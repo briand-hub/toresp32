@@ -355,6 +355,7 @@ namespace Briand {
 
 				if (DEBUG) Serial.println("[DEBUG] Got AUTH_CHALLENGE cell!");
 
+				if (DEBUG) Serial.println("[DEBUG] AUTH_CHALLENGE cell is not handled at moment from this version.");
 				// TODO dont't mind for now..
 
 				// The next part of buffer should be a NETINFO cell. Free some buffer to point to next cell. And save RAM :)
@@ -370,6 +371,7 @@ namespace Briand {
 
 				if (DEBUG) Serial.println("[DEBUG] Got NETINFO cell!");
 
+				if (DEBUG) Serial.println("[DEBUG] NETINFO cell is not handled at moment from this version.");
 				// TODO dont't mind for now..
 
 
@@ -385,8 +387,7 @@ namespace Briand {
 
 			// Re-setup CircID with 4 bytes (link protocol >=4)
 
-			// TODO
-			// do not understand:
+			// TODO / do not understand:
 			// To prevent CircID collisions, when one node sends a CREATE/CREATE2
    			// cell to another, it chooses from only one half of the possible
    			// values based on the ORs' public identity keys.
@@ -405,13 +406,13 @@ namespace Briand {
 				if (DEBUG) Serial.println("[DEBUG] Sending CREATE2 cell to guard");
 
 				/*					
-				Users set up circuits incrementally, one hop at a time. To create a
-				new circuit, OPs send a CREATE/CREATE2 cell to the first node, with
-				the first half of an authenticated handshake; that node responds with
-				a CREATED/CREATED2 cell with the second half of the handshake. To
-				extend a circuit past the first hop, the OP sends an EXTEND/EXTEND2
-				relay cell (see section 5.1.2) which instructs the last node in the
-				circuit to send a CREATE/CREATE2 cell to extend the circuit.
+					Users set up circuits incrementally, one hop at a time. To create a
+					new circuit, OPs send a CREATE/CREATE2 cell to the first node, with
+					the first half of an authenticated handshake; that node responds with
+					a CREATED/CREATED2 cell with the second half of the handshake. To
+					extend a circuit past the first hop, the OP sends an EXTEND/EXTEND2
+					relay cell (see section 5.1.2) which instructs the last node in the
+					circuit to send a CREATE/CREATE2 cell to extend the circuit.
 				*/
 
 				tempCell = make_unique<Briand::BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::CREATE2);
@@ -430,7 +431,7 @@ namespace Briand {
 
 				
 
-
+				if (DEBUG) Serial.println("[DEBUG] CREATE2 sent. Waiting for CREATED2.");
 
 				/*
 					A CREATED2 cell contains:
@@ -438,6 +439,9 @@ namespace Briand {
 						HLEN      (Server Handshake Data Len) [2 bytes]
 						HDATA     (Server Handshake Data)     [HLEN bytes]
 				*/
+
+
+				if (DEBUG) Serial.println("[DEBUG] Got CREATED2 !");
 			}
 
 			// DEBUG !!!

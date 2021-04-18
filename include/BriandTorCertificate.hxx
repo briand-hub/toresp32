@@ -214,8 +214,8 @@ namespace Briand {
 				if (mbedtls_x509_crt_verify_with_profile(&chain, &root_ca, NULL,  &profile, NULL, &verification_flags, NULL, NULL) != 0) {
 					if (DEBUG) {
 						tempBuffer = BriandUtils::GetOneOldBuffer(256 + 1);
-						mbedtls_x509_crt_verify_info(vbuf, 256,"", verification_flags);
-						Serial.printf("[DEBUG] Certificate validation: failed because %s\n", vbuf);
+						mbedtls_x509_crt_verify_info( reinterpret_cast<char*>(tempBuffer.get()), 256,"", verification_flags);
+						Serial.printf("[DEBUG] Certificate validation: failed because %s\n", reinterpret_cast<const char*>(tempBuffer.get()));
 					} 
 
 					// free 
