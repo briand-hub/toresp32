@@ -3,6 +3,7 @@ Briand's project to turn an ESP32 into a Tor client "plug&amp;play"
 
 ## Development status
 04/2021 At the moment just a non-working draft!
+For news check always [NEWS FILE](NEWS)
 
 ## Intro
 This project borns just for personal interest on ESP32 platform (I'm using WeMos LolinD32 v.1.0.0) because it summarize my interests for electronics, programming, c++ and cryptography. I think [Tor](https://www.torproject.org/) is a great example of applied cryptography for a noble purpose. 

@@ -20,6 +20,7 @@
 
 #include <Arduino.h>
 #include <WiFiClientSecure.h>
+#include "time.h"
 
 #include <iostream>
 #include <memory>
@@ -41,10 +42,11 @@ namespace Briand {
 	class BriandTorCircuit {
 		protected:
 		unique_ptr<Briand::BriandTorRelaySearcher> relaySearcher;
-		bool isBuilt;		// has been built
-		bool isClean; 		// not used for any traffic
-		bool isClosing;		// it is currently closing
-		bool isClosed;		// it is closed (call destroyer and free RAM!!)
+		bool isBuilt;						// has been built
+		bool isClean; 						// not used for any traffic
+		bool isClosing;						// it is currently closing
+		bool isClosed;						// it is closed (call destroyer and free RAM!!)
+		time_t createdOn;					// create timestamp
 
 		// Tor specific
 		unsigned int CIRCID;					// the CIRCID of this circuit
@@ -123,15 +125,16 @@ namespace Briand {
 		unique_ptr<Briand::BriandTorRelay> exitNode;
 
 		BriandTorCircuit() {
-			guardNode = nullptr;
-			middleNode = nullptr;
-			exitNode = nullptr;
-			relaySearcher = nullptr;
+			this->guardNode = nullptr;
+			this->middleNode = nullptr;
+			this->exitNode = nullptr;
+			this->relaySearcher = nullptr;
 
 			this->isBuilt = false;
 			this->isClean = false;
 			this->isClosing = false;
 			this->isClosed = false;
+			this->createdOn = 0;
 
 			this->CIRCID = 0;
 			this->LINKPROTOCOLVERSION = 0;
@@ -140,10 +143,9 @@ namespace Briand {
 		}
 
 		~BriandTorCircuit() {
-			if (this->guardNode != nullptr) this->guardNode.reset();
-			if (this->middleNode != nullptr) this->middleNode.reset();
-			if (this->exitNode != nullptr) this->exitNode.reset();
-			if (this->relaySearcher != nullptr) this->relaySearcher.reset();
+			if (!this->isClosed) {
+				this->TearDown();
+			}
 
 			if (this->sClient != nullptr) {
 				// close connetion if active
@@ -151,6 +153,11 @@ namespace Briand {
 					this->sClient->stop();
 				this->sClient.reset();
 			}
+
+			if (this->guardNode != nullptr) this->guardNode.reset();
+			if (this->middleNode != nullptr) this->middleNode.reset();
+			if (this->exitNode != nullptr) this->exitNode.reset();
+			if (this->relaySearcher != nullptr) this->relaySearcher.reset();
 		}
 
 		/**
@@ -466,8 +473,31 @@ namespace Briand {
 
 			this->isBuilt = true;
 			this->isClean = true;
-
+			
+			// TODO !!!!!
+			// this->createdOn = 
+			
 			return true;
+		}
+
+		
+
+		// Stream functions
+		// MUST check if built / closed / closing ....
+
+
+		/**
+		 * Tears down the circuit
+		*/
+		void TearDown() {
+			this->isClosing = true;
+
+			//
+			// TODO
+			//
+
+			this->isBuilt = false;
+			this->isClosed = true;
 		}
 	};
 }
