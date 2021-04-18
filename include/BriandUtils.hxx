@@ -24,14 +24,13 @@
 #include <esp_system.h>
 
 #include <Arduino.h>
-#include <WiFi.h>
 #include <WiFiClientSecure.h>
-#include <HTTPClient.h>
 
 #include <ArduinoJson.h>
 
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
+#include "BriandNet.hxx"
 
 
 /* This file contains support functions used in code */
@@ -238,111 +237,83 @@ namespace Briand
 		 * @return string with main informations, empty if fails
 		*/
 		static string BriandIfConfigMe() {
-			// prepare output
+			bool success = false;
+			short httpCode = 0;
+			string randomAgent = string( Briand::BriandUtils::GetRandomHostName().get() );
+			DynamicJsonDocument doc = Briand::BriandNet::HttpsGetJson("ifconfig.me", 443, "/all.json", httpCode, success, randomAgent, 512);
+
+			// Prepare output
 			string output("");
 
-			auto clientHttp = make_unique<HTTPClient>();
-			DynamicJsonDocument doc(512); // Should be enough for data and safe for RAM...
-
-			// Not providing a CACert will be a leak of security but hard-coding has disadvantages...	
-			clientHttp->begin( "https://ifconfig.me/all.json" );
-			int httpCode = clientHttp->GET();
-
-			if (httpCode == 200) {
-				// It is safe RAM beacause request just little data with poor fields,
-				// thus RAM should be fine...
-								
-				string responseContent = string( clientHttp->getString().c_str() );
-				clientHttp->end();
-				clientHttp.reset(); // now please, I need RAM!
-
-				if (DEBUG) Serial.printf("[DEBUG] Got response HTTP/200\n");
-				if (DEBUG) Serial.printf("[DEBUG] Raw response of %d bytes: %s\n", responseContent.length(), responseContent.c_str() );
-
-				DeserializationError err = deserializeJson(doc, responseContent.c_str());
-				
-				if (err) {
-					Serial.printf("[ERR] Error on deserialization from https://ifconfig.me/all.json\n");
+			if (success) {
+				if (doc.containsKey("ip_addr")) {
+					output.append("[IFCONFIG.me Public ip]: ");
+					output.append( doc["ip_addr"].as<const char*>() );
+					output.append("\n");
 				}
-				else {
-					if (DEBUG) Serial.printf("[DEBUG] Json document allocated %d bytes\n", doc.memoryUsage());
-					doc.shrinkToFit();
-					if (DEBUG) Serial.printf("[DEBUG] Json document shrink to %d bytes.\n", doc.memoryUsage());
-
-					if (doc.containsKey("ip_addr")) {
-						output.append("[IFCONFIG.me Public ip]: ");
-						output.append( doc["ip_addr"].as<const char*>() );
-						output.append("\n");
-					}
-					if (doc.containsKey("remote_host")) {
-						output.append("[IFCONFIG.me Remote host]: ");
-						output.append( doc["remote_host"].as<const char*>() );
-						output.append("\n");
-					}
-					if (doc.containsKey("user_agent")) {
-						output.append("[IFCONFIG.me User-Agent]: ");
-						output.append( doc["user_agent"].as<const char*>() );
-						output.append("\n");
-					}
-					if (doc.containsKey("port")) {
-						output.append("[IFCONFIG.me Port]: ");
-						output.append( std::to_string( doc["port"].as<int>() ) );
-						output.append("\n");
-					}
-					if (doc.containsKey("language")) {
-						output.append("[IFCONFIG.me Language]: ");
-						output.append( doc["language"].as<const char*>() );
-						output.append("\n");
-					}
-					if (doc.containsKey("encoding")) {
-						output.append("[IFCONFIG.me Encoding]: ");
-						output.append( doc["encoding"].as<const char*>() );
-						output.append("\n");
-					}
-					if (doc.containsKey("mime")) {
-						output.append("[IFCONFIG.me Mime]: ");
-						output.append( doc["mime"].as<const char*>() );
-						output.append("\n");
-					}
-					if (doc.containsKey("via")) {
-						output.append("[IFCONFIG.me Via]: ");
-						output.append( doc["via"].as<const char*>() );
-						output.append("\n");
-					}
-					if (doc.containsKey("forwarded")) {
-						output.append("[IFCONFIG.me Forwarded]: ");
-						output.append( doc["forwarded"].as<const char*>() );
-						output.append("\n");
-					}
-
-					responseContent.clear();
+				if (doc.containsKey("remote_host")) {
+					output.append("[IFCONFIG.me Remote host]: ");
+					output.append( doc["remote_host"].as<const char*>() );
+					output.append("\n");
+				}
+				if (doc.containsKey("user_agent")) {
+					output.append("[IFCONFIG.me User-Agent]: ");
+					output.append( doc["user_agent"].as<const char*>() );
+					output.append("\n");
+				}
+				if (doc.containsKey("port")) {
+					output.append("[IFCONFIG.me Port]: ");
+					output.append( std::to_string( doc["port"].as<int>() ) );
+					output.append("\n");
+				}
+				if (doc.containsKey("language")) {
+					output.append("[IFCONFIG.me Language]: ");
+					output.append( doc["language"].as<const char*>() );
+					output.append("\n");
+				}
+				if (doc.containsKey("encoding")) {
+					output.append("[IFCONFIG.me Encoding]: ");
+					output.append( doc["encoding"].as<const char*>() );
+					output.append("\n");
+				}
+				if (doc.containsKey("mime")) {
+					output.append("[IFCONFIG.me Mime]: ");
+					output.append( doc["mime"].as<const char*>() );
+					output.append("\n");
+				}
+				if (doc.containsKey("via")) {
+					output.append("[IFCONFIG.me Via]: ");
+					output.append( doc["via"].as<const char*>() );
+					output.append("\n");
+				}
+				if (doc.containsKey("forwarded")) {
+					output.append("[IFCONFIG.me Forwarded]: ");
+					output.append( doc["forwarded"].as<const char*>() );
+					output.append("\n");
 				}
 			}
-			else
-				Serial.printf("[ERR] Error on downloading from https://ifconfig.me/all.json Http code: %d\n", httpCode);
+			else {
+				Serial.printf("[ERR] Error on downloading from https://ifconfig.me/all.json Http code: %d Deserialization success: %d\n", httpCode, success);
+			}
 
 			return output;
 		}
 
 		/**
-		 * Method to print raw bytes to serial (hex format)
-		 * @param buffer the buffer to be printed
-		 * @param length the buffer size
-		*/
-		static void printByteBuffer(const unsigned char* buffer, const unsigned int& length) {
-			for (unsigned int i=0; i < length; i++) {
-				Serial.printf("%02X ", buffer[i]);
-			}
-			Serial.print("\n");
-		}
-
-		/**
-		 * Method to print raw bytes to serial (hex format)
+		 * DEBUG Method to print raw bytes to serial output (hex format)
 		 * @param buffer the buffer to be printed (vector)
+		 * @param bytesToPrint number of buffer bytes to print (0 to print all)
+		 * @param newLineAfterBytes print a new line after N bytes
 		*/
-		static void printByteBuffer(vector<unsigned char>& buffer) {
-			for (unsigned int i=0; i < buffer.size(); i++) {
+		static void PrintByteBuffer(const vector<unsigned char>& buffer, const short& newLineAfterBytes = 8, const unsigned int& bytesToPrint = 0) {
+			unsigned int limit;
+
+			if (bytesToPrint > 0 && bytesToPrint < buffer.size()) limit = bytesToPrint;
+			else limit = buffer.size();
+
+			for (unsigned int i=0; i < limit; i++) {
 				Serial.printf("%02X ", buffer.at(i));
+				if (i > 0 && i % newLineAfterBytes == 0) Serial.print("\n");
 			}
 			Serial.print("\n");
 		}
@@ -372,6 +343,21 @@ namespace Briand
 			if (command == Briand::BriandTorCellCommand::AUTHORIZE) return string("AUTHORIZE");
 
 			return string("UNKNOWN");
+		}
+	
+		/**
+		 * Method return a pointer to an old-style buffer, initialized all to zero
+		 * @param size The buffer size
+		 * @return Pointer to buffer 
+		*/
+		static unique_ptr<unsigned char[]> GetOneOldBuffer(const unsigned int& size) {
+			auto buf = make_unique<unsigned char[]>(size);
+			// init to zero
+			for (unsigned int i = 0; i<size; i++) {
+				buf[i] = 0x00;
+			}
+
+			return std::move(buf);
 		}
 	};
 	

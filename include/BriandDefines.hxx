@@ -32,4 +32,5 @@ constexpr unsigned char WIFI_AP_PASSWORD_LEN = 16;		// random wifi password leng
 constexpr unsigned char WIFI_AP_CH = 1;					// wifichannel for AP
 constexpr unsigned char WIFI_AP_HIDDEN = 0;				// AP hidden Essid (1) or not (0)
 constexpr unsigned char WIFI_AP_MAX_CONN = 1;			// AP maximum connections (set to 1 for more security, just you) 
-
+constexpr unsigned char NET_REQUEST_TIMEOUT_S = 5;		// Elapsed this number of seconds, any connection is intended to be timed out!
+constexpr const char* NTP_SERVER = "pool.ntp.org";      // NTP server to use

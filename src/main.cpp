@@ -27,7 +27,6 @@
 #include <FS.h>
 #include <SPIFFS.h>
 #include <WiFiClientSecure.h>
-#include <HTTPClient.h>
 
 /* Standard C++ libraries */
 #include <iostream>
@@ -36,11 +35,13 @@
 
 /* Platformio libraries */
 #include <ArduinoJson.h>
+#include "time.h"
 
 /* Project libraries */
 #include "BriandTorEsp32Config.hxx"
 #include "BriandTorAes.hxx"
 #include "BriandUtils.hxx"
+#include "BriandNet.hxx"
 #include "BriandTorRelay.hxx"
 #include "BriandTorCircuit.hxx"
 
@@ -64,6 +65,7 @@ unsigned long long int COMMANDID = 0;
 
 /* Early declarations */
 void reboot();
+void printLocalTime();
 void printLogo();
 void startSerialRead(string*);
 void executeCommand(string&);
@@ -371,6 +373,27 @@ void loop() {
 			Serial.println("[ERR] Error on AP init! Only serial communication is enabled.");
 		}
 
+        // Proceed to next step
+        nextStep = 9;
+    }
+    else if (nextStep == 9) {
+
+        if (VERBOSE) printLocalTime();
+        if (VERBOSE) Serial.println("Sync time to UTC+0 (no daylight saving) with NTP");
+
+        //For UTC -5.00 : -5 * 60 * 60 : -18000
+        //For UTC +1.00 : 1 * 60 * 60 : 3600
+        //For UTC +0.00 : 0 * 60 * 60 : 0
+        const long  gmtOffset_sec = 0;
+
+        // to 3600 if daylight saving
+        const int daylightOffset_sec = 0; 
+
+        // init and get the time
+        configTime(gmtOffset_sec, daylightOffset_sec, NTP_SERVER);
+
+        if (VERBOSE) printLocalTime();
+
         // Proceed to next steps
         nextStep = 100;
     }
@@ -414,7 +437,20 @@ void printLogo() {
     Serial.println("                          |_|                  ");
     Serial.println("                                               ");
     Serial.println("                VERSION 1.0.0                  ");
+    Serial.println("              (Pandemic version)               ");
+    Serial.println("          Copyright (C) 2021 briand            ");
+    Serial.println("        https://github.com/briand-hub          ");
     Serial.println("                                               ");
+}
+
+void printLocalTime()
+{
+    struct tm timeinfo;
+    if(!getLocalTime(&timeinfo)){
+        Serial.println("Failed to obtain time");
+        return;
+    }
+    Serial.println(&timeinfo, "Local time: %A, %B %d %Y %H:%M:%S");
 }
 
 void reboot() {
@@ -451,6 +487,7 @@ void executeCommand(string& cmd) {
         Serial.println("COMMAND : description");
 		Serial.println("GENERAL-------------------------------------------------------------------");
 		Serial.println("help : display this.");
+        Serial.println("time : display date and time.");
 		Serial.println("devinfo : display device information.");
 		Serial.println("meminfo : display short memory information.");
 		Serial.println("netinfo : display network STA/AP interfaces information.");
@@ -468,6 +505,9 @@ void executeCommand(string& cmd) {
 
 		Serial.println("TOR TESTING------------------------------------------------------------------");
 		Serial.println("ifconfig.me : Show ifconfig.me information (NON-TOR REQUEST, REAL ADDRESS).");
+    }
+    else if (cmd.compare("time") == 0) {
+        printLocalTime();
     }
     else if (cmd.compare("devinfo") == 0) {
         Serial.printf("CPU Frequency: %uMHz\n", ESP.getCpuFreqMHz());
@@ -553,7 +593,6 @@ void executeCommand(string& cmd) {
 		string info = Briand::BriandUtils::BriandIfConfigMe();
 		Serial.printf("\nInfo about your real identity:\n\n%s\n", info.c_str());
     }
-	
 	
 	// other commands implementation...
     else {

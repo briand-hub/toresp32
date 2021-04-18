@@ -19,7 +19,6 @@
 #pragma once
 
 #include <Arduino.h>
-#include <WiFi.h>
 #include <WiFiClientSecure.h>
 
 #include <iostream>
@@ -46,7 +45,77 @@ namespace Briand {
 		bool isClean; 		// not used for any traffic
 		bool isClosing;		// it is currently closing
 		bool isClosed;		// it is closed (call destroyer and free RAM!!)
-		unsigned int CIRCID;
+
+		// Tor specific
+		unsigned int CIRCID;					// the CIRCID of this circuit
+		unsigned short LINKPROTOCOLVERSION; 	// the version of this circuit
+
+		unique_ptr<WiFiClientSecure> sClient;	// Client used for communications
+
+		/**
+		 * Method to cleanup pointers etc. before returning a failed operation
+		*/
+		void Cleanup() {
+			if (this->relaySearcher != nullptr) this->relaySearcher.reset();
+			if (this->sClient != nullptr) {
+				// close connetion if active
+				if (this->sClient->connected())
+					this->sClient->stop();
+				this->sClient.reset();
+			}
+		}
+
+		/**
+		 * Method to choose a relay with timeouts and so on to simplify code.
+		 * @param relayType 0 for guard, 1 for middle, 2 for exit 
+		 * @return true if success, false if there is no way to do it :(
+		*/
+		bool FindAndPopulateRelay(const unsigned char& relayType, const unsigned short& maxTentatives) {
+			string relayS;
+
+			if (DEBUG) {
+				
+				switch (relayType) {
+					case 0: relayS = "guard"; break;
+					case 1: relayS = "middle"; break;
+					case 2: relayS = "exit"; break;
+					default: relayS = to_string(relayType) + "(?)";
+				}
+				Serial.print(" node.\n");
+			}
+
+			Serial.printf("[DEBUG] Starting search for %s node.\n", relayS.c_str());
+
+			unsigned short attempts_made = 0;
+			bool done = false;
+			
+			while (attempts_made < maxTentatives && !done) {
+				unique_ptr<Briand::BriandTorRelay> tentative = nullptr;
+
+				if (relayType == 0) tentative = this->relaySearcher->GetGuardRelay();
+				else if (relayType == 1) tentative = this->relaySearcher->GetMiddleRelay();
+				else if (relayType == 2) tentative = this->relaySearcher->GetExitRelay();
+				
+				if (tentative != nullptr) {
+
+					if (relayType == 0) this->guardNode = std::move(tentative);
+					else if (relayType == 1) this->middleNode = std::move(tentative);
+					else if (relayType == 2) this->exitNode = std::move(tentative);
+					
+					done = true;
+					if (DEBUG) Serial.printf("[DEBUG] %s node ok.\n", relayS.c_str());
+				}
+				else {
+					if (DEBUG) Serial.printf("[DEBUG] Retry search for %s node.\n", relayS.c_str());
+					attempts_made++;
+					delay(2000); // wait 2 seconds before doing a new request
+				}
+			}
+
+			if (!done && VERBOSE) Serial.printf("[ERR] FAIL to get a valid %s node.\n", relayS.c_str());
+
+			return done;
+		}
 
 		public:
 		unique_ptr<Briand::BriandTorRelay> guardNode;
@@ -63,13 +132,25 @@ namespace Briand {
 			this->isClean = false;
 			this->isClosing = false;
 			this->isClosed = false;
+
+			this->CIRCID = 0;
+			this->LINKPROTOCOLVERSION = 0;
+			
+			this->sClient = nullptr;
 		}
 
 		~BriandTorCircuit() {
-			if (guardNode != nullptr) guardNode.reset();
-			if (middleNode != nullptr) middleNode.reset();
-			if (exitNode != nullptr) exitNode.reset();
-			if (relaySearcher != nullptr) relaySearcher.reset();
+			if (this->guardNode != nullptr) this->guardNode.reset();
+			if (this->middleNode != nullptr) this->middleNode.reset();
+			if (this->exitNode != nullptr) this->exitNode.reset();
+			if (this->relaySearcher != nullptr) this->relaySearcher.reset();
+
+			if (this->sClient != nullptr) {
+				// close connetion if active
+				if (this->sClient->connected())
+					this->sClient->stop();
+				this->sClient.reset();
+			}
 		}
 
 		/**
@@ -101,109 +182,69 @@ namespace Briand {
 
 			if (DEBUG) Serial.println("[DEBUG] Starting relay search.");
 
-			unsigned short attempts_made = 0;
-			bool stepDone = false;
+			if (!this->FindAndPopulateRelay(0, maxTentatives)) return false; // GUARD
 
-			if (DEBUG) Serial.println("[DEBUG] Starting search for guard node.");
-
-			while (attempts_made < maxTentatives && !stepDone) {
-				auto tentative = this->relaySearcher->GetGuardRelay();
-				
-				if (tentative != nullptr) {
-					this->guardNode = std::move(tentative);
-					stepDone = true;
-					if (DEBUG) Serial.println("[DEBUG] Guard node OK.");
-				}
-				else {
-					if (DEBUG) Serial.println("[DEBUG] Retry search for guard node.");
-					attempts_made++;
-					delay(2000); // wait 2 seconds before doing a new request
-				}
-			}
-
-			if (attempts_made == maxTentatives && !stepDone) return false;
-
-			attempts_made = 0;
-			stepDone = false;
-
-			if (DEBUG) Serial.println("[DEBUG] Starting search for middle node.");
-
-			while (attempts_made < maxTentatives && !stepDone) {
-				auto tentative = this->relaySearcher->GetMiddleRelay();
-				
-				if (tentative != nullptr) {
-
-					//
-					// TODO : test not in the same family!
-					//
-
-					this->middleNode = std::move(tentative);
-					stepDone = true;
-					if (DEBUG) Serial.println("[DEBUG] Middle node OK.");
-				}
-				else {
-					if (DEBUG) Serial.println("[DEBUG] Retry search for middle node.");
-					attempts_made++;
-					delay(2000); // wait 2 seconds before doing a new request
-				}
-			}
-			
-			if (attempts_made == maxTentatives && !stepDone) return false;
-
-			attempts_made = 0;
-			stepDone = false;
-
-			if (DEBUG) Serial.println("[DEBUG] Starting search for exit node.");
-
-			while (attempts_made < maxTentatives && !stepDone) {
-				auto tentative = this->relaySearcher->GetExitRelay();
-				
-				if (tentative != nullptr) {
-
-					//
-					// TODO : test not in the same family!
-					//
-
-					this->exitNode = std::move(tentative);
-					stepDone = true;
-					if (DEBUG) Serial.println("[DEBUG] Exit node OK.");
-				}
-				else {
-					if (DEBUG) Serial.println("[DEBUG] Retry search for exit node.");
-					attempts_made++;
-					delay(2000); // wait 2 seconds before doing a new request
-				}
-			}
-			
-			if (attempts_made == maxTentatives && !stepDone) return false;
-
-			if (DEBUG) Serial.println("[DEBUG] All nodes ready, start VERSION to guard.");
+			if (DEBUG) Serial.println("[DEBUG] Guard node ready, start sending VERSION to guard.");
 
 			// All nodes found! Free some RAM
 			this->relaySearcher.reset();
 
 			// Now start to build the path
 
-			// Prepare client for communicate
-			auto wifiClient = make_unique<WiFiClient>();
+			// Build the client and connect to guard
 			
-			// Choose random CircID
+			this->sClient = make_unique<WiFiClientSecure>();
 
-			// TODO: do not understand:
+			// TODO : find a way to validate requests.
+			// Not providing a CACert will be a leak of security but hard-coding has disadvantages...
 
-			// To prevent CircID collisions, when one node sends a CREATE/CREATE2
-   			// cell to another, it chooses from only one half of the possible
-   			// values based on the ORs' public identity keys.
+			this->sClient->setInsecure();
 
+			// Connect to GUARD
+
+			if ( ! this->sClient->connect(this->guardNode->GetHost().c_str(), this->guardNode->GetPort() ) ) {
+				if (VERBOSE) Serial.println("[ERR] Failed to connect to Guard.");
+				this->Cleanup();
+				return false;
+			}
+
+			if (DEBUG) Serial.println("[DEBUG] Connected to guard node.");
+
+			// Choose random CircID (does not matter here, see CREATE2)
 			// The first VERSIONS cell, and any cells sent before the first VERSIONS cell, always have CIRCID_LEN == 2 for backward compatibility.
 
 			this->CIRCID = ( Briand::BriandUtils::GetRandomByte() << 8 ) + Briand::BriandUtils::GetRandomByte();
 
-			// 1. Send a VERSION the guard
+			if(DEBUG) Serial.printf("[DEBUG] CircID = %d\n", this->CIRCID);
 
-			if ( wifiClient->connect(this->guardNode->GetHost().c_str(), this->guardNode->GetPort()) ) {
-				unique_ptr<Briand::BriandTorCell> tempCell = make_unique<Briand::BriandTorCell>(0, this->CIRCID, Briand::BriandTorCellCommand::VERSIONS);	
+			unique_ptr<Briand::BriandTorCell> tempCell = nullptr;
+			unique_ptr<vector<unsigned char>> tempCellResponse = nullptr;
 
+			
+			// Here I will use the IN-PROTOCOL HANDSHAKE
+
+			/*
+				When the in-protocol handshake is used, the initiator sends a
+				VERSIONS cell to indicate that it will not be renegotiating.  The
+				responder sends a VERSIONS cell, a CERTS cell (4.2 below) to give the
+				initiator the certificates it needs to learn the responder's
+				identity, an AUTH_CHALLENGE cell (4.3) that the initiator must include
+				as part of its answer if it chooses to authenticate, and a NETINFO
+				cell (4.5).  As soon as it gets the CERTS cell, the initiator knows
+				whether the responder is correctly authenticated.  At this point the
+				initiator behaves differently depending on whether it wants to
+				authenticate or not. If it does not want to authenticate, it MUST
+				send a NETINFO cell.  If it does want to authenticate, it MUST send a
+				CERTS cell, an AUTHENTICATE cell (4.4), and a NETINFO.  When this
+				handshake is in use, the first cell must be VERSIONS, VPADDING, or
+				AUTHORIZE, and no other cell type is allowed to intervene besides
+				those specified, except for VPADDING cells.
+			*/
+
+			// Start with VERSIONS (+CERTS +AUTH_CHALLENGE +NETINFO) 
+			// and authenticate myself (not for now, TODO )
+
+			{
 				/*
 				The payload in a VERSIONS cell is a series of big-endian two-byte
 				integers.  Both parties MUST select as the link protocol version the
@@ -214,58 +255,202 @@ namespace Briand {
 				if it contains an odd number of bytes).
 				*/
 
-				if (DEBUG) Serial.printf("[DEBUG] Client connected to %s on port %d\n", this->guardNode->GetHost().c_str(), this->guardNode->GetPort());
-				
-				tempCell->Payload->push_back(0x00);
-				tempCell->Payload->push_back(0x03); // link version 3
-				tempCell->Payload->push_back(0x00);
-				tempCell->Payload->push_back(0x04); // or link version 4
+				// Send a VERSION the guard
 
-				unsigned int bufferSize = 0;
-				auto cellBuffer = tempCell->GetBuffer(bufferSize);
+				if (DEBUG) Serial.println("[DEBUG] Sending first VERSION to guard.");
 
-				if (DEBUG) Serial.println("[DEBUG] CELL BYTES:");
-				if (DEBUG) Briand::BriandUtils::printByteBuffer(cellBuffer.get(), bufferSize);
+				tempCell = make_unique<Briand::BriandTorCell>(0, this->CIRCID, Briand::BriandTorCellCommand::VERSIONS);
 
-				if (DEBUG) Serial.printf("[DEBUG] Sending cell of %u bytes... ", bufferSize);
+				tempCell->AppendToPayload(0x00);
+				tempCell->AppendToPayload(0x04); // link version 4 at least please!!!
 
-				wifiClient->write( cellBuffer.get(), bufferSize );
-
-				cellBuffer.reset();
+				tempCellResponse = tempCell->SendCell(this->sClient, false);
 				tempCell.reset();
 
-				if (DEBUG) Serial.print("sent!\n");
-
-				// Wait response
-				while (wifiClient->connected() && !wifiClient->available()) {
-					delay(10);
+				if (tempCellResponse->size() == 0) {
+					if (VERBOSE) Serial.println("[ERR] Error on sending first VERSION to Guard.");
+					this->Cleanup();
+					return false;
 				}
 
-				// Got response or disconnect
-				if (wifiClient->connected()) {
-					if (DEBUG) Serial.print("[DEBUG] Guard response to VERSION, size ");
+				if (DEBUG) Serial.println("[DEBUG] Cell response! :-D Contents (first 32 bytes):");
+				if (DEBUG) Briand::BriandUtils::PrintByteBuffer( *(tempCellResponse.get()), 128, 32 );
+				
+				// The response contents should have a lot of informations.
 
-					auto respBuffer = make_unique<vector<unsigned char>>();
+				// First is a version cell containing valid linkprotocols to use.
+				// The cell is always backward-compatible
 
-					while ( wifiClient->available() > 0) {
-						respBuffer->push_back( wifiClient->read() );
-					}
+				// start an empty cell to build with buffer
 
-					if (DEBUG) Serial.printf("%d bytes:\n", respBuffer->size());
-					if (DEBUG) Briand::BriandUtils::printByteBuffer( *respBuffer.get() );
+				tempCell =  make_unique<Briand::BriandTorCell>(0, 0, Briand::BriandTorCellCommand::PADDING); 
+				tempCell->BuildFromBuffer(tempCellResponse, 2); // Link protocol is always 2 for VERSION
+				this->LINKPROTOCOLVERSION = tempCell->GetLinkProtocolFromVersionCell();
+
+				if (this->LINKPROTOCOLVERSION == 0) {
+					if (VERBOSE) Serial.println("[ERR] Error on receiving first VERSION from Guard, unable to negotiate link protocol version.");
+					this->Cleanup();
+					return false;
 				}
-				else {
-					if (VERBOSE) Serial.println("[ERR] Error on receiving VERSION response from Guard.");
+				else if (this->LINKPROTOCOLVERSION < 4) {
+					if (VERBOSE) Serial.printf("[ERR] Guard has an old link protocol (version %d but required >= 4).\n", this->LINKPROTOCOLVERSION);
+					this->Cleanup();
+					return false;
+				}
+				else if (DEBUG) {
+					Serial.printf("[DEBUG] Link protocol version %d negotiation SUCCESS.\n", this->LINKPROTOCOLVERSION);
 				}
 
+				// The next part of buffer should be a CERTS cell. Free some buffer to point to next cell. And save RAM :)
+
+				tempCellResponse->erase(tempCellResponse->begin(), tempCellResponse->begin() + tempCell->GetCellTotalSizeBytes() );
+
+				if (DEBUG) Serial.print("[DEBUG] Next chunk (first 32 bytes printed):\n");
+				if (DEBUG) Briand::BriandUtils::PrintByteBuffer( *(tempCellResponse.get()), 128, 32 );
+
+				tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION);
+				if (tempCell->GetCommand() != Briand::BriandTorCellCommand::CERTS) {
+					if (VERBOSE) Serial.printf("[ERR] Error, expected CERTS cell but received %s.\n", Briand::BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
+					this->Cleanup();
+					return false;
+				}
+
+				if (DEBUG) Serial.println("[DEBUG] Got CERTS cell!");
+				
+				if (! tempCell->SetRelayCertificatesFromCertsCell(this->guardNode) ) {
+					if (VERBOSE) Serial.println("[ERR] CERTS cell seems not valid.");
+					this->Cleanup();
+					return false;
+				}
+
+				if (DEBUG) {
+					Serial.printf("[DEBUG] Guard has %d certifcates loaded.\n", this->guardNode->certificates->size());
+					for (auto c : *(this->guardNode->certificates.get()) )
+						Serial.printf("[DEBUG] %s\n", c.GetCertificateShortInfo().c_str());
+				} 
+
+				if ( ! this->guardNode->ValidateCertificates() ) {
+					if (VERBOSE) Serial.println("[ERR] CERTS cell received has invalid certificates.");
+					this->Cleanup();
+					return false;
+				}
+
+				if (DEBUG) Serial.println("[DEBUG] CERTS cell certificates validation succeded.");
+
+				// The next part of buffer should be a AUTH_CHALLENGE cell. Free some buffer to point to next cell. And save RAM :)
+
+				tempCellResponse->erase(tempCellResponse->begin(), tempCellResponse->begin() + tempCell->GetCellTotalSizeBytes() );
+
+				// AUTH_CHALLENGE is used for authenticate, might not do that.
+
+				if (DEBUG) Serial.print("[DEBUG] Next chunk (first 32 bytes printed): ");
+				if (DEBUG) Briand::BriandUtils::PrintByteBuffer( *(tempCellResponse.get()), 128, 32 );
+
+				tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION);
+				if (tempCell->GetCommand() != Briand::BriandTorCellCommand::AUTH_CHALLENGE) {
+					if (VERBOSE) Serial.printf("[ERR] Error, expected AUTH_CHALLENGE cell but received %s.\n", Briand::BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
+					this->Cleanup();
+					return false;
+				}
+
+				if (DEBUG) Serial.println("[DEBUG] Got AUTH_CHALLENGE cell!");
+
+				// TODO dont't mind for now..
+
+				// The next part of buffer should be a NETINFO cell. Free some buffer to point to next cell. And save RAM :)
+
+				tempCellResponse->erase(tempCellResponse->begin(), tempCellResponse->begin() + tempCell->GetCellTotalSizeBytes() );
+
+				tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION);
+				if (tempCell->GetCommand() != Briand::BriandTorCellCommand::NETINFO) {
+					if (VERBOSE) Serial.printf("[ERR] Error, expected NETINFO cell but received %s.\n", Briand::BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
+					this->Cleanup();
+					return false;
+				}
+
+				if (DEBUG) Serial.println("[DEBUG] Got NETINFO cell!");
+
+				// TODO dont't mind for now..
+
+
+				if (DEBUG) Serial.println("[DEBUG] Got all cells needed for handshake :-)");
+
+				// The next part of buffer needs to be ignored, could be cleared and save RAM.
+				// WARNING: for client auth all bytes received must be kept!
+				tempCellResponse.reset();
+				tempCell.reset();
 			}
-			else {
-				if (VERBOSE) Serial.println("[ERR] Error on sending first VERSION to Guard.");
+
+			if (DEBUG) Serial.println("[DEBUG] All information complete. Starting CREATE the circuit.");
+
+			// Re-setup CircID with 4 bytes (link protocol >=4)
+
+			// TODO
+			// do not understand:
+			// To prevent CircID collisions, when one node sends a CREATE/CREATE2
+   			// cell to another, it chooses from only one half of the possible
+   			// values based on the ORs' public identity keys.
+
+			this->CIRCID = 0x00000000;
+			this->CIRCID += ( Briand::BriandUtils::GetRandomByte() << 24 );
+			this->CIRCID += ( Briand::BriandUtils::GetRandomByte() << 16 );
+			this->CIRCID += ( Briand::BriandUtils::GetRandomByte() << 8 );
+			this->CIRCID += Briand::BriandUtils::GetRandomByte();
+
+			if (DEBUG) Serial.printf("[DEBUG] NEW CircID: %08X \n", this->CIRCID);
+
+			// CREATE/CREATE2
+
+			{
+				if (DEBUG) Serial.println("[DEBUG] Sending CREATE2 cell to guard");
+
+				/*					
+				Users set up circuits incrementally, one hop at a time. To create a
+				new circuit, OPs send a CREATE/CREATE2 cell to the first node, with
+				the first half of an authenticated handshake; that node responds with
+				a CREATED/CREATED2 cell with the second half of the handshake. To
+				extend a circuit past the first hop, the OP sends an EXTEND/EXTEND2
+				relay cell (see section 5.1.2) which instructs the last node in the
+				circuit to send a CREATE/CREATE2 cell to extend the circuit.
+				*/
+
+				tempCell = make_unique<Briand::BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::CREATE2);
+
+				/*
+					A CREATE2 cell contains:
+
+       				HTYPE     (Client Handshake Type)     [2 bytes]
+       				HLEN      (Client Handshake Data Len) [2 bytes]
+       				HDATA     (Client Handshake Data)     [HLEN bytes]
+				*/
+
+				// Set HTYPE to 0x0002  ntor -- the ntor+curve25519+sha256 handshake; see 5.1.4
+				tempCell->AppendToPayload(0x00);
+				tempCell->AppendToPayload(0x02);
+
+				
+
+
+
+				/*
+					A CREATED2 cell contains:
+
+						HLEN      (Server Handshake Data Len) [2 bytes]
+						HDATA     (Server Handshake Data)     [HLEN bytes]
+				*/
 			}
 
+			// DEBUG !!!
+			return false;
+
+			if (DEBUG) Serial.println("[DEBUG] Starting relay search for middle node.");
 			
+			if (!this->FindAndPopulateRelay(1, maxTentatives)) return false; // MIDDLE
 			
 
+			if (DEBUG) Serial.println("[DEBUG] Starting relay search for exit node.");
+
+			if (!this->FindAndPopulateRelay(2, maxTentatives)) return false; // EXIT
 
 
 			//

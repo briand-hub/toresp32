@@ -25,6 +25,7 @@
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
 #include "BriandUtils.hxx"
+#include "BriandTorCertificate.hxx"
 
 using namespace std;
 
@@ -36,12 +37,18 @@ namespace Briand {
 	class BriandTorCell {
 		protected:
 		bool isVariableLengthCell;
-		unsigned char linkProtocolVersion;
+		unsigned short linkProtocolVersion;
+		unsigned long cellTotalSizeBytes;
 
 		// CircID is 4 bytes in link protocol 4+ , 2 otherwise
 		// The first VERSIONS cell, and any cells sent before the first VERSIONS cell, always have CIRCID_LEN == 2 for backward compatibility.
 		unsigned int CircID;
 		Briand::BriandTorCellCommand Command;
+
+		// The length in case of variable cells will be calculated from vector (length occupy 2 bytes)
+		unique_ptr<vector<unsigned char>> Payload;
+
+		const short PAYLOAD_LEN = 509; 						// Apr 2021: The longest allowable cell payload, in bytes. (509)
 
 		/**
 		 * Pads the payload (if needed)
@@ -96,10 +103,6 @@ namespace Briand {
 		}
 
 		public:
-		const short PAYLOAD_LEN = 509; 						// Apr 2021: The longest allowable cell payload, in bytes. (509)
-
-		// The length in case of variable cells will be calculated from vector (length occupy 2 bytes)
-		unique_ptr<vector<unsigned char>> Payload;
 
 		/**
 		 * Constructor
@@ -107,7 +110,7 @@ namespace Briand {
 		 * @param circid the CircID
 		 * @param command the cell Command
 		*/
-		BriandTorCell(const unsigned char& link_protocol_version, const unsigned int circid, const Briand::BriandTorCellCommand& command) {
+		BriandTorCell(const unsigned char& link_protocol_version, const unsigned int& circid, const Briand::BriandTorCellCommand& command) {
 			this->linkProtocolVersion = link_protocol_version;
 
 			this->CircID = circid;
@@ -122,6 +125,8 @@ namespace Briand {
 			// Additionally to save more RAM, padding will be done directly.
 
 			this->Payload = make_unique<vector<unsigned char>>();
+
+			this->cellTotalSizeBytes = 0;
 		}
 
 		~BriandTorCell() {
@@ -131,13 +136,42 @@ namespace Briand {
 		}
 
 		/**
-		 * Method to get the buffer to be transmitted. Must set Payload BEFORE calling this method!
-		 * @param bufferLength reference to write output buffer length (in bytes)
-		 * @return the buffer ready to be transmitted
+		 * Append one single byte to the current payload.
+		 * Warning! Do exceed PAYLOAD_LEN!
+		 * @param byte Byte-Content to append
+		 * @return true if success, false if exceed PAYLOAD_LEN
 		*/
-		unique_ptr<unsigned char[]> GetBuffer(unsigned int& bufferLength) {
-			// Pad the payload
-			this->PadPayload();
+		bool AppendToPayload(const unsigned char& byte) {
+			if (this->Payload->size() + 1 > this->PAYLOAD_LEN)
+				return false;
+
+			this->Payload->push_back(byte);
+			return true;
+		}
+
+		/**
+		 * Clear the current payload
+		*/
+		void ClearPayload() {
+			this->Payload->clear();
+		}
+
+		/**
+		 * Print out the cell raw bytes to Serial output, group 8 bytes per row
+		*/
+		void PrintCellPayloadToSerial() {
+			Briand::BriandUtils::PrintByteBuffer( *(this->Payload.get()) );
+		}
+
+		/**
+		 * Method to send cell over the net using the initialized and connected client secure.
+		 * @param client Pointer to your own initialized WiFiClientSecure, connected and ready.
+		 * @param closeConnection set it to true if you want close the connection (client->end).
+		 * @return Pointer to response contents
+		*/
+		unique_ptr<vector<unsigned char>> SendCell(unique_ptr<WiFiClientSecure>& client, bool closeConnection = false) {
+			// Prepare the cell header and pad payload if necessary
+			auto cellBuffer = make_unique<vector<unsigned char>>();
 
 			/*
 				Apr 2021
@@ -157,84 +191,266 @@ namespace Briand {
 						Payload (some commands MAY pad)       [Length bytes]
 			*/
 
+			// CircID may vary
+
+			if (this->Command == Briand::BriandTorCellCommand::VERSIONS || this->linkProtocolVersion < 4) {
+				// CircID is 2 bytes
+				cellBuffer->push_back( static_cast<unsigned char>( this->CircID & 0xFF00 ) );
+				cellBuffer->push_back( static_cast<unsigned char>( this->CircID & 0x00FF ) );
+			}
+			else if (this->linkProtocolVersion >= 4) {
+				// CircID is 4 bytes
+				cellBuffer->push_back( static_cast<unsigned char>( this->CircID & 0xFF000000 ) );
+				cellBuffer->push_back( static_cast<unsigned char>( this->CircID & 0x00FF0000 ) );
+				cellBuffer->push_back( static_cast<unsigned char>( this->CircID & 0x0000FF00 ) );
+				cellBuffer->push_back( static_cast<unsigned char>( this->CircID & 0x000000FF ) );
+			}
+
+			// 1 byte for Command, always
+			cellBuffer->push_back( static_cast<unsigned char>(this->Command) );
+
+			// If variable-length cell, 2 bytes must be added, containing payload len
 			if (this->isVariableLengthCell) {
-				if (this->Command == Briand::BriandTorCellCommand::VERSIONS || this->linkProtocolVersion < 4) {
-					// The versions has compatibility mode so ....
-					// 2 bytes for CircID
-					bufferLength = 2; 	
-					// 1 byte for Command
-					bufferLength += 1;  
-					// 2 bytes for Length
-					bufferLength += 2;  
-					// just the length of Payload
-					bufferLength += this->Payload->size();  
-				}
-				else {
-					bufferLength = 4; // 4 bytes for CircID
-					// 1 byte for Command
-					bufferLength += 1;  
-					// 2 bytes for Length
-					bufferLength += 2;  
-					// just the length of Payload
-					bufferLength += this->Payload->size();  
-				}
-			}
-			else {
-				// For sure payload padded. just check protocol version
-				// 2 or 4 bytes for CircID
-				bufferLength = (this->linkProtocolVersion < 4 ? 2 : 4);
-				// 1 byte for Command
-				bufferLength += 1;  
-				// just the length of Payload (SHOULD BE PAYLOAD_LEN)
-				bufferLength += this->Payload->size();  
+				cellBuffer->push_back( static_cast<unsigned char>( this->Payload->size() & 0xFF00 ) );
+				cellBuffer->push_back( static_cast<unsigned char>( this->Payload->size() & 0x00FF ) );
 			}
 
-			auto cellBuffer = make_unique<unsigned char[]>(bufferLength);
+			// Pad payload (will check itself if it is needed)
+			this->PadPayload();
 
-			// Build buffer 
-			// (TODO: find a better way...)
+			// Append payload to cellBuffer
+			cellBuffer->insert(cellBuffer->end(), this->Payload->begin(), this->Payload->end());
 
-			unsigned short payloadStart = 0;
+			this->cellTotalSizeBytes = cellBuffer->size();
 
-			if (this->linkProtocolVersion < 4) {
-				cellBuffer[0] = static_cast<unsigned char>( this->CircID & 0xFF00 );
-				cellBuffer[1] = static_cast<unsigned char>( this->CircID & 0x00FF );
+			if (DEBUG) Serial.printf("[DEBUG] %s Cell of %d bytes is going to be sent. Contents:\n", Briand::BriandUtils::BriandTorCellCommandToString(this->Command).c_str(), cellBuffer->size());
+			if (DEBUG) Briand::BriandUtils::PrintByteBuffer( *(cellBuffer.get()), 128 );
 
-				cellBuffer[2] = static_cast<unsigned char>( this->Command );
-
-				if (this->isVariableLengthCell) {
-					cellBuffer[3] = static_cast<unsigned char>( this->Payload->size() & 0xFF00 );
-					cellBuffer[4] = static_cast<unsigned char>( this->Payload->size() & 0x00FF );
-					payloadStart = 5;
-				}
-				else {
-					payloadStart = 3;
-				}
-			}
-			else {
-				cellBuffer[0] = static_cast<unsigned char>( this->CircID & 0xFF000000 );
-				cellBuffer[1] = static_cast<unsigned char>( this->CircID & 0x00FF0000 );
-				cellBuffer[2] = static_cast<unsigned char>( this->CircID & 0x0000FF00 );
-				cellBuffer[3] = static_cast<unsigned char>( this->CircID & 0x000000FF );
-
-				cellBuffer[4] = static_cast<unsigned char>( this->Command );
-
-				if (this->isVariableLengthCell) {
-					cellBuffer[5] = static_cast<unsigned char>( this->Payload->size() & 0xFF00 );
-					cellBuffer[6] = static_cast<unsigned char>( this->Payload->size() & 0x00FF );
-					payloadStart = 7;
-				}
-				else {
-					payloadStart = 5;
-				}
-			}
-
-			for (unsigned short i = 0; i<this->Payload->size(); i++) {
-				cellBuffer[i + payloadStart] = static_cast<unsigned char>( this->Payload->at(i) );
-			}
-
-			return std::move(cellBuffer);
+			// That's all, send cell through network!
+			auto response = Briand::BriandNet::RawSecureRequest(client, cellBuffer, true, closeConnection); // clear cell buffer after request to save ram.
+			cellBuffer.reset(); // free ram
+			return std::move(response);
 		}
+
+		/**
+		 * Method to rebuild cell informations starting from a buffer received. Could override link protocol version.
+		 * @param buffer Pointer to the buffer
+		 * @param link_protocol_version Set to <= 0 to keep the default (from constructor), or set the version (>0) to override.
+		 * @return true if success, false instead.
+		*/
+		bool BuildFromBuffer(unique_ptr<vector<unsigned char>>& buffer, const unsigned char& link_protocol_version) {
+			cellTotalSizeBytes = 0;
+
+			if (link_protocol_version > 0) {
+				this->linkProtocolVersion = link_protocol_version;
+			}
+			
+			// Clear all current informations
+			this->CircID = 0;
+			this->Command = Briand::BriandTorCellCommand::PADDING;
+			this->isVariableLengthCell = false;
+			this->ClearPayload();
+			
+			// check length
+			if (buffer->size() < 5) {
+				if (DEBUG) Serial.println("[DEBUG] Insufficient length (less than 5 bytes).");
+				return false;
+			}
+
+			unsigned short nextFrom = 0;
+
+			// CircID
+			if (this->linkProtocolVersion < 4) {
+				// CircID is 2 bytes, VERSION cells are always 2 bytes
+				if (DEBUG) Serial.printf("[DEBUG] Link protocol <4 (Ver.%u)\n", this->linkProtocolVersion);
+				this->CircID += static_cast<unsigned int>(buffer->at(0) << 8);
+				this->CircID += static_cast<unsigned int>(buffer->at(1));
+				nextFrom = 2;
+				cellTotalSizeBytes += 2;
+			}
+			else {
+				// CircID is 4 bytes
+				if (DEBUG) Serial.printf("[DEBUG] Link protocol >=4. (Ver. %u)\n", this->linkProtocolVersion);
+				this->CircID += static_cast<unsigned int>(buffer->at(0) << 24);
+				this->CircID += static_cast<unsigned int>(buffer->at(1) << 16);
+				this->CircID += static_cast<unsigned int>(buffer->at(2) << 8);
+				this->CircID += static_cast<unsigned int>(buffer->at(3));
+				nextFrom = 4;
+				cellTotalSizeBytes += 4;
+			}
+
+			// Command 1 byte
+			this->Command = static_cast<Briand::BriandTorCellCommand>( buffer->at(nextFrom) );
+			nextFrom += 1;
+			cellTotalSizeBytes += 1;
+
+			if (DEBUG) Serial.printf("[DEBUG] Cell command is %s\n", Briand::BriandUtils::BriandTorCellCommandToString(this->Command).c_str() );
+
+			// Command => I know if is variable length cell
+			if (this->Command == Briand::BriandTorCellCommand::VERSIONS || static_cast<unsigned int>(this->Command) >= 128) 
+				this->isVariableLengthCell = true;
+
+			// If variable length cell then I must have 2 bytes for Length and [Length] bytes more
+			if(this->isVariableLengthCell && (buffer->size() - nextFrom) < 2) {
+				if (DEBUG) Serial.println("[DEBUG] Variable-length cell has insufficient length.");
+				return false;
+			}
+			
+			if (this->isVariableLengthCell) {
+				// Get the size of payload (may be more, but should be ignored)
+				unsigned short length = 0;
+				length += static_cast<unsigned short>(buffer->at(nextFrom) << 8);
+				length += static_cast<unsigned short>(buffer->at(nextFrom+1));
+				nextFrom += 2;
+				cellTotalSizeBytes += 2;
+
+				if ((buffer->size() - nextFrom) < length) {
+					if (DEBUG) Serial.println("[DEBUG] Variable-length cell has insufficient payload length.");
+					return false;
+				}
+
+				// Read all payload
+				this->Payload->insert(this->Payload->begin(), buffer->begin() + nextFrom, buffer->begin() + nextFrom + length);
+
+				if (DEBUG) {
+					Serial.print("[DEBUG] Variable-length cell payload: ");
+					Briand::BriandUtils::PrintByteBuffer( *(this->Payload.get()), 128 );
+				} 
+			}
+			else {
+				// All the rest, for a maximum of PAYLOAD_LEN, is payload
+				this->Payload->insert(this->Payload->begin(), buffer->begin() + nextFrom, buffer->begin() + nextFrom + PAYLOAD_LEN);
+				if (DEBUG) Serial.printf("[DEBUG] Fixed cell payload of %d bytes.\n", this->Payload->size());
+			}
+
+			cellTotalSizeBytes += this->Payload->size();
+
+			return true;
+		}
+
+		/**
+		 * @return Cell command
+		*/
+		Briand::BriandTorCellCommand GetCommand() {
+			return this->Command;
+		}
+
+		/**
+		 * @return Raw payload pointer reference (PAY(load) ATTENTION!)
+		*/
+		unique_ptr<vector<unsigned char>>& GetPayload() {
+			return this->Payload;
+		}
+
+		/**
+		 * @return Link protocol version
+		*/
+		unsigned int GetCircID() {
+			return this->CircID;
+		}
+
+		/**
+		 * @return true if is a variable-length cell
+		*/
+		bool IsVariableLengthCell() {
+			return this->isVariableLengthCell;
+		}
+
+		/**
+		 * @return Cell size in bytes (available only after SendCell or BuildFromBuffer calls)
+		*/
+		unsigned long int GetCellTotalSizeBytes() {
+			return this->cellTotalSizeBytes;
+		}
+
+		/**
+		 * Method returns the highest link protocol available from a VERSION cell. Zero if non a version cell or error.
+		 * @return Highest link protocol version, 0 if not a VERSION cell or error.
+		*/
+		unsigned short GetLinkProtocolFromVersionCell() {
+			if (this->Command != Briand::BriandTorCellCommand::VERSIONS || this->Payload->size() < 2 || this->Payload->size() % 2 != 0) 
+				return 0;
+			
+			// Payload should contain couples of bytes for each supported protocol version.
+			unsigned short highest = 0;
+
+			for (int i = 0; i<this->Payload->size(); i += 2) {
+				unsigned short current = 0;
+				current += static_cast<unsigned short>(this->Payload->at(i) << 8);
+				current += static_cast<unsigned short>(this->Payload->at(i+1));
+				if (current > highest)
+					highest = current;
+			}
+
+			return highest;
+		}
+
+		/**
+		 * Method sets the certificates included in a CERTS cell to the specified relay
+		 * @param relay The relay where save certificates.
+		 * @return true if success, false if fails.
+		*/
+		bool SetRelayCertificatesFromCertsCell(unique_ptr<Briand::BriandTorRelay>& relay) {
+			if (this->Command != Briand::BriandTorCellCommand::CERTS || this->Payload->size() < 3)
+				return false;
+			
+			/*
+				The CERTS cell describes the keys that a Tor instance is claiming
+				to have.  It is a variable-length cell.  Its payload format is:
+
+						N: Number of certs in cell            [1 octet]
+						N times:
+						CertType                           [1 octet]
+						CLEN                               [2 octets]
+						Certificate                        [CLEN octets]
+			*/
+
+			// First byte has number of certs
+			unsigned char NCerts = this->Payload->at(0);
+			unsigned long int startIndex = 1;
+			for (unsigned char curCert = 0; curCert<NCerts; curCert++) {
+				Briand::BriandTorCertificate newCert;
+
+				// First byte => cert type
+				unsigned char certType = this->Payload->at(startIndex);
+				startIndex++;
+				
+				if (DEBUG) Serial.printf("[DEBUG] Certificate %u (of %u) is certType %u.\n", curCert+1, NCerts, certType);
+
+				// check if ok
+				if ( certType <= 0 || certType > Briand::BriandTorCertificate::MAX_CERT_VALUE ) {
+					if (DEBUG) Serial.println("[DEBUG] Invalid CERTS cell content (not a valid range certType).");
+					return false;
+				}
+
+				newCert.Type = static_cast<Briand::BriandTorCertificate::CertType>(certType);
+				
+				// 2 bytes for length
+				unsigned short certLen = 0;
+				certLen += static_cast<unsigned short>(this->Payload->at(startIndex) << 8);
+				certLen += static_cast<unsigned short>(this->Payload->at(startIndex+1));
+				startIndex += 2;
+
+				if (DEBUG) Serial.printf("[DEBUG] Certificate len is %u bytes.\n", certLen);
+
+				// Payload should contain at least this length
+				if (this->Payload->size() - startIndex < certLen) {
+					if (DEBUG) Serial.println("[DEBUG] Invalid CERTS cell content size.");
+					return false;
+				}
+
+				// Read certificate content
+				for (int i = startIndex; i < startIndex + certLen; i++ )
+					newCert.Contents->push_back( this->Payload->at(i) );
+
+				relay->certificates->push_back(newCert);
+
+				startIndex += certLen;
+			}
+
+			return true;
+		}
+
 	};
 
 	/*

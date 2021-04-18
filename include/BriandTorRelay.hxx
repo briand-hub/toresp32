@@ -18,20 +18,20 @@
 
 #pragma once
 
-#include <Arduino.h>
-#include <WiFi.h>
-#include <WiFiClientSecure.h>
-#include <HTTPClient.h>
-
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <vector>
+#include <algorithm>
 
 #include <ArduinoJson.h>
+#include <WiFiClientSecure.h>
 
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
 #include "BriandUtils.hxx"
+#include "BriandNet.hxx"
+#include "BriandTorCertificate.hxx"
 
 using namespace std;
 
@@ -40,6 +40,17 @@ namespace Briand {
 	 * This class describes and keeps information about a single Tor Relay
 	*/
 	class BriandTorRelay {
+		private:
+		
+		/**
+		 * Returns a certificate if match found, this->certificates->end() instead
+		 * @return pointer to certificate 
+		*/
+		std::vector<Briand::BriandTorCertificate>::iterator FindCertByType(Briand::BriandTorCertificate::CertType type) {
+			auto ptr = std::find_if(this->certificates->begin(), this->certificates->end(), [&type](const Briand::BriandTorCertificate& item) {return item.Type == type; } );
+			return ptr;
+		}
+
 		public:
 
 		unique_ptr<string> nickname;
@@ -47,21 +58,32 @@ namespace Briand {
 		unique_ptr<string> fingerprint;
 		unsigned short flags;
 
-		// TODO: handle more fields (minimum necessary!)
+		/** Contains CERTS cell certificates */
+		unique_ptr<vector<Briand::BriandTorCertificate>> certificates;
 
+		// TODO: handle more fields (minimum necessary if needed!)
+
+		// Relay Certificates (ready after a CERTS cell is sent)
+		
 		BriandTorRelay() {
 			nickname = make_unique<string>("");
 			first_address = make_unique<string>("");
 			fingerprint = make_unique<string>("");
 			flags = 0x0000;
+			certificates = make_unique<vector<Briand::BriandTorCertificate>>();
 		}
 
 		~BriandTorRelay() {
 			nickname.reset();
 			first_address.reset();
 			fingerprint.reset();
+			certificates.reset();
 		}
 
+		/**
+		 * Method returns relay host
+		 * @return host in string format 
+		*/
 		string GetHost() {
 			int sepPos = this->first_address->find(':');
 			if (sepPos != std::string::npos) {
@@ -71,13 +93,167 @@ namespace Briand {
 				return string("");
 		}
 
+		/**
+		 * Method returns relay port
+		 * @return port
+		*/
 		unsigned short GetPort() {
 			int sepPos = this->first_address->find(':');
 			if (sepPos != std::string::npos) {
-				return stoi( this->first_address->substr(sepPos + 1, this->first_address->length() ) );
+				return stoi( this->first_address->substr(sepPos + 1 ) ); // from there to the end
 			}
 			else
 				return 0;
+		}
+	
+		/**
+		 * Method validates certificates as required in Tor handshake protocol.
+		 * @return true if all valid, false if not.
+		*/
+		bool ValidateCertificates() {
+			if (this->certificates->size() == 0)
+				return false;
+			
+			/*			
+				To authenticate the responder as having a given Ed25519,RSA identity key
+				combination, the initiator MUST check the following.
+
+				[ see testCondition1 ]
+
+				To authenticate the responder as having a given RSA identity only,
+				the initiator MUST check the following:
+
+				[see testCondition2]
+			*/
+
+			bool testCondition1 = ( this->FindCertByType(BriandTorCertificate::CertType::Ed25519_Identity) != this->certificates->end() ) &&
+							 	  ( this->FindCertByType(BriandTorCertificate::CertType::RSA1024_Identity_Self_Signed) != this->certificates->end() );
+			
+			bool condition1Satisfied = false;
+
+			bool testCondition2 = ( this->FindCertByType(BriandTorCertificate::CertType::RSA1024_Identity_Self_Signed) != this->certificates->end() );
+
+			bool condition2Satisfied = false;
+			
+			if (testCondition1) {
+				if (DEBUG) Serial.println("[DEBUG] Relay has Ed25519+RSA identity keys.");
+				/*
+					the initiator MUST check the following.
+
+					* The CERTS cell contains exactly one CertType 2 "ID" certificate.
+					* The CERTS cell contains exactly one CertType 4 Ed25519 "Id->Signing" cert.
+					* The CERTS cell contains exactly one CertType 5 Ed25519 "Signing->link" certificate.
+					* The CERTS cell contains exactly one CertType 7 "RSA->Ed25519" cross-certificate.
+				*/
+
+				unsigned short test;
+				test = std::count_if(this->certificates->begin(), this->certificates->end(), [] (const BriandTorCertificate& x) { return x.Type == BriandTorCertificate::CertType::RSA1024_Identity_Self_Signed; });
+				if (test != 1) {
+					if (DEBUG) Serial.printf("[DEBUG] Error, found %d certificates of type 2, expected exactly one.\n", test);
+					return false;
+				}
+				test = std::count_if(this->certificates->begin(), this->certificates->end(), [] (const BriandTorCertificate& x) { return x.Type == BriandTorCertificate::CertType::Ed25519_Signing_Key; });
+				if (test != 1) {
+					if (DEBUG) Serial.printf("[DEBUG] Error, found %d certificates of type 4, expected exactly one.\n", test);
+					return false;
+				}
+				test = std::count_if(this->certificates->begin(), this->certificates->end(), [] (const BriandTorCertificate& x) { return x.Type == BriandTorCertificate::CertType::TLS_Link; });
+				if (test != 1) {
+					if (DEBUG) Serial.printf("[DEBUG] Error, found %d certificates of type 5, expected exactly one.\n", test);
+					return false;
+				}
+				test = std::count_if(this->certificates->begin(), this->certificates->end(), [] (const BriandTorCertificate& x) { return x.Type == BriandTorCertificate::CertType::Ed25519_Identity; });
+				if (test != 1) {
+					if (DEBUG) Serial.printf("[DEBUG] Error, found %d certificates of type 7, expected exactly one.\n", test);
+					return false;
+				}
+
+				/*
+					* All X.509 certificates above have validAfter and validUntil dates; no X.509 or Ed25519 certificates are expired.
+					* All certificates are correctly signed.
+				*/
+
+				auto ptrCa = this->FindCertByType(BriandTorCertificate::CertType::RSA1024_Identity_Self_Signed);
+				auto ptrPeer = this->FindCertByType(BriandTorCertificate::CertType::LinkKeyWithRSA1024);
+
+				if (ptrPeer == this->certificates->end()) {
+					if (DEBUG) Serial.println("[DEBUG] Error, LinkKeyWithRSA1024 not found!");
+					return false;
+				}
+
+				if (!ptrPeer->isValid( *ptrCa )) {
+					if (DEBUG) Serial.println("[DEBUG] Error, LinkKeyWithRSA1024 is invalid!");
+					return false;
+				}
+
+				//
+				// TODO
+				//
+
+				/*
+					* All X.509 certificates above have validAfter and validUntil dates; no X.509 or Ed25519 certificates are expired.
+					* All certificates are correctly signed.
+					* The certified key in the Signing->Link certificate matches the SHA256 digest of the certificate that was used to authenticate the TLS connection.
+					* The identity key listed in the ID->Signing cert was used to sign the ID->Signing Cert.
+					* The Signing->Link cert was signed with the Signing key listed in the ID->Signing cert.
+					* The RSA->Ed25519 cross-certificate certifies the Ed25519 identity, and is signed with the RSA identity listed in the "ID" certificate.
+					* The certified key in the ID certificate is a 1024-bit RSA key.
+					* The RSA ID certificate is correctly self-signed.
+				*/
+			}
+			else if (testCondition2) {
+				if (DEBUG) Serial.println("[DEBUG] Relay has RSA identity key only.");
+				
+				/*
+					the initiator MUST check the following.
+
+					* The CERTS cell contains exactly one CertType 1 "Link" certificate.
+					* The CERTS cell contains exactly one CertType 2 "ID" certificate.
+				*/
+
+				unsigned short test;
+				test = std::count_if(this->certificates->begin(), this->certificates->end(), [] (const BriandTorCertificate& x) { return x.Type == BriandTorCertificate::CertType::LinkKeyWithRSA1024; });
+				if (test != 1) {
+					if (DEBUG) Serial.printf("[DEBUG] Error, found %d certificates of type 1, expected exactly one.\n", test);
+					return false;
+				}
+				test = std::count_if(this->certificates->begin(), this->certificates->end(), [] (const BriandTorCertificate& x) { return x.Type == BriandTorCertificate::CertType::RSA1024_Identity_Self_Signed; });
+				if (test != 1) {
+					if (DEBUG) Serial.printf("[DEBUG] Error, found %d certificates of type 2, expected exactly one.\n", test);
+					return false;
+				}
+
+				//
+				// TODO
+				//
+
+
+
+				/*
+					* Both certificates have validAfter and validUntil dates that are not expired.
+					* The certified key in the Link certificate matches the link key that was used to negotiate the TLS connection.
+					* The certified key in the ID certificate is a 1024-bit RSA key.
+					* The certified key in the ID certificate was used to sign both certificates.
+					* The link certificate is correctly signed with the key in the ID certificate
+					* The ID certificate is correctly self-signed.
+				*/
+
+			}
+			else  {
+				if (DEBUG) Serial.println("[DEBUG] Relay has no identity keys.");
+				return false;
+			}
+
+			/*
+				In both cases above, checking these conditions is sufficient to
+				authenticate that the initiator is talking to the Tor node with the
+				expected identity, as certified in the ID certificate(s).
+			*/
+
+			// DEBUG !!!!!!!!
+			return true;
+
+			return condition1Satisfied || condition2Satisfied;
 		}
 	};
 
@@ -129,19 +305,15 @@ namespace Briand {
 			// Randomize for subsequent method invoke
 			this->randomize();
 
+			short httpCode = 0;
+			string randomAgent = string( Briand::BriandUtils::GetRandomHostName().get() );
+
 			// Success to false
 			success = false;
 
-			// TODO: find a method to query https without give the CA root certificate hard-coded
-			// maybe download it ?
-			// Connection is still encrypted but there is no way to verify the server is the right one!
-
-			auto clientHttp = make_unique<HTTPClient>();
-			DynamicJsonDocument doc(2048); // Should be enough for data and safe for RAM...
-
 			ostringstream urlBuilder("");
 			// Main URL
-			urlBuilder << "https://onionoo.torproject.org/details?search=";
+			urlBuilder << "/details?search=";
 			// Search by flags
 			// WARNING: clientHttp DO NOT urlencode! So %20 instead of space must be provided!
 			urlBuilder << Briand::BriandUtils::BriandTorRelayFlagsToString(flagsMask, "flag:", "%20");
@@ -158,46 +330,17 @@ namespace Briand {
 			// Take a random number bunch
 			urlBuilder << "&limit=" << static_cast<unsigned short>( this->limitRandom );
 
-			if (DEBUG) Serial.printf("[DEBUG] Relay request url: %s\n", urlBuilder.str().c_str());
+			DynamicJsonDocument doc = Briand::BriandNet::HttpsGetJson(
+				"onionoo.torproject.org", 443,
+				urlBuilder.str(),
+				httpCode, success, randomAgent,
+				2048
+			);
 
-			// Not providing a CACert will be a leak of security but hard-coding has disadvantages...	
-			clientHttp->begin( urlBuilder.str().c_str() );
-			int httpCode = clientHttp->GET();
-
-			if (httpCode == 200) {
-				// It is safe RAM beacause request just little data with poor fields,
-				// thus RAM should be fine...
-								
-				string responseContent = string( clientHttp->getString().c_str() );
-				clientHttp->end();
-				clientHttp.reset(); // now please, I need RAM!
-
-				if (DEBUG) Serial.printf("[DEBUG] Got response HTTP/200\n");
-				if (DEBUG) Serial.printf("[DEBUG] Raw response of %d bytes: %s\n", responseContent.length(), responseContent.c_str() );
-
-				StaticJsonDocument<200> filter; // used to filter just what needed!
-				filter["relays_published"] = true;
-				filter["relays"][0]["nickname"] = true;
-				filter["relays"][0]["fingerprint"] = true;
-				filter["relays"][0]["or_addresses"] = true;
-
-				DeserializationError err = deserializeJson(doc, responseContent.c_str(), DeserializationOption::Filter(filter));
-				
-				if (err) {
-					Serial.printf("[ERR] Error on deserialization from Onionoo!\n");
-				}
-				else {
-					if (DEBUG) Serial.printf("[DEBUG] Json document allocated %d bytes\n", doc.memoryUsage());
-					doc.shrinkToFit();
-					if (DEBUG) Serial.printf("[DEBUG] Json document shrink to %d bytes.\n", doc.memoryUsage());
-
-					// Success!
-					success = true;
-				}
+			if (!success) {
+				Serial.printf("[ERR] Error on downloading Onionoo relay. Http code: %d Deserialization success: %d\n", httpCode, success);
 			}
-			else
-				Serial.printf("[ERR] Error on downloading Onionoo relay. Http code: %d\n", httpCode);
-			
+
 			return doc;
 		}
 
@@ -209,6 +352,11 @@ namespace Briand {
 
 		~BriandTorRelaySearcher() {
 		}
+
+		//
+		// TODO: get a significative bunch of nodes (>=100) for each type
+		// save to a file and then use it randomly
+		//
 
 		/**
 		 * Search for Guard node
