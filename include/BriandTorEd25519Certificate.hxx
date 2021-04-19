@@ -53,7 +53,7 @@ namespace Briand {
 		unsigned short ExtLength; 	// [2 bytes]
         unsigned char ExtType;   	// [1 byte]
         unsigned char ExtFlags;		// [1 byte]
-        unique_ptr<vector<unsigned char>> ExtData; // [ExtLength bytes]
+        unique_ptr<unsigned char[]> ExtData; // [ExtLength bytes]
 		bool valid;	// built correctly
 
 		/**
@@ -64,7 +64,7 @@ namespace Briand {
 			this->ExtLength = 0x0000;
 			this->ExtType = 0x00;
 			this->ExtFlags = 0x00;
-			this->ExtData = nullptr; 
+			this->ExtData = nullptr;
 			
 			if (rawdata->size() < 4) {
 				if (DEBUG) Serial.println("[DEBUG] Ed25519CertificateExtension has poor bytes.");
@@ -81,9 +81,8 @@ namespace Briand {
 				return;
 			}
 
-			this->ExtData = make_unique<vector<unsigned char>>(this->ExtLength);
-
-			std::copy(rawdata->begin() + 4, rawdata->end(), this->ExtData->begin());
+			this->ExtData = make_unique<unsigned char[]>( this->ExtLength );
+			std::copy(rawdata->begin() + 4, rawdata->begin() + 4 + this->ExtLength, this->ExtData.get());
 
 			if (DEBUG) Serial.println("[DEBUG] Ed25519CertificateExtension structure is valid.");
 
@@ -98,10 +97,8 @@ namespace Briand {
 			this->ExtType = other.ExtType;
 			this->ExtFlags = other.ExtFlags;
 			this->valid = other.valid;
-			this->ExtData = make_unique<vector<unsigned char>>();
-			Serial.println("Copy constr init");
-			this->ExtData->insert(this->ExtData->begin(), other.ExtData->begin(), other.ExtData->end());
-			Serial.println("Copy constr end");
+			this->ExtData = make_unique<unsigned char[]>(other.ExtLength);
+			std::copy(other.ExtData.get(), other.ExtData.get() + other.ExtLength, this->ExtData.get());
 		}
 
 		~BriandTorEd25519CertificateExtension() {
@@ -109,7 +106,7 @@ namespace Briand {
 		}
 
 		unsigned int TotalSize() {
-			return 4 + this->ExtData->size();
+			return 4 + this->ExtLength;
 		}
 	};
 
@@ -184,7 +181,6 @@ namespace Briand {
 			std::copy(raw_bytes->begin() + 7, raw_bytes->begin() + 7 + certified_key_len, this->CERTIFIED_KEY.get());
 
 			this->N_EXTENSIONS = raw_bytes->at(7 + certified_key_len);
-			unsigned int totalExtSize = 0;
 
 			if (this->N_EXTENSIONS > 0x00) {
 				// There are extensions, each can have a variable size.
@@ -206,13 +202,7 @@ namespace Briand {
 					}
 
 					this->EXTENSIONS->push_back(ext);
-					Serial.println("PUSHED                         !!!!!!");
-
 					remainingExtensions--;
-					totalExtSize += ext.TotalSize();
-
-					Serial.printf("Erasing %d bytes from vector of %d bytes.\n", ext.TotalSize(), extBuffer->size());
-
 					extBuffer->erase(extBuffer->begin(), extBuffer->begin() + ext.TotalSize());
 				}
 
@@ -221,8 +211,6 @@ namespace Briand {
 
 			// The last 64 bytes are this, do not check, certificate validation will do.
 			
-			Serial.printf("Copying data signature.\n");
-
 			std::copy(raw_bytes->end() - this->signature_len, raw_bytes->end(), this->SIGNATURE.get());
 
 			if (DEBUG) Serial.println("[DEBUG] Ed25519Certificate structure validated.");

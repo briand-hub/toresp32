@@ -319,6 +319,27 @@ namespace Briand
 		}
 	
 		/**
+		 * DEBUG Method to print raw bytes to serial output (hex format)
+		 * @param buffer the buffer to be printed (unsigned char[])
+		 * @param size the buffer size
+		 * @param bytesToPrint number of buffer bytes to print (0 to print all)
+		 * @param newLineAfterBytes print a new line after N bytes
+		*/
+		static void PrintOldStyleByteBuffer(unsigned char buffer[], const unsigned int& size, const short& newLineAfterBytes = 8, const unsigned int& bytesToPrint = 0) {
+			unsigned int limit;
+
+			if (bytesToPrint > 0 && bytesToPrint < size) limit = bytesToPrint;
+			else limit = size;
+
+			for (unsigned int i=0; i < limit; i++) {
+				Serial.printf("%02X ", buffer[i]);
+				if (i > 0 && i % newLineAfterBytes == 0) Serial.print("\n");
+			}
+			Serial.print("\n");
+		}
+	
+
+		/**
 		 * Convert a command to a readable string
 		 * @param command Cell command 
 		*/

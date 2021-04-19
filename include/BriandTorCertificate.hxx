@@ -90,7 +90,7 @@ namespace Briand {
 		}
 
 		~BriandTorCertificate() {
-			this->Contents.release();
+			this->Contents.reset();
 		}
 
 		/**
@@ -268,6 +268,8 @@ namespace Briand {
 				//
 
 				if (DEBUG) Serial.printf("[DEBUG] Type %d certificate validation: success.\n", static_cast<short>(this->Type));
+				
+				return true;
 			}
 			else if (this->Type == Ed25519_Signing_Key) {
 				// This is a "special" Tor-specific format of certificate.
@@ -286,6 +288,8 @@ namespace Briand {
 				//
 
 				if (DEBUG) Serial.printf("[DEBUG] Type %d certificate validation: success.\n", static_cast<short>(this->Type));
+				
+				return true;
 			}
 			else if (this->Type == TLS_Link) {
 				// This is a "special" Tor-specific format of certificate.
@@ -302,6 +306,8 @@ namespace Briand {
 				//
 
 				if (DEBUG) Serial.printf("[DEBUG] Type %d certificate validation: success.\n", static_cast<short>(this->Type));
+
+				return true;
 			}
 			else if (this->Type == Ed25519_AUTHENTICATE_Cell_key) {
 				// This is a "special" Tor-specific format of certificate.
@@ -319,6 +325,8 @@ namespace Briand {
 				//
 
 				if (DEBUG) Serial.printf("[DEBUG] Type %d certificate validation: success.\n", static_cast<short>(this->Type));
+
+				return true;
 			}
 			else if (this->Type == Ed25519_Identity) {
 				// This is a "special" Tor-specific format of certificate.
@@ -336,6 +344,8 @@ namespace Briand {
 				//
 
 				if (DEBUG) Serial.printf("[DEBUG] Type %d certificate validation: success.\n", static_cast<short>(this->Type));
+
+				return true;
 			}
 			else {
 				if (DEBUG) Serial.println("[DEBUG] Unknown certificate type, validation fails by default!");

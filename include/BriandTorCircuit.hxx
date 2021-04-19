@@ -451,6 +451,7 @@ namespace Briand {
 				if (DEBUG) Serial.println("[DEBUG] Got CREATED2 !");
 			}
 
+			this->Cleanup();
 			// DEBUG !!!
 			return false;
 

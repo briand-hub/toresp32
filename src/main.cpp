@@ -62,6 +62,7 @@ unique_ptr<string> AP_ESSID = nullptr;
 unique_ptr<string> AP_PASSW = nullptr;
 unique_ptr<string> COMMAND = nullptr;
 unsigned long long int COMMANDID = 0;
+unsigned int HEAP_LEAK_CHECK = 0;
 
 /* Early declarations */
 void reboot();
@@ -94,16 +95,15 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, 1); // 1 => off, 0 => on
 
-	// Set time to UTC 
-
-	if (VERBOSE) {
-		//
-		// TODO
-		//
-
-		// Maybe not necessary? RTC is resetting...
-	}
-
+    // ----------------------------
+    Serial.println("START");
+    auto buf = make_unique<vector<unsigned char>>();
+    buf->push_back( 0x01 ); buf->push_back( 0x04 ); buf->push_back( 0x00 ); buf->push_back( 0x06 ); buf->push_back( 0xDE ); buf->push_back( 0x64 ); buf->push_back( 0x01 ); buf->push_back( 0xA9 ); buf->push_back( 0x46 ); buf->push_back( 0x69 ); buf->push_back( 0x53 ); buf->push_back( 0x29 ); buf->push_back( 0xFC ); buf->push_back( 0xE0 ); buf->push_back( 0x28 ); buf->push_back( 0xEB ); buf->push_back( 0x36 ); buf->push_back( 0xC4 ); buf->push_back( 0xD4 ); buf->push_back( 0x07 ); buf->push_back( 0xB1 ); buf->push_back( 0x98 ); buf->push_back( 0x51 ); buf->push_back( 0xEC ); buf->push_back( 0x8A ); buf->push_back( 0x1D ); buf->push_back( 0x30 ); buf->push_back( 0x97 ); buf->push_back( 0x0D ); buf->push_back( 0xFD ); buf->push_back( 0xFA ); buf->push_back( 0xD1 ); buf->push_back( 0x08 ); buf->push_back( 0x6F ); buf->push_back( 0x9E ); buf->push_back( 0xD8 ); buf->push_back( 0xAA ); buf->push_back( 0xD8 ); buf->push_back( 0x79 ); buf->push_back( 0x01 ); buf->push_back( 0x00 ); buf->push_back( 0x20 ); buf->push_back( 0x04 ); buf->push_back( 0x00 ); buf->push_back( 0x0C ); buf->push_back( 0xE0 ); buf->push_back( 0x26 ); buf->push_back( 0x06 ); buf->push_back( 0xCB ); buf->push_back( 0x02 ); buf->push_back( 0xD7 ); buf->push_back( 0x4B ); buf->push_back( 0x64 ); buf->push_back( 0x63 ); buf->push_back( 0x3D ); buf->push_back( 0xE5 ); buf->push_back( 0x09 ); buf->push_back( 0x0D ); buf->push_back( 0xC9 ); buf->push_back( 0x74 ); buf->push_back( 0x62 ); buf->push_back( 0xAA ); buf->push_back( 0x42 ); buf->push_back( 0xE2 ); buf->push_back( 0x2F ); buf->push_back( 0x7F ); buf->push_back( 0x0C ); buf->push_back( 0xB6 ); buf->push_back( 0x88 ); buf->push_back( 0x48 ); buf->push_back( 0x06 ); buf->push_back( 0x50 ); buf->push_back( 0x6E ); buf->push_back( 0x41 ); buf->push_back( 0xA6 ); buf->push_back( 0x34 ); buf->push_back( 0x39 ); buf->push_back( 0xFB ); buf->push_back( 0xEC ); buf->push_back( 0x8E ); buf->push_back( 0xA1 ); buf->push_back( 0xF8 ); buf->push_back( 0xBD ); buf->push_back( 0x52 ); buf->push_back( 0x6B ); buf->push_back( 0xB7 ); buf->push_back( 0xD6 ); buf->push_back( 0xB2 ); buf->push_back( 0xED ); buf->push_back( 0xFC ); buf->push_back( 0xB0 ); buf->push_back( 0xBD ); buf->push_back( 0x42 ); buf->push_back( 0x41 ); buf->push_back( 0xD3 ); buf->push_back( 0xF5 ); buf->push_back( 0xE9 ); buf->push_back( 0x50 ); buf->push_back( 0xF1 ); buf->push_back( 0x4B ); buf->push_back( 0x5D ); buf->push_back( 0xC0 ); buf->push_back( 0x30 ); buf->push_back( 0xC6 ); buf->push_back( 0xEF ); buf->push_back( 0xB9 ); buf->push_back( 0x7C ); buf->push_back( 0x6C ); buf->push_back( 0xB3 ); buf->push_back( 0xF7 ); buf->push_back( 0x46 ); buf->push_back( 0xC7 ); buf->push_back( 0x78 ); buf->push_back( 0xD6 ); buf->push_back( 0x25 ); buf->push_back( 0x53 ); buf->push_back( 0x34 ); buf->push_back( 0x24 ); buf->push_back( 0xC1 ); buf->push_back( 0xC9 ); buf->push_back( 0x37 ); buf->push_back( 0x5C ); buf->push_back( 0xB1 ); buf->push_back( 0x91 ); buf->push_back( 0xEF ); buf->push_back( 0xCE ); buf->push_back( 0x54 ); buf->push_back( 0x5D ); buf->push_back( 0x8D ); buf->push_back( 0xD6 ); buf->push_back( 0x72 ); buf->push_back( 0x5F ); buf->push_back( 0xDD ); buf->push_back( 0xFA ); buf->push_back( 0x7B ); buf->push_back( 0x75 ); buf->push_back( 0x7A ); buf->push_back( 0xF3 ); buf->push_back( 0xCC ); buf->push_back( 0x06 ); 
+    Briand::BriandTorEd25519Certificate cer { buf };
+    Serial.printf("Valid: %d\n", cer.isStructureValid());
+    Serial.println("FINISH");
+    // ----------------------------
+    
     if (VERBOSE) {
         // Execute tests
         Serial.printf("[TEST] UULONG MAX VALUE (hex): 0x%016llx\n", ULLONG_MAX);
@@ -608,7 +608,21 @@ void executeCommand(string& cmd) {
     Serial.printf("[EXE][0x%016llx][END]\n", COMMANDID);
 
 	// Debug: print memory used by command
-	if (DEBUG) Serial.printf("[DEBUG] Heap consumption: %lu (from %lu to %lu) bytes.", (heapBefore - ESP.getFreeHeap()), heapBefore, ESP.getFreeHeap());
+    int consumption = (heapBefore - ESP.getFreeHeap());
+	if (DEBUG) Serial.printf("[DEBUG] Heap consumption: %lu (from %lu to %lu) bytes.\n", consumption, heapBefore, ESP.getFreeHeap());
+
+    // Always useful: check if code has heap leaks 
+    // sometimes I do the mistake to use .release() insted of .reset() on smart pointers :P
+
+    //
+    // TODO
+    //
+
+    if (false) {
+        Serial.println("!!!!!!!!!!WARNING!!!!!!!!! Heap is constantly decreasing!");
+        HEAP_LEAK_CHECK++;
+    }
+    
 
     // Clear COMMAND for next
     COMMAND->clear();
