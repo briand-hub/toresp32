@@ -408,6 +408,9 @@ void loop() {
         nextStep = 900;
 
         Serial.println("\n\nSYSTEM READY! Type help for commands.\n");
+
+        // Start heap-leak warning watch
+        HEAP_LEAK_CHECK = ESP.getFreeHeap();
     }
     else if (nextStep == 900) {
         // Here system ready for commands
@@ -416,6 +419,8 @@ void loop() {
         nextStep = 901;
     }
     else if (nextStep == 901) {
+        
+
         // Command received
         // Execute.....
         executeCommand( *(COMMAND.get()) );
@@ -619,7 +624,7 @@ void executeCommand(string& cmd) {
     //
 
     if (false) {
-        Serial.println("!!!!!!!!!!WARNING!!!!!!!!! Heap is constantly decreasing!");
+        Serial.println("!!!!!!!!!!WARNING!!!!!!!!! Heap is decreasing!");
         HEAP_LEAK_CHECK++;
     }
     
