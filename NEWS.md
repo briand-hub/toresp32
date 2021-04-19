@@ -1,6 +1,6 @@
 # Development status
 
-## 18/04/2021
+## 2021-04-18
 * Added more commands for debugging and normal use
 * RSA certificates validation is ready (using ESP32 mbedtls library)
 * First cells exchange with Guard node working!!
@@ -11,5 +11,5 @@
 * Encrypted AES128 config file working (SPIFFS filesystem)
 * Memory checks are OK!
 
-## 14/04/2021 
+## 2021-04-18
 At the moment just a non-working draft!
