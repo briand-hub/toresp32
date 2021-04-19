@@ -186,20 +186,70 @@ namespace Briand {
 					return false;
 				}
 
+				if (DEBUG) Serial.println("[DEBUG] LinkKeyWithRSA1024 certificate validation: successs.");
+
+				/* The RSA ID certificate is correctly self-signed. */
+				if (!ptrCa->isValid( *ptrCa )) {
+					if (DEBUG) Serial.println("[DEBUG] Error, RSA1024_Identity_Self_Signed is invalid!");
+					return false;
+				}
+
+				/* The certified key in the ID certificate is a 1024-bit RSA key. */
+				if (ptrCa->GetRsaKeyLength() != 1024) {
+					unsigned int ks = ptrCa->GetRsaKeyLength();
+					if (DEBUG) Serial.printf("[DEBUG] Error, RSA1024_Identity_Self_Signed has an invalid key size of %d bit, expected 1024.\n", ks);
+					return false;
+				}
+
+				if (DEBUG) Serial.println("[DEBUG] RSA1024_Identity_Self_Signed certificate validation: successs.");
+
+				if (DEBUG) Serial.println("[DEBUG] X.509 certificates OK, starting verification of Ed25519 certificates.");
+
+				// TEST ED25519 CERTIFICATES
+				
+				// TODO : REAL CA!!!!
+
+				ptrPeer = this->FindCertByType(BriandTorCertificate::CertType::Ed25519_Signing_Key);
+
+				if (!ptrPeer->isValid( *ptrCa )) {
+					if (DEBUG) Serial.println("[DEBUG] Error, Ed25519_Signing_Key is not valid.");
+					return false;
+				}
+
+				if (DEBUG) Serial.println("[DEBUG] Ed25519_Signing_Key certificate validation: successs.");
+
+				ptrPeer = this->FindCertByType(BriandTorCertificate::CertType::TLS_Link);
+				if (!ptrPeer->isValid( *ptrCa )) {
+					if (DEBUG) Serial.println("[DEBUG] Error, TLS_Link is not valid.");
+					return false;
+				}
+
+				if (DEBUG) Serial.println("[DEBUG] TLS_Link certificate validation: successs.");
+
+				ptrPeer = this->FindCertByType(BriandTorCertificate::CertType::Ed25519_Identity);
+				if (!ptrPeer->isValid( *ptrCa )) {
+					if (DEBUG) Serial.println("[DEBUG] Error, Ed25519_Identity is not valid.");
+					return false;
+				}
+
+				if (DEBUG) Serial.println("[DEBUG] Ed25519_Identity certificate validation: successs.");
+
+				// --------------------------
+
 				//
 				// TODO
 				//
 
 				/*
-					* All X.509 certificates above have validAfter and validUntil dates; no X.509 or Ed25519 certificates are expired.
-					* All certificates are correctly signed.
 					* The certified key in the Signing->Link certificate matches the SHA256 digest of the certificate that was used to authenticate the TLS connection.
 					* The identity key listed in the ID->Signing cert was used to sign the ID->Signing Cert.
 					* The Signing->Link cert was signed with the Signing key listed in the ID->Signing cert.
 					* The RSA->Ed25519 cross-certificate certifies the Ed25519 identity, and is signed with the RSA identity listed in the "ID" certificate.
-					* The certified key in the ID certificate is a 1024-bit RSA key.
-					* The RSA ID certificate is correctly self-signed.
+					
+					* 
 				*/
+
+				if (DEBUG) Serial.println("[DEBUG] Ed25519 certificates OK.");
 			}
 			else if (testCondition2) {
 				if (DEBUG) Serial.println("[DEBUG] Relay has RSA identity key only.");
@@ -223,24 +273,53 @@ namespace Briand {
 					return false;
 				}
 
+				/*
+					* Both certificates have validAfter and validUntil dates that are not expired.
+					* The link certificate is correctly signed with the key in the ID certificate
+					* The certified key in the ID certificate was used to sign both certificates.
+				*/
+
+				auto ptrCa = this->FindCertByType(BriandTorCertificate::CertType::RSA1024_Identity_Self_Signed);
+				auto ptrPeer = this->FindCertByType(BriandTorCertificate::CertType::LinkKeyWithRSA1024);
+
+				if (ptrPeer == this->certificates->end()) {
+					if (DEBUG) Serial.println("[DEBUG] Error, LinkKeyWithRSA1024 not found!");
+					return false;
+				}
+
+				if (!ptrPeer->isValid( *ptrCa )) {
+					if (DEBUG) Serial.println("[DEBUG] Error, LinkKeyWithRSA1024 is invalid!");
+					return false;
+				}
+
+				if (DEBUG) Serial.println("[DEBUG] LinkKeyWithRSA1024 certificate validation: successs.");
+
+				/* The ID certificate is correctly self-signed. */
+				if (!ptrCa->isValid( *ptrCa )) {
+					if (DEBUG) Serial.println("[DEBUG] Error, RSA1024_Identity_Self_Signed is invalid!");
+					return false;
+				}
+
+				/* The certified key in the ID certificate is a 1024-bit RSA key. */
+				if (ptrCa->GetRsaKeyLength() != 1024) {
+					unsigned int ks = ptrCa->GetRsaKeyLength();
+					if (DEBUG) Serial.printf("[DEBUG] Error, RSA1024_Identity_Self_Signed has an invalid key size of %d bit, expected 1024.\n", ks);
+					return false;
+				}
+
+				/*
+					* The certified key in the Link certificate matches the link key that was used to negotiate the TLS connection.
+				*/
+
 				//
 				// TODO
 				//
 
-
-
-				/*
-					* Both certificates have validAfter and validUntil dates that are not expired.
-					* The certified key in the Link certificate matches the link key that was used to negotiate the TLS connection.
-					* The certified key in the ID certificate is a 1024-bit RSA key.
-					* The certified key in the ID certificate was used to sign both certificates.
-					* The link certificate is correctly signed with the key in the ID certificate
-					* The ID certificate is correctly self-signed.
-				*/
-
+				if (DEBUG) Serial.println("[DEBUG] RSA1024_Identity_Self_Signed certificate validation: successs.");
+				if (DEBUG) Serial.println("[DEBUG] X.509 certificates OK");
 			}
 			else  {
-				if (DEBUG) Serial.println("[DEBUG] Relay has no identity keys.");
+				if (DEBUG) Serial.println("[DEBUG] Error, relay has no identity keys.");
 				return false;
 			}
 

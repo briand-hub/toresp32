@@ -1,5 +1,15 @@
 # Development status
 
+## Next steps
+
+
+
+
+## ?
+
+* Added Tor's Ed25519 certificate managing class
+* More CERTS cell validations done
+
 ## 2021-04-18
 * Added more commands for debugging and normal use
 * RSA certificates validation is ready (using ESP32 mbedtls library)

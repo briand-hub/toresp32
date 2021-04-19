@@ -105,7 +105,7 @@ void setup() {
 	}
 
     if (VERBOSE) {
-        // Executes tests
+        // Execute tests
         Serial.printf("[TEST] UULONG MAX VALUE (hex): 0x%016llx\n", ULLONG_MAX);
 
         // Check Filesystem
@@ -114,7 +114,10 @@ void setup() {
         else 
             Serial.println("[TEST] Filesystem SPIFFS OK.");
 
-        // Test AES configuration encryption suite
+		// Test ArduinoCrypto suite for what needed
+
+
+        // Test AES configuration encryption suite (MbedTLS suite)
         string test = "Hello from an {AES128} configuration file.";
         string key = "1234567890123456";
         int t = 0;
@@ -437,7 +440,7 @@ void printLogo() {
     Serial.println("                          |_|                  ");
     Serial.println("                                               ");
     Serial.println("                VERSION 1.0.0                  ");
-    Serial.println("              (Pandemic version)               ");
+    Serial.println("              (Pandemic edition)               ");
     Serial.println("          Copyright (C) 2021 briand            ");
     Serial.println("        https://github.com/briand-hub          ");
     Serial.println("                                               ");
@@ -474,6 +477,9 @@ void startSerialRead(string* sPtr) {
 }
 
 void executeCommand(string& cmd) {
+	// Get heap size before command
+	unsigned long int heapBefore = ESP.getFreeHeap();
+
     // Assign a command ID for external processing (will reset after max value for long tasks)
     if ( COMMANDID == ULLONG_MAX)
         COMMANDID = 0;
@@ -600,6 +606,9 @@ void executeCommand(string& cmd) {
     }
 
     Serial.printf("[EXE][0x%016llx][END]\n", COMMANDID);
+
+	// Debug: print memory used by command
+	if (DEBUG) Serial.printf("[DEBUG] Heap consumption: %lu (from %lu to %lu) bytes.", (heapBefore - ESP.getFreeHeap()), heapBefore, ESP.getFreeHeap());
 
     // Clear COMMAND for next
     COMMAND->clear();

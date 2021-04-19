@@ -24,13 +24,18 @@
 #include <iomanip>
 #include <cstring>
 
+/* mbedTLS library for SSL / SHA / TLS / RSA */
 #include <mbedtls/ssl.h>
 #include <mbedtls/error.h>
 #include <mbedtls/certs.h>
 
+/* LibSodium found for Ed25519 signatures! It's on framwork :-D */
+#include <sodium.h>
+
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
 #include "BriandUtils.hxx"
+#include "BriandTorEd25519Certificate.hxx"
 
 using namespace std;
 
@@ -135,12 +140,36 @@ namespace Briand {
 		/**
 		 * Method to check if certificate is valid against the specified root ca (identity).
 		 * Works for RSA and Curve using Mbedtls library within ESP32. Use a lower profile to check certificate.
-		 * @param rootCA The root CA for signature verify
+		 * @param rootCA The root CA for signature verify (for both RSA and Ed25519 certificates, method knows how to do it)
 		 * @return true if valid, false if not.
 		*/
 		bool isValid(BriandTorCertificate& rootCA) {
 
-			if (this->Type == LinkKeyWithRSA1024) {
+			/*
+				Relevant certType values are:
+					1: Link key certificate certified by RSA1024 identity
+					2: RSA1024 Identity certificate, self-signed.
+					3: RSA1024 AUTHENTICATE cell link certificate, signed with RSA1024 key.
+					4: Ed25519 signing key, signed with identity key.
+					5: TLS link certificate, signed with ed25519 signing key.
+					6: Ed25519 AUTHENTICATE cell key, signed with ed25519 signing key.
+					7: Ed25519 identity, signed with RSA identity.
+
+				The certificate format for certificate types 1-3 is DER encoded
+				X509.  For others, the format is as documented in cert-spec.txt.
+				Note that type 7 uses a different format from types 4-6.
+			*/
+
+			// Note: for Ed25519 the SDK embedded LibSodium is used,
+			// https://libsodium.gitbook.io/doc/public-key_cryptography/public-key_signatures
+			// For RSA and others embedded mbedTLS is used,
+			// https://tls.mbed.org/api/
+			// or see programs/ section on https://github.com/ARMmbed/mbedtls/tree/v2.26.0
+
+			if (this->Type == LinkKeyWithRSA1024 || this->Type == RSA1024_Identity_Self_Signed) {
+				// Verify peer or root certificate has same procedure.
+				// However for CA (Identity) doing a chain is not necessary 
+
 				if (rootCA.Type != RSA1024_Identity_Self_Signed) {
 					if (DEBUG) Serial.println("[DEBUG] Certificate validation: must be used RSA1024_Identity_Self_Signed to validate LinkKeyWithRSA1024");
 					return false;
@@ -225,7 +254,7 @@ namespace Briand {
 					return false;
 				}
 
-				if (DEBUG) Serial.println("[DEBUG] Certificate validation: success.");
+				if (DEBUG) Serial.printf("[DEBUG] Type %d certificate validation: success.\n", static_cast<short>(this->Type));
 
 				// free data structs
 				mbedtls_x509_crt_free(&chain);
@@ -233,13 +262,122 @@ namespace Briand {
 
 				return true;
 			}
-			else if (this->Type == Ed25519_Signing_Key) {
+			else if (this->Type == RSA_1024_AUTHENTICATE_Cell_Link) {
 				//
 				// TODO
 				//
+
+				if (DEBUG) Serial.printf("[DEBUG] Type %d certificate validation: success.\n", static_cast<short>(this->Type));
+			}
+			else if (this->Type == Ed25519_Signing_Key) {
+				// This is a "special" Tor-specific format of certificate.
+				// is handled by a specific class.
+
+				auto cert = make_unique<Briand::BriandTorEd25519Certificate>(this->Contents);
+				if (!cert->isStructureValid()) {
+					if (DEBUG) Serial.println("[DEBUG] Ed25519_Signing_Key has invalid contents (see above messages).");
+					return false;
+				}
+
+
+
+				//
+				// TODO
+				//
+
+				if (DEBUG) Serial.printf("[DEBUG] Type %d certificate validation: success.\n", static_cast<short>(this->Type));
+			}
+			else if (this->Type == TLS_Link) {
+				// This is a "special" Tor-specific format of certificate.
+				// is handled by a specific class.
+
+				auto cert = make_unique<Briand::BriandTorEd25519Certificate>(this->Contents);
+				if (!cert->isStructureValid()) {
+					if (DEBUG) Serial.println("[DEBUG] TLS_Link has invalid contents (see above messages).");
+					return false;
+				}
+
+				//
+				// TODO
+				//
+
+				if (DEBUG) Serial.printf("[DEBUG] Type %d certificate validation: success.\n", static_cast<short>(this->Type));
+			}
+			else if (this->Type == Ed25519_AUTHENTICATE_Cell_key) {
+				// This is a "special" Tor-specific format of certificate.
+				// is handled by a specific class.
+
+				auto cert = make_unique<Briand::BriandTorEd25519Certificate>(this->Contents);
+				if (!cert->isStructureValid()) {
+					if (DEBUG) Serial.println("[DEBUG] Ed25519_AUTHENTICATE_Cell_key has invalid contents (see above messages).");
+					return false;
+				}
+
+
+				//
+				// TODO
+				//
+
+				if (DEBUG) Serial.printf("[DEBUG] Type %d certificate validation: success.\n", static_cast<short>(this->Type));
+			}
+			else if (this->Type == Ed25519_Identity) {
+				// This is a "special" Tor-specific format of certificate.
+				// is handled by a specific class.
+
+				auto cert = make_unique<Briand::BriandTorRSAEd25519CrossCertificate>(this->Contents);
+				if (!cert->isStructureValid()) {
+					if (DEBUG) Serial.println("[DEBUG] Ed25519_Identity has invalid contents (see above messages).");
+					return false;
+				}
+
+
+				//
+				// TODO
+				//
+
+				if (DEBUG) Serial.printf("[DEBUG] Type %d certificate validation: success.\n", static_cast<short>(this->Type));
+			}
+			else {
+				if (DEBUG) Serial.println("[DEBUG] Unknown certificate type, validation fails by default!");
 			}
 
 			return false;
+		}
+	
+		/**
+		 * Method returns the RSA key length (in bits) of this certificate
+		 * @return RSA key length in bits, 0 if error.
+		*/
+		unsigned int GetRsaKeyLength() {
+			// Buffers needed
+			unsigned int certSize = this->Contents->size() + 1; // +1 because MUST be null-terminated
+			auto tempBuffer = BriandUtils::GetOneOldBuffer( certSize ); // MUST be zero-init
+
+			// Data structures needed
+			mbedtls_x509_crt certificate;
+
+			// Initialize data structures
+			mbedtls_x509_crt_init(&certificate);
+
+			// Copy contents
+			std::copy(this->Contents->begin(), this->Contents->end(), tempBuffer.get() );
+
+			// Parse certificate
+			if ( mbedtls_x509_crt_parse(&certificate, reinterpret_cast<const unsigned char*>(tempBuffer.get()), certSize) != 0) {
+				if (DEBUG) Serial.println("[DEBUG] Certificate validation: failed to parse certificate.");
+
+				// free
+				mbedtls_x509_crt_free(&certificate);
+
+				return 0;
+			}
+
+			unsigned int ks = mbedtls_rsa_get_len( mbedtls_pk_rsa(certificate.pk) ) * 8;
+
+			// Free
+			mbedtls_x509_crt_free(&certificate);
+
+			return ks;
 		}
 	};
 }
