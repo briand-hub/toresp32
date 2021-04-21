@@ -25,7 +25,7 @@
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
 #include "BriandUtils.hxx"
-#include "BriandTorCertificate.hxx"
+#include "BriandTorCertificates.hxx"
 
 using namespace std;
 

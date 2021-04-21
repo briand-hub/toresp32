@@ -31,7 +31,7 @@
 #include "BriandTorDefinitions.hxx"
 #include "BriandUtils.hxx"
 #include "BriandNet.hxx"
-#include "BriandTorCertificate.hxx"
+#include "BriandTorCertificates.hxx"
 
 using namespace std;
 

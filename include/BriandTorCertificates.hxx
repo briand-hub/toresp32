@@ -82,7 +82,7 @@ namespace Briand {
 
 			// Parse CA and add to chain
 			if ( mbedtls_x509_crt_parse(&chain, reinterpret_cast<const unsigned char*>(tempBuffer.get()), caSize) != 0) {
-				if (DEBUG) Serial.println("[DEBUG] Certificate validation: failed to parse rootCA.");
+				if (DEBUG) Serial.printf("[DEBUG] %s validation: failed to parse rootCA.", this->GetCertificateName().c_str());
 
 				// free
 				mbedtls_x509_crt_free(&chain);
@@ -103,7 +103,7 @@ namespace Briand {
 
 			// Parse Peer and add to chain
 			if ( mbedtls_x509_crt_parse(&chain, reinterpret_cast<const unsigned char*>(tempBuffer.get()), peerSize) != 0) {
-				if (DEBUG) Serial.println("[DEBUG] Certificate validation: failed to parse peer.");
+				if (DEBUG) Serial.printf("[DEBUG] %s validation: failed to parse peer.", this->GetCertificateName().c_str());
 
 				// free
 				mbedtls_x509_crt_free(&chain);
@@ -123,7 +123,7 @@ namespace Briand {
 				if (DEBUG) {
 					tempBuffer = BriandUtils::GetOneOldBuffer(256 + 1);
 					mbedtls_x509_crt_verify_info( reinterpret_cast<char*>(tempBuffer.get()), 256,"", verification_flags);
-					Serial.printf("[DEBUG] Certificate validation: failed because %s\n", reinterpret_cast<const char*>(tempBuffer.get()));
+					Serial.printf("[DEBUG] %s validation: failed because %s\n", this->GetCertificateName().c_str(), reinterpret_cast<const char*>(tempBuffer.get()));
 				} 
 
 				// free 
@@ -133,7 +133,7 @@ namespace Briand {
 				return false;
 			}
 
-			if (DEBUG) Serial.printf("[DEBUG] Type %s certificate validation: success.\n", this->GetCertificateName().c_str());
+			if (DEBUG) Serial.printf("[DEBUG] Type %s validation: success.\n", this->GetCertificateName().c_str());
 
 			// free data structs
 			mbedtls_x509_crt_free(&chain);
@@ -208,7 +208,7 @@ namespace Briand {
 		unsigned short ExtLength; 	// [2 bytes]
         unsigned char ExtType;   	// [1 byte]
         unsigned char ExtFlags;		// [1 byte]
-        unique_ptr<unsigned char[]> ExtData; // [ExtLength bytes]
+        unique_ptr<vector<unsigned char>> ExtData; // [ExtLength bytes]
 		bool valid;	// built correctly
 
 		/**
@@ -219,25 +219,36 @@ namespace Briand {
 			this->ExtLength = 0x0000;
 			this->ExtType = 0x00;
 			this->ExtFlags = 0x00;
-			this->ExtData = nullptr;
+			this->ExtData = make_unique<vector<unsigned char>>();
 			
+			if (DEBUG) {
+				Serial.print("[DEBUG] Ed25519CertificateExtension raw bytes: ");
+				BriandUtils::PrintByteBuffer(*rawdata.get(), rawdata->size()+1, rawdata->size()+1);
+			}
+
 			if (rawdata->size() < 4) {
 				if (DEBUG) Serial.println("[DEBUG] Ed25519CertificateExtension has poor bytes.");
 				return;
 			}
 
-			this->ExtLength += rawdata->at(0) << 8;
+			this->ExtLength += static_cast<unsigned char>(rawdata->at(0) << 8);
 			this->ExtLength += rawdata->at(1);
 			this->ExtType = rawdata->at(2);
 			this->ExtFlags = rawdata->at(3);
+
+			if (DEBUG) Serial.printf("[DEBUG] Ed25519CertificateExtension length is of %d bytes.\n", this->ExtLength);
 
 			if ( (rawdata->size() - 4) < this->ExtLength ) {
 				if (DEBUG) Serial.println("[DEBUG] Ed25519CertificateExtension has poor bytes for content.");
 				return;
 			}
 
-			this->ExtData = make_unique<unsigned char[]>( this->ExtLength );
-			std::copy(rawdata->begin() + 4, rawdata->begin() + 4 + this->ExtLength, this->ExtData.get());
+			this->ExtData->insert(this->ExtData->begin(), rawdata->begin() + 4, rawdata->begin() + 4 + this->ExtLength);
+			
+			if (DEBUG) {
+				Serial.printf("[DEBUG] Ed25519CertificateExtension ExtData: ");
+				BriandUtils::PrintByteBuffer(*this->ExtData.get(), this->ExtLength + 1, this->ExtLength + 1);
+			} 
 
 			if (DEBUG) Serial.println("[DEBUG] Ed25519CertificateExtension structure is valid.");
 
@@ -252,8 +263,8 @@ namespace Briand {
 			this->ExtType = other.ExtType;
 			this->ExtFlags = other.ExtFlags;
 			this->valid = other.valid;
-			this->ExtData = make_unique<unsigned char[]>(other.ExtLength);
-			std::copy(other.ExtData.get(), other.ExtData.get() + other.ExtLength, this->ExtData.get());
+			this->ExtData = make_unique<vector<unsigned char>>();
+			this->ExtData->insert(this->ExtData->begin(), other.ExtData->begin(), other.ExtData->end());
 		}
 
 		~BriandTorEd25519CertificateExtension() {
@@ -323,6 +334,11 @@ namespace Briand {
 			this->EXTENSIONS = make_unique<vector<BriandTorEd25519CertificateExtension>>();
 
 			// start to build
+
+			if (DEBUG) {
+				Serial.printf("[DEBUG] Ed25519Certificate raw bytes: ");
+				BriandUtils::PrintByteBuffer(*raw_bytes.get(), raw_bytes->size() + 1, raw_bytes->size() +1);
+			} 
 
 			if (raw_bytes->size() < 40) {
 				if (DEBUG) Serial.println("[DEBUG] Ed25519Certificate has too poor bytes.");
@@ -414,30 +430,36 @@ namespace Briand {
 		 * @return true if expired , false if not
 		*/
 		virtual bool IsExpired() {
-			return (this->EXPIRATION_DATE*3600 > BriandUtils::GetUnixTime());
+			return (this->EXPIRATION_DATE*3600 <= BriandUtils::GetUnixTime());
 		}
+
+		/** 
+		 * Method return certificate name human-readable (for debug). MUST be implemented by derived classes. 
+		 * @return Certificate name (string)
+		*/
+		virtual string GetCertificateName() = 0;
 
 		/**
 		 * Print to serial certificate informations (debug) 
 		*/
 		virtual void PrintCertInfo() {
-			if (DEBUG) {				
-				Serial.printf("[DEBUG] BriandTorEd25519Certificate->EXPIRATION_DATE (Unix time HOURS) = %u\n", this->EXPIRATION_DATE);
-				Serial.printf("[DEBUG] BriandTorEd25519Certificate->EXPIRATION_DATE valid = %d\n", !this->IsExpired() );
-				Serial.printf("[DEBUG] BriandTorEd25519Certificate->CERTIFIED_KEY = ");
+			if (DEBUG) {		
+				Serial.printf("[DEBUG] Certificate Type: %d/%s->EXPIRATION_DATE (Unix time HOURS) = %u\n", this->Type, this->GetCertificateName().c_str(), this->EXPIRATION_DATE);
+				Serial.printf("[DEBUG] Certificate Type: %d/%s->EXPIRATION_DATE valid = %d\n", this->Type, this->GetCertificateName().c_str(), !this->IsExpired() );
+				Serial.printf("[DEBUG] Certificate Type: %d/%s->CERTIFIED_KEY = ", this->Type, this->GetCertificateName().c_str());
 				BriandUtils::PrintOldStyleByteBuffer(this->CERTIFIED_KEY.get(), this->certified_key_len, this->certified_key_len+1, this->certified_key_len);
 				
 				if (this->EXTENSIONS->size() > 0) {
 					for (int i = 0; i<this->N_EXTENSIONS; i++) {
-						Serial.printf("[DEBUG] Extension %d of %d : ->type = 0x%02X ->flags = 0x%02X ->len = %d bytes ->data = ", (i+1), this->N_EXTENSIONS, this->EXTENSIONS->at(i).ExtType, this->EXTENSIONS->at(i).ExtFlags, this->EXTENSIONS->at(i).ExtLength);
-						BriandUtils::PrintOldStyleByteBuffer(this->EXTENSIONS->at(i).ExtData.get(), this->EXTENSIONS->at(i).ExtLength, this->EXTENSIONS->at(i).ExtLength+1, this->EXTENSIONS->at(i).ExtLength);
+						Serial.printf("[DEBUG] Certificate Type: %d/%s Extension %d of %d : ->type = 0x%02X ->flags = 0x%02X ->len = %u bytes ->data = ", this->Type, this->GetCertificateName().c_str(), (i+1), this->N_EXTENSIONS, this->EXTENSIONS->at(i).ExtType, this->EXTENSIONS->at(i).ExtFlags, this->EXTENSIONS->at(i).ExtLength);
+						BriandUtils::PrintByteBuffer(*this->EXTENSIONS->at(i).ExtData.get(), this->EXTENSIONS->at(i).ExtLength+1, this->EXTENSIONS->at(i).ExtLength+1);
 					}
 				}
 				else {
-					Serial.printf("[DEBUG] BriandTorEd25519Certificate has no extensions.\n");	
+					Serial.printf("[DEBUG] Certificate Type: %d/%s has no extensions.\n", this->Type, this->GetCertificateName().c_str());	
 				}
 
-				Serial.printf("[DEBUG] BriandTorEd25519Certificate->SIGNATURE = ");
+				Serial.printf("[DEBUG] Certificate Type: %d/%s->SIGNATURE = ", this->Type, this->GetCertificateName().c_str());
 				BriandUtils::PrintOldStyleByteBuffer(this->SIGNATURE.get(), this->signature_len, this->signature_len+1, this->signature_len);
 			}
 		}
@@ -480,7 +502,7 @@ namespace Briand {
 
 			// Parse certificate
 			if ( mbedtls_x509_crt_parse(&certificate, reinterpret_cast<const unsigned char*>(tempBuffer.get()), certSize) != 0) {
-				if (DEBUG) Serial.println("[DEBUG] Certificate validation: failed to parse certificate.");
+				if (DEBUG) Serial.println("[DEBUG] RSA1024Identity certificate validation: failed to parse certificate.");
 
 				// free
 				mbedtls_x509_crt_free(&certificate);
@@ -539,6 +561,8 @@ namespace Briand {
 
 		BriandTorCertificate_Ed25519SigningKey(const unique_ptr<vector<unsigned char>>& raw_bytes) : BriandTorEd25519CertificateBase(raw_bytes) {}
 
+		virtual string GetCertificateName() { return "Ed25519SigningKey certificate"; }
+
 		virtual bool IsValid(const BriandTorCertificate_RSA1024Identity& signAuthenticator) {
 			if (this->IsExpired()) {
 				if (DEBUG) Serial.println("[DEBUG] Ed25519SigningKey is expired.");
@@ -562,6 +586,8 @@ namespace Briand {
 
 		BriandTorCertificate_TLSLink(const unique_ptr<vector<unsigned char>>& raw_bytes) : BriandTorEd25519CertificateBase(raw_bytes) {}
 
+		virtual string GetCertificateName() { return "TLSLink certificate"; }
+
 		virtual bool IsValid(const BriandTorCertificate_Ed25519SigningKey& signAuthenticator) {
 			if (this->IsExpired()) {
 				if (DEBUG) Serial.println("[DEBUG] TLSLink is expired.");
@@ -584,6 +610,8 @@ namespace Briand {
 		public:
 
 		BriandTorCertificate_Ed25519AuthenticateCellLink(const unique_ptr<vector<unsigned char>>& raw_bytes) : BriandTorEd25519CertificateBase(raw_bytes) {}
+
+		virtual string GetCertificateName() { return "Ed25519AuthenticateCellLink certificate"; }
 
 		virtual bool IsValid(const BriandTorCertificate_Ed25519SigningKey& signAuthenticator) {
 			if (this->IsExpired()) {
