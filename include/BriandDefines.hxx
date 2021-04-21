@@ -33,4 +33,7 @@ constexpr unsigned char WIFI_AP_CH = 1;					// wifichannel for AP
 constexpr unsigned char WIFI_AP_HIDDEN = 0;				// AP hidden Essid (1) or not (0)
 constexpr unsigned char WIFI_AP_MAX_CONN = 1;			// AP maximum connections (set to 1 for more security, just you) 
 constexpr unsigned char NET_REQUEST_TIMEOUT_S = 5;		// Elapsed this number of seconds, any connection is intended to be timed out!
-constexpr const char* NTP_SERVER = "pool.ntp.org";      // NTP server to use
+constexpr const char* NTP_SERVER = "pool.ntp.org";    	// NTP server to use
+constexpr char HEAP_LEAK_LIMIT = 5;						// Heap consumption since system readiness more than HEAP_LEAK_LIMIT% will warn
+constexpr unsigned char TOR_CIRCUITS_CACHE = 3;			// No. of Tor circuits to be kept always open and ready
+

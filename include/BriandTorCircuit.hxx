@@ -331,9 +331,8 @@ namespace Briand {
 				}
 
 				if (DEBUG) {
-					Serial.printf("[DEBUG] Guard has %d certifcates loaded.\n", this->guardNode->certificates->size());
-					for (auto c : *(this->guardNode->certificates.get()) )
-						Serial.printf("[DEBUG] %s\n", c.GetCertificateShortInfo().c_str());
+					Serial.printf("[DEBUG] Guard has %d certifcates loaded.\n", this->guardNode->GetCertificateCount());
+					this->guardNode->PrintAllCertificateShortInfo();
 				} 
 
 				if ( ! this->guardNode->ValidateCertificates() ) {
@@ -388,6 +387,14 @@ namespace Briand {
 				// WARNING: for client auth all bytes received must be kept!
 				tempCellResponse.reset();
 				tempCell.reset();
+
+				// After authentication....
+
+				// Answer with NETINFO CELL
+
+				// 
+				// TODO
+				//
 			}
 
 			if (DEBUG) Serial.println("[DEBUG] All information complete. Starting CREATE the circuit.");

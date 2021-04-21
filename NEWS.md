@@ -2,11 +2,15 @@
 
 ## Next steps
 
-
+* Write certificate validation methods
+* Simplify code
+* Prepare stub method to authenticate client
+* Send NETINFO cell after CERTS cell authentication
 
 
 ## ?
 
+* Changed classes to manage certificates with polymorphism and base:derived
 * Added Tor's Ed25519 certificate managing class
 * More CERTS cell validations done
 

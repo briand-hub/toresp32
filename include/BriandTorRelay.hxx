@@ -41,16 +41,7 @@ namespace Briand {
 	*/
 	class BriandTorRelay {
 		private:
-		
-		/**
-		 * Returns a certificate if match found, this->certificates->end() instead
-		 * @return pointer to certificate 
-		*/
-		std::vector<Briand::BriandTorCertificate>::iterator FindCertByType(Briand::BriandTorCertificate::CertType type) {
-			auto ptr = std::find_if(this->certificates->begin(), this->certificates->end(), [&type](const Briand::BriandTorCertificate& item) {return item.Type == type; } );
-			return ptr;
-		}
-
+		protected:
 		public:
 
 		unique_ptr<string> nickname;
@@ -58,26 +49,44 @@ namespace Briand {
 		unique_ptr<string> fingerprint;
 		unsigned short flags;
 
-		/** Contains CERTS cell certificates */
-		unique_ptr<vector<Briand::BriandTorCertificate>> certificates;
+		/** Certificates for this relay (nullptr if not present) */
+		unique_ptr<BriandTorCertificate_LinkKey> certLinkKey;
+		unique_ptr<BriandTorCertificate_RSA1024Identity> certRsa1024Identity;
+		unique_ptr<BriandTorCertificate_RSA1024AuthenticateCellLink> certRsa1024AuthenticateCell;
+		unique_ptr<BriandTorCertificate_Ed25519SigningKey> certEd25519SigningKey;
+		unique_ptr<BriandTorCertificate_TLSLink> certTLSLink;
+		unique_ptr<BriandTorCertificate_Ed25519AuthenticateCellLink> certEd25519AuthenticateCellLink;
+		unique_ptr<BriandTorCertificate_RSAEd25519CrossCertificate> certRSAEd25519CrossCertificate;
 
 		// TODO: handle more fields (minimum necessary if needed!)
 
 		// Relay Certificates (ready after a CERTS cell is sent)
 		
 		BriandTorRelay() {
-			nickname = make_unique<string>("");
-			first_address = make_unique<string>("");
-			fingerprint = make_unique<string>("");
-			flags = 0x0000;
-			certificates = make_unique<vector<Briand::BriandTorCertificate>>();
+			this->nickname = make_unique<string>("");
+			this->first_address = make_unique<string>("");
+			this->fingerprint = make_unique<string>("");
+			this->flags = 0x0000;
+			this->certLinkKey = nullptr;
+			this->certRsa1024Identity = nullptr;
+			this->certRsa1024AuthenticateCell = nullptr;
+			this->certEd25519SigningKey = nullptr;
+			this->certTLSLink = nullptr;
+			this->certEd25519AuthenticateCellLink = nullptr;
+			this->certRSAEd25519CrossCertificate = nullptr;
 		}
 
 		~BriandTorRelay() {
-			nickname.reset();
-			first_address.reset();
-			fingerprint.reset();
-			certificates.reset();
+			this->nickname.reset();
+			this->first_address.reset();
+			this->fingerprint.reset();
+			if(this->certLinkKey == nullptr) this->certLinkKey.reset();
+			if(this->certRsa1024Identity == nullptr) this->certRsa1024Identity.reset();
+			if(this->certRsa1024AuthenticateCell == nullptr) this->certRsa1024AuthenticateCell.reset();
+			if(this->certEd25519SigningKey == nullptr) this->certEd25519SigningKey.reset();
+			if(this->certTLSLink == nullptr) this->certTLSLink.reset();
+			if(this->certEd25519AuthenticateCellLink == nullptr) this->certEd25519AuthenticateCellLink.reset();
+			if(this->certRSAEd25519CrossCertificate == nullptr) this->certRSAEd25519CrossCertificate.reset();
 		}
 
 		/**
@@ -106,204 +115,76 @@ namespace Briand {
 				return 0;
 		}
 	
+		unsigned short GetCertificateCount() {
+			unsigned short num = 0x0000;
+
+			if (this->certEd25519AuthenticateCellLink != nullptr) num++;
+			if (this->certEd25519SigningKey != nullptr) num++;
+			if (this->certLinkKey != nullptr) num++;
+			if (this->certRsa1024AuthenticateCell != nullptr) num++;
+			if (this->certRsa1024Identity != nullptr) num++;
+			if (this->certRSAEd25519CrossCertificate != nullptr) num++;
+			if (this->certTLSLink != nullptr) num++;
+
+			return num;
+		}
+
 		/**
 		 * Method validates certificates as required in Tor handshake protocol.
 		 * @return true if all valid, false if not.
 		*/
 		bool ValidateCertificates() {
-			if (this->certificates->size() == 0)
-				return false;
 			
-			/*			
-				To authenticate the responder as having a given Ed25519,RSA identity key
-				combination, the initiator MUST check the following.
+			if (this->certRsa1024Identity != nullptr && this->certRSAEd25519CrossCertificate != nullptr) {
+				/*			
+					To authenticate the responder as having a given Ed25519,RSA identity key
+					combination, the initiator MUST check the following.
+				*/
 
-				[ see testCondition1 ]
-
-				To authenticate the responder as having a given RSA identity only,
-				the initiator MUST check the following:
-
-				[see testCondition2]
-			*/
-
-			bool testCondition1 = ( this->FindCertByType(BriandTorCertificate::CertType::Ed25519_Identity) != this->certificates->end() ) &&
-							 	  ( this->FindCertByType(BriandTorCertificate::CertType::RSA1024_Identity_Self_Signed) != this->certificates->end() );
-			
-			bool condition1Satisfied = false;
-
-			bool testCondition2 = ( this->FindCertByType(BriandTorCertificate::CertType::RSA1024_Identity_Self_Signed) != this->certificates->end() );
-
-			bool condition2Satisfied = false;
-			
-			if (testCondition1) {
 				if (DEBUG) Serial.println("[DEBUG] Relay has Ed25519+RSA identity keys.");
-				/*
-					the initiator MUST check the following.
 
+				/*
 					* The CERTS cell contains exactly one CertType 2 "ID" certificate.
 					* The CERTS cell contains exactly one CertType 4 Ed25519 "Id->Signing" cert.
 					* The CERTS cell contains exactly one CertType 5 Ed25519 "Signing->link" certificate.
 					* The CERTS cell contains exactly one CertType 7 "RSA->Ed25519" cross-certificate.
 				*/
 
-				unsigned short test;
-				test = std::count_if(this->certificates->begin(), this->certificates->end(), [] (const BriandTorCertificate& x) { return x.Type == BriandTorCertificate::CertType::RSA1024_Identity_Self_Signed; });
-				if (test != 1) {
-					if (DEBUG) Serial.printf("[DEBUG] Error, found %d certificates of type 2, expected exactly one.\n", test);
-					return false;
-				}
-				test = std::count_if(this->certificates->begin(), this->certificates->end(), [] (const BriandTorCertificate& x) { return x.Type == BriandTorCertificate::CertType::Ed25519_Signing_Key; });
-				if (test != 1) {
-					if (DEBUG) Serial.printf("[DEBUG] Error, found %d certificates of type 4, expected exactly one.\n", test);
-					return false;
-				}
-				test = std::count_if(this->certificates->begin(), this->certificates->end(), [] (const BriandTorCertificate& x) { return x.Type == BriandTorCertificate::CertType::TLS_Link; });
-				if (test != 1) {
-					if (DEBUG) Serial.printf("[DEBUG] Error, found %d certificates of type 5, expected exactly one.\n", test);
-					return false;
-				}
-				test = std::count_if(this->certificates->begin(), this->certificates->end(), [] (const BriandTorCertificate& x) { return x.Type == BriandTorCertificate::CertType::Ed25519_Identity; });
-				if (test != 1) {
-					if (DEBUG) Serial.printf("[DEBUG] Error, found %d certificates of type 7, expected exactly one.\n", test);
+				//
+				// TODO
+				//
+
+				if (this->certRsa1024Identity == nullptr ||
+					this->certEd25519SigningKey == nullptr ||
+					this->certTLSLink == nullptr ||
+					this->certRSAEd25519CrossCertificate == nullptr ) 
+				{
+					Serial.println("[DEBUG] Relay has invalid number of certificates.");
 					return false;
 				}
 
 				/*
 					* All X.509 certificates above have validAfter and validUntil dates; no X.509 or Ed25519 certificates are expired.
 					* All certificates are correctly signed.
+					* The RSA ID certificate is correctly self-signed.
 				*/
 
-				auto ptrCa = this->FindCertByType(BriandTorCertificate::CertType::RSA1024_Identity_Self_Signed);
-				auto ptrPeer = this->FindCertByType(BriandTorCertificate::CertType::LinkKeyWithRSA1024);
-
-				if (ptrPeer == this->certificates->end()) {
-					if (DEBUG) Serial.println("[DEBUG] Error, LinkKeyWithRSA1024 not found!");
+				// Check for X509 types (1,2,3)
+				if (!this->certRsa1024Identity->IsValid() ||
+					!this->certLinkKey->IsValid( *this->certRsa1024Identity.get() ) ||
+					(this->certRsa1024AuthenticateCell != nullptr && !this->certRsa1024AuthenticateCell->IsValid( *this->certRsa1024Identity.get() ))
+					) 
+				{
+					Serial.println("[DEBUG] Relay has invalid or expired X.509 certificates.");
 					return false;
 				}
 
-				if (!ptrPeer->isValid( *ptrCa )) {
-					if (DEBUG) Serial.println("[DEBUG] Error, LinkKeyWithRSA1024 is invalid!");
-					return false;
-				}
-
-				if (DEBUG) Serial.println("[DEBUG] LinkKeyWithRSA1024 certificate validation: successs.");
-
-				/* The RSA ID certificate is correctly self-signed. */
-				if (!ptrCa->isValid( *ptrCa )) {
-					if (DEBUG) Serial.println("[DEBUG] Error, RSA1024_Identity_Self_Signed is invalid!");
-					return false;
-				}
+				// Check for Ed25519 certificates
 
 				/* The certified key in the ID certificate is a 1024-bit RSA key. */
-				if (ptrCa->GetRsaKeyLength() != 1024) {
-					unsigned int ks = ptrCa->GetRsaKeyLength();
-					if (DEBUG) Serial.printf("[DEBUG] Error, RSA1024_Identity_Self_Signed has an invalid key size of %d bit, expected 1024.\n", ks);
-					return false;
-				}
-
-				if (DEBUG) Serial.println("[DEBUG] RSA1024_Identity_Self_Signed certificate validation: successs.");
-
-				if (DEBUG) Serial.println("[DEBUG] X.509 certificates OK, starting verification of Ed25519 certificates.");
-
-				// TEST ED25519 CERTIFICATES
-				
-				// TODO : REAL CA!!!!
-
-				ptrPeer = this->FindCertByType(BriandTorCertificate::CertType::Ed25519_Signing_Key);
-
-				if (!ptrPeer->isValid( *ptrCa )) {
-					if (DEBUG) Serial.println("[DEBUG] Error, Ed25519_Signing_Key is not valid.");
-					return false;
-				}
-
-				if (DEBUG) Serial.println("[DEBUG] Ed25519_Signing_Key certificate validation: successs.");
-
-				ptrPeer = this->FindCertByType(BriandTorCertificate::CertType::TLS_Link);
-				if (!ptrPeer->isValid( *ptrCa )) {
-					if (DEBUG) Serial.println("[DEBUG] Error, TLS_Link is not valid.");
-					return false;
-				}
-
-				if (DEBUG) Serial.println("[DEBUG] TLS_Link certificate validation: successs.");
-
-				ptrPeer = this->FindCertByType(BriandTorCertificate::CertType::Ed25519_Identity);
-				if (!ptrPeer->isValid( *ptrCa )) {
-					if (DEBUG) Serial.println("[DEBUG] Error, Ed25519_Identity is not valid.");
-					return false;
-				}
-
-				if (DEBUG) Serial.println("[DEBUG] Ed25519_Identity certificate validation: successs.");
-
-				// --------------------------
-
-				//
-				// TODO
-				//
-
-				/*
-					* The certified key in the Signing->Link certificate matches the SHA256 digest of the certificate that was used to authenticate the TLS connection.
-					* The identity key listed in the ID->Signing cert was used to sign the ID->Signing Cert.
-					* The Signing->Link cert was signed with the Signing key listed in the ID->Signing cert.
-					* The RSA->Ed25519 cross-certificate certifies the Ed25519 identity, and is signed with the RSA identity listed in the "ID" certificate.
-					
-					* 
-				*/
-
-				if (DEBUG) Serial.println("[DEBUG] Ed25519 certificates OK.");
-			}
-			else if (testCondition2) {
-				if (DEBUG) Serial.println("[DEBUG] Relay has RSA identity key only.");
-				
-				/*
-					the initiator MUST check the following.
-
-					* The CERTS cell contains exactly one CertType 1 "Link" certificate.
-					* The CERTS cell contains exactly one CertType 2 "ID" certificate.
-				*/
-
-				unsigned short test;
-				test = std::count_if(this->certificates->begin(), this->certificates->end(), [] (const BriandTorCertificate& x) { return x.Type == BriandTorCertificate::CertType::LinkKeyWithRSA1024; });
-				if (test != 1) {
-					if (DEBUG) Serial.printf("[DEBUG] Error, found %d certificates of type 1, expected exactly one.\n", test);
-					return false;
-				}
-				test = std::count_if(this->certificates->begin(), this->certificates->end(), [] (const BriandTorCertificate& x) { return x.Type == BriandTorCertificate::CertType::RSA1024_Identity_Self_Signed; });
-				if (test != 1) {
-					if (DEBUG) Serial.printf("[DEBUG] Error, found %d certificates of type 2, expected exactly one.\n", test);
-					return false;
-				}
-
-				/*
-					* Both certificates have validAfter and validUntil dates that are not expired.
-					* The link certificate is correctly signed with the key in the ID certificate
-					* The certified key in the ID certificate was used to sign both certificates.
-				*/
-
-				auto ptrCa = this->FindCertByType(BriandTorCertificate::CertType::RSA1024_Identity_Self_Signed);
-				auto ptrPeer = this->FindCertByType(BriandTorCertificate::CertType::LinkKeyWithRSA1024);
-
-				if (ptrPeer == this->certificates->end()) {
-					if (DEBUG) Serial.println("[DEBUG] Error, LinkKeyWithRSA1024 not found!");
-					return false;
-				}
-
-				if (!ptrPeer->isValid( *ptrCa )) {
-					if (DEBUG) Serial.println("[DEBUG] Error, LinkKeyWithRSA1024 is invalid!");
-					return false;
-				}
-
-				if (DEBUG) Serial.println("[DEBUG] LinkKeyWithRSA1024 certificate validation: successs.");
-
-				/* The ID certificate is correctly self-signed. */
-				if (!ptrCa->isValid( *ptrCa )) {
-					if (DEBUG) Serial.println("[DEBUG] Error, RSA1024_Identity_Self_Signed is invalid!");
-					return false;
-				}
-
-				/* The certified key in the ID certificate is a 1024-bit RSA key. */
-				if (ptrCa->GetRsaKeyLength() != 1024) {
-					unsigned int ks = ptrCa->GetRsaKeyLength();
-					if (DEBUG) Serial.printf("[DEBUG] Error, RSA1024_Identity_Self_Signed has an invalid key size of %d bit, expected 1024.\n", ks);
+				unsigned short keyLen = this->certRsa1024Identity->GetRsaKeyLength();
+				if (keyLen != 1024) {
+					if (DEBUG) Serial.printf("[DEBUG] Error, RSA1024_Identity_Self_Signed has an invalid key size of %d bit, expected 1024.\n", keyLen);
 					return false;
 				}
 
@@ -311,15 +192,81 @@ namespace Briand {
 					* The certified key in the Link certificate matches the link key that was used to negotiate the TLS connection.
 				*/
 
+
+				/*
+					* The certified key in the Signing->Link certificate matches the SHA256 digest of the certificate that was used to authenticate the TLS connection. (CertType 5 Ed25519)
+					* The identity key listed in the ID->Signing cert was used to sign the ID->Signing Cert. (CertType 4 Ed25519)
+					* The Signing->Link cert was signed with the Signing key listed in the ID->Signing cert. (CertType 5 Ed25519)
+					
+				*/
+
+				/* The RSA->Ed25519 cross-certificate certifies the Ed25519 identity, and is signed with the RSA identity listed in the "ID" certificate. */
+
 				//
 				// TODO
 				//
 
-				if (DEBUG) Serial.println("[DEBUG] RSA1024_Identity_Self_Signed certificate validation: successs.");
-				if (DEBUG) Serial.println("[DEBUG] X.509 certificates OK");
+				if (DEBUG) Serial.println("[DEBUG] Relay with RSA+Ed25519 identity has the right and valid certificates.");
+				
+				return true;
 			}
-			else  {
-				if (DEBUG) Serial.println("[DEBUG] Error, relay has no identity keys.");
+			else if (this->certRsa1024Identity != nullptr) {
+				/*
+					To authenticate the responder as having a given RSA identity only,
+					the initiator MUST check the following:
+				*/
+
+				if (DEBUG) Serial.println("[DEBUG] Relay has RSA identity key only.");
+
+				/*
+					* The CERTS cell contains exactly one CertType 1 "Link" certificate.
+					* The CERTS cell contains exactly one CertType 2 "ID" certificate.
+				*/
+
+				if (this->certRsa1024Identity == nullptr || this->certLinkKey == nullptr ) 
+				{
+					Serial.println("[DEBUG] Relay has invalid number of certificates.");
+					return false;
+				}
+
+				/*
+					* Both certificates have validAfter and validUntil dates that
+					are not expired.
+					* The certified key in the ID certificate was used to sign both
+					certificates.
+					* The link certificate is correctly signed with the key in the
+					ID certificate
+					* The ID certificate is correctly self-signed.
+				*/
+
+				if (!this->certRsa1024Identity->IsValid() ||
+					!this->certLinkKey->IsValid( *this->certRsa1024Identity.get() ) ||
+					(this->certRsa1024AuthenticateCell != nullptr && !this->certRsa1024AuthenticateCell->IsValid( *this->certRsa1024Identity.get() ))
+					) 
+				{
+					Serial.println("[DEBUG] Relay has invalid or expired X.509 certificates.");
+					return false;
+				}
+		
+				/*	The certified key in the ID certificate is a 1024-bit RSA key. */
+				unsigned short keyLen = this->certRsa1024Identity->GetRsaKeyLength();
+				if (keyLen != 1024) {
+					if (DEBUG) Serial.printf("[DEBUG] Error, RSA1024_Identity_Self_Signed has an invalid key size of %d bit, expected 1024.\n", keyLen);
+					return false;
+				}
+
+				/* The certified key in the Link certificate matches the link key that was used to negotiate the TLS connection. */
+
+				// 
+				// TODO
+				//
+
+				if (DEBUG) Serial.println("[DEBUG] Relay with RSA identity key only has the right and valid certificates.");
+
+				return true;
+			}
+			else {
+				if (DEBUG) Serial.println("[DEBUG] Relay has no valid certificates to verify (no identity)!");
 				return false;
 			}
 
@@ -328,11 +275,22 @@ namespace Briand {
 				authenticate that the initiator is talking to the Tor node with the
 				expected identity, as certified in the ID certificate(s).
 			*/
-
-			// DEBUG !!!!!!!!
-			return true;
-
-			return condition1Satisfied || condition2Satisfied;
+		}
+	
+		/**
+		 * Method (only if debug active) print all short info of certificates, order of CertType
+		*/
+		void PrintAllCertificateShortInfo() {
+			if (DEBUG) {
+				if (this->certLinkKey != nullptr) this->certLinkKey->PrintCertInfo();
+				if (this->certRsa1024Identity != nullptr) this->certRsa1024Identity->PrintCertInfo();
+				if (this->certRsa1024AuthenticateCell != nullptr) this->certRsa1024AuthenticateCell->PrintCertInfo();
+				if (this->certEd25519SigningKey != nullptr) this->certEd25519SigningKey->PrintCertInfo();
+				if (this->certTLSLink != nullptr) this->certTLSLink->PrintCertInfo();
+				if (this->certEd25519AuthenticateCellLink != nullptr) this->certEd25519AuthenticateCellLink->PrintCertInfo();
+				if (this->certRSAEd25519CrossCertificate != nullptr) this->certRSAEd25519CrossCertificate->PrintCertInfo();
+				
+			}
 		}
 	};
 

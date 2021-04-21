@@ -409,22 +409,29 @@ namespace Briand {
 			unsigned char NCerts = this->Payload->at(0);
 			unsigned long int startIndex = 1;
 			for (unsigned char curCert = 0; curCert<NCerts; curCert++) {
-				Briand::BriandTorCertificate newCert;
-
 				// First byte => cert type
 				unsigned char certType = this->Payload->at(startIndex);
 				startIndex++;
-				
-				if (DEBUG) Serial.printf("[DEBUG] Certificate %u (of %u) is certType %u.\n", curCert+1, NCerts, certType);
 
 				// check if ok
-				if ( certType <= 0 || certType > Briand::BriandTorCertificate::MAX_CERT_VALUE ) {
-					if (DEBUG) Serial.println("[DEBUG] Invalid CERTS cell content (not a valid range certType).");
+				if ( certType <= 0 || certType > BriandTorCertificateBase::MAX_CERT_VALUE ) {
+					if (DEBUG) Serial.printf("[DEBUG] Invalid CERTS cell content (%d is not a valid range certType).\n", certType);
 					return false;
 				}
 
-				newCert.Type = static_cast<Briand::BriandTorCertificate::CertType>(certType);
-				
+				/*
+					Relevant certType values are:
+					1: Link key certificate certified by RSA1024 identity
+					2: RSA1024 Identity certificate, self-signed.
+					3: RSA1024 AUTHENTICATE cell link certificate, signed with RSA1024 key.
+					4: Ed25519 signing key, signed with identity key.
+					5: TLS link certificate, signed with ed25519 signing key.
+					6: Ed25519 AUTHENTICATE cell key, signed with ed25519 signing key.
+					7: Ed25519 identity, signed with RSA identity.
+				*/
+
+				if (DEBUG) Serial.printf("[DEBUG] Certificate %u (of %u) is certType %u.\n", curCert+1, NCerts, certType);
+
 				// 2 bytes for length
 				unsigned short certLen = 0;
 				certLen += static_cast<unsigned short>(this->Payload->at(startIndex) << 8);
@@ -439,11 +446,75 @@ namespace Briand {
 					return false;
 				}
 
-				// Read certificate content
-				for (int i = startIndex; i < startIndex + certLen; i++ )
-					newCert.Contents->push_back( this->Payload->at(i) );
+				auto edBuf = make_unique<vector<unsigned char>>(); // temp buffer in case of ed25519 certs (must be built on contructor)
 
-				relay->certificates->push_back(newCert);
+				switch (certType) {
+					case 0x01:
+						relay->certLinkKey = make_unique<BriandTorCertificate_LinkKey>();
+						relay->certLinkKey->Type = certType;
+						// Read certificate content
+						for (int i = startIndex; i < startIndex + certLen; i++ ) relay->certLinkKey->Contents->push_back( this->Payload->at(i) );
+					break;
+					case 0x02:
+						relay->certRsa1024Identity = make_unique<BriandTorCertificate_RSA1024Identity>();
+						relay->certRsa1024Identity->Type = certType;
+						// Read certificate content
+						for (int i = startIndex; i < startIndex + certLen; i++ ) relay->certRsa1024Identity->Contents->push_back( this->Payload->at(i) );
+					break;
+					case 0x03:
+						relay->certRsa1024AuthenticateCell = make_unique<BriandTorCertificate_RSA1024AuthenticateCellLink>();
+						relay->certRsa1024AuthenticateCell->Type = certType;
+						// Read certificate content
+						for (int i = startIndex; i < startIndex + certLen; i++ ) relay->certRsa1024AuthenticateCell->Contents->push_back( this->Payload->at(i) );
+					break;
+					case 0x04:
+						// Build directly
+						edBuf->insert(edBuf->begin(), this->Payload->begin() + startIndex, this->Payload->begin() + startIndex + certLen);
+						relay->certEd25519SigningKey = make_unique<BriandTorCertificate_Ed25519SigningKey>(edBuf);
+						relay->certEd25519SigningKey->Type = certType;
+						// Check structure validity
+						if (!relay->certEd25519SigningKey->IsStructureValid()) {
+							// debug message handled by IsStructureValid()
+							return false;
+						}
+					break;
+					case 0x05:
+						// Build directly
+						edBuf->insert(edBuf->begin(), this->Payload->begin() + startIndex, this->Payload->begin() + startIndex + certLen);
+						relay->certTLSLink = make_unique<BriandTorCertificate_TLSLink>(edBuf);
+						relay->certTLSLink->Type = certType;
+						// Check structure validity
+						if (!relay->certTLSLink->IsStructureValid()) {
+							// debug message handled by IsStructureValid()
+							return false;
+						}
+					break;
+					case 0x06:
+						// Build directly
+						edBuf->insert(edBuf->begin(), this->Payload->begin() + startIndex, this->Payload->begin() + startIndex + certLen);
+						relay->certEd25519AuthenticateCellLink = make_unique<BriandTorCertificate_Ed25519AuthenticateCellLink>(edBuf);
+						relay->certEd25519AuthenticateCellLink->Type = certType;
+						// Check structure validity
+						if (!relay->certEd25519AuthenticateCellLink->IsStructureValid()) {
+							// debug message handled by IsStructureValid()
+							return false;
+						}
+					break;
+					case 0x07:
+						edBuf->insert(edBuf->begin(), this->Payload->begin() + startIndex, this->Payload->begin() + startIndex + certLen);
+						relay->certRSAEd25519CrossCertificate = make_unique<BriandTorCertificate_RSAEd25519CrossCertificate>(edBuf);
+						relay->certRSAEd25519CrossCertificate->Type = certType;
+						// Check structure validity
+						if (!relay->certRSAEd25519CrossCertificate->IsStructureValid()) {
+							// debug message handled by IsStructureValid()
+							return false;
+						}
+					break;
+					default:
+					break;
+				}
+
+				edBuf.reset();
 
 				startIndex += certLen;
 			}

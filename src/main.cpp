@@ -56,6 +56,7 @@ bool SERIAL_INPUT_READING = false;
 string* SERIAL_INPUT_POINTER = nullptr;
 unique_ptr<string> CONFIG_PASSWORD = nullptr;
 unique_ptr<string> SERIAL_ENC_KEY = nullptr;
+unique_ptr<string> STA_HOSTNAME = nullptr;
 unique_ptr<string> STA_ESSID = nullptr;
 unique_ptr<string> STA_PASSW = nullptr;
 unique_ptr<string> AP_ESSID = nullptr;
@@ -66,6 +67,7 @@ unsigned int HEAP_LEAK_CHECK = 0;
 
 /* Early declarations */
 void reboot();
+void syncTimeWithNTP();
 void printLocalTime();
 void printLogo();
 void startSerialRead(string*);
@@ -76,6 +78,7 @@ void setup() {
     // Initialize globals
     CONFIG_PASSWORD = make_unique<string>("");
     SERIAL_ENC_KEY = make_unique<string>("");
+	STA_HOSTNAME = make_unique<string>("");
     STA_ESSID = make_unique<string>("");
     STA_PASSW = make_unique<string>("");
     AP_ESSID = make_unique<string>("");
@@ -88,21 +91,12 @@ void setup() {
     Serial.setRxBufferSize(1);
 	Serial.println("");
 
-    if (VERBOSE) Serial.printf("Entering step %d\n", nextStep);
+    if (VERBOSE) Serial.printf("[INFO] Entering step %d\n", nextStep);
 
     // Turn off leds
-	if (VERBOSE) Serial.printf("Turning OFF built led %d\n", LED_BUILTIN);
+	if (VERBOSE) Serial.printf("[INFO] Turning OFF built led %d\n", LED_BUILTIN);
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, 1); // 1 => off, 0 => on
-
-    // ----------------------------
-    Serial.println("START");
-    auto buf = make_unique<vector<unsigned char>>();
-    buf->push_back( 0x01 ); buf->push_back( 0x04 ); buf->push_back( 0x00 ); buf->push_back( 0x06 ); buf->push_back( 0xDE ); buf->push_back( 0x64 ); buf->push_back( 0x01 ); buf->push_back( 0xA9 ); buf->push_back( 0x46 ); buf->push_back( 0x69 ); buf->push_back( 0x53 ); buf->push_back( 0x29 ); buf->push_back( 0xFC ); buf->push_back( 0xE0 ); buf->push_back( 0x28 ); buf->push_back( 0xEB ); buf->push_back( 0x36 ); buf->push_back( 0xC4 ); buf->push_back( 0xD4 ); buf->push_back( 0x07 ); buf->push_back( 0xB1 ); buf->push_back( 0x98 ); buf->push_back( 0x51 ); buf->push_back( 0xEC ); buf->push_back( 0x8A ); buf->push_back( 0x1D ); buf->push_back( 0x30 ); buf->push_back( 0x97 ); buf->push_back( 0x0D ); buf->push_back( 0xFD ); buf->push_back( 0xFA ); buf->push_back( 0xD1 ); buf->push_back( 0x08 ); buf->push_back( 0x6F ); buf->push_back( 0x9E ); buf->push_back( 0xD8 ); buf->push_back( 0xAA ); buf->push_back( 0xD8 ); buf->push_back( 0x79 ); buf->push_back( 0x01 ); buf->push_back( 0x00 ); buf->push_back( 0x20 ); buf->push_back( 0x04 ); buf->push_back( 0x00 ); buf->push_back( 0x0C ); buf->push_back( 0xE0 ); buf->push_back( 0x26 ); buf->push_back( 0x06 ); buf->push_back( 0xCB ); buf->push_back( 0x02 ); buf->push_back( 0xD7 ); buf->push_back( 0x4B ); buf->push_back( 0x64 ); buf->push_back( 0x63 ); buf->push_back( 0x3D ); buf->push_back( 0xE5 ); buf->push_back( 0x09 ); buf->push_back( 0x0D ); buf->push_back( 0xC9 ); buf->push_back( 0x74 ); buf->push_back( 0x62 ); buf->push_back( 0xAA ); buf->push_back( 0x42 ); buf->push_back( 0xE2 ); buf->push_back( 0x2F ); buf->push_back( 0x7F ); buf->push_back( 0x0C ); buf->push_back( 0xB6 ); buf->push_back( 0x88 ); buf->push_back( 0x48 ); buf->push_back( 0x06 ); buf->push_back( 0x50 ); buf->push_back( 0x6E ); buf->push_back( 0x41 ); buf->push_back( 0xA6 ); buf->push_back( 0x34 ); buf->push_back( 0x39 ); buf->push_back( 0xFB ); buf->push_back( 0xEC ); buf->push_back( 0x8E ); buf->push_back( 0xA1 ); buf->push_back( 0xF8 ); buf->push_back( 0xBD ); buf->push_back( 0x52 ); buf->push_back( 0x6B ); buf->push_back( 0xB7 ); buf->push_back( 0xD6 ); buf->push_back( 0xB2 ); buf->push_back( 0xED ); buf->push_back( 0xFC ); buf->push_back( 0xB0 ); buf->push_back( 0xBD ); buf->push_back( 0x42 ); buf->push_back( 0x41 ); buf->push_back( 0xD3 ); buf->push_back( 0xF5 ); buf->push_back( 0xE9 ); buf->push_back( 0x50 ); buf->push_back( 0xF1 ); buf->push_back( 0x4B ); buf->push_back( 0x5D ); buf->push_back( 0xC0 ); buf->push_back( 0x30 ); buf->push_back( 0xC6 ); buf->push_back( 0xEF ); buf->push_back( 0xB9 ); buf->push_back( 0x7C ); buf->push_back( 0x6C ); buf->push_back( 0xB3 ); buf->push_back( 0xF7 ); buf->push_back( 0x46 ); buf->push_back( 0xC7 ); buf->push_back( 0x78 ); buf->push_back( 0xD6 ); buf->push_back( 0x25 ); buf->push_back( 0x53 ); buf->push_back( 0x34 ); buf->push_back( 0x24 ); buf->push_back( 0xC1 ); buf->push_back( 0xC9 ); buf->push_back( 0x37 ); buf->push_back( 0x5C ); buf->push_back( 0xB1 ); buf->push_back( 0x91 ); buf->push_back( 0xEF ); buf->push_back( 0xCE ); buf->push_back( 0x54 ); buf->push_back( 0x5D ); buf->push_back( 0x8D ); buf->push_back( 0xD6 ); buf->push_back( 0x72 ); buf->push_back( 0x5F ); buf->push_back( 0xDD ); buf->push_back( 0xFA ); buf->push_back( 0x7B ); buf->push_back( 0x75 ); buf->push_back( 0x7A ); buf->push_back( 0xF3 ); buf->push_back( 0xCC ); buf->push_back( 0x06 ); 
-    Briand::BriandTorEd25519Certificate cer { buf };
-    Serial.printf("Valid: %d\n", cer.isStructureValid());
-    Serial.println("FINISH");
-    // ----------------------------
     
     if (VERBOSE) {
         // Execute tests
@@ -113,9 +107,6 @@ void setup() {
             Serial.println("[TEST] Filesystem SPIFFS error.");
         else 
             Serial.println("[TEST] Filesystem SPIFFS OK.");
-
-		// Test ArduinoCrypto suite for what needed
-
 
         // Test AES configuration encryption suite (MbedTLS suite)
         string test = "Hello from an {AES128} configuration file.";
@@ -133,7 +124,7 @@ void setup() {
 
 	// Init WiFi to AP+STA 
 
-	if (VERBOSE) Serial.println("Initializing WiFi\n");
+	if (VERBOSE) Serial.println("[INFO] Initializing WiFi\n");
 	WiFi.mode(WIFI_MODE_APSTA);
 
     // Change MAC address to a random one
@@ -151,12 +142,12 @@ void setup() {
 			nmacAP[0] = baseMac[0];
 			nmacSTA[0] = baseMac[0];
 
-			Serial.printf("Current baseMAC: %02x:%02x:%02x:%02x:%02x:%02x\n", baseMac[0], baseMac[1], baseMac[2], baseMac[3], baseMac[4], baseMac[5]);
-            Serial.printf("Current AP  MAC: %s\n", WiFi.softAPmacAddress().c_str());
-            Serial.printf("Current STA MAC: %s\n", WiFi.macAddress().c_str());
+			Serial.printf("[INFO] Current baseMAC: %02x:%02x:%02x:%02x:%02x:%02x\n", baseMac[0], baseMac[1], baseMac[2], baseMac[3], baseMac[4], baseMac[5]);
+            Serial.printf("[INFO] Current AP  MAC: %s\n", WiFi.softAPmacAddress().c_str());
+            Serial.printf("[INFO] Current STA MAC: %s\n", WiFi.macAddress().c_str());
 			Serial.println("");
-			Serial.printf("Change   AP MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", nmacAP[0], nmacAP[1], nmacAP[2], nmacAP[3], nmacAP[4], nmacAP[5]);
-            Serial.printf("Change  STA MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", nmacSTA[0], nmacSTA[1], nmacSTA[2], nmacSTA[3], nmacSTA[4], nmacSTA[5]);
+			Serial.printf("[INFO] Change   AP MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", nmacAP[0], nmacAP[1], nmacAP[2], nmacAP[3], nmacAP[4], nmacAP[5]);
+            Serial.printf("[INFO] Change  STA MAC: %02x:%02x:%02x:%02x:%02x:%02x\n", nmacSTA[0], nmacSTA[1], nmacSTA[2], nmacSTA[3], nmacSTA[4], nmacSTA[5]);
         }
 
         auto errAp = esp_wifi_set_mac(WIFI_IF_AP, nmacAP.get());
@@ -166,25 +157,25 @@ void setup() {
 
         if (VERBOSE) { 
 			Serial.println("");
-            Serial.printf("****New AP  MAC: %s\n", WiFi.softAPmacAddress().c_str());
-            Serial.printf("****New STA MAC: %s\n", WiFi.macAddress().c_str());
+            Serial.printf("[INFO] New AP  MAC: %s\n", WiFi.softAPmacAddress().c_str());
+            Serial.printf("[INFO] New STA MAC: %s\n", WiFi.macAddress().c_str());
         }
     }
 
 	// Init STA and AP with random hostname
 
-	auto staHostname = Briand::BriandUtils::GetRandomHostName();
+	STA_HOSTNAME->append( Briand::BriandUtils::GetRandomHostName().get() );
 	auto apHostname = Briand::BriandUtils::GetRandomHostName();
 	
-	if (WiFi.setHostname(staHostname.get())) {
-		Serial.printf("STA WiFi hostname is: %s\n", WiFi.getHostname());
+	if (WiFi.setHostname(STA_HOSTNAME->c_str())) {
+		Serial.printf("[INFO] STA WiFi hostname is: %s\n", WiFi.getHostname());
 	}
 	else {
 		Serial.printf("[ERR] Error on setting STA hostname, will remain: %s\n", WiFi.getHostname());
 	}
 
 	if (WiFi.softAPsetHostname(apHostname.get())) {
-		Serial.printf("AP WiFi hostname is: %s\n", WiFi.softAPgetHostname());
+		Serial.printf("[INFO] AP WiFi hostname is: %s\n", WiFi.softAPgetHostname());
 	}
 	else {
 		Serial.printf("[ERR] Error on setting AP hostname, will remain: %s\n", WiFi.softAPgetHostname());
@@ -193,7 +184,7 @@ void setup() {
     // Print welcome
     printLogo();
 
-    Serial.println("Serial communication: press [ENTER] to confirm inputs/commands. BACKSPACE *MAY* not work!\n\n");
+    Serial.println("[INFO] Serial communication: press [ENTER] to confirm inputs/commands. BACKSPACE *MAY* not work!\n\n");
 
     nextStep = 1; // setup success
 }
@@ -300,7 +291,7 @@ void loop() {
     else if (nextStep == 6) {
         // Connect station, until timeout reached.
         unsigned long int timeout = millis() + WIFI_CONNECTION_TIMEOUT*1000;
-        Serial.printf("Connecting to %s", STA_ESSID->c_str());
+        Serial.printf("[INFO] Connecting to %s", STA_ESSID->c_str());
 
         WiFi.begin(STA_ESSID->c_str(), STA_PASSW->c_str());
         while (!WiFi.isConnected() && millis() < timeout) {
@@ -308,16 +299,24 @@ void loop() {
             if (VERBOSE) Serial.print(".");
         }
 
-        Serial.println("");
-
         if (!WiFi.isConnected()) {
-            Serial.println("\n\nWIFI CONNECTION ERROR/TIMEOUT. SYSTEM WILL RESTART IN 5 SECONDS!");
+            Serial.println("\n\n[ERR] WIFI CONNECTION ERROR/TIMEOUT. SYSTEM WILL RESTART IN 5 SECONDS!");
             delay(5*1000);
             reboot();
         }
 
         Serial.println("connected!");
-        if (VERBOSE) Serial.printf("LAN IP Address: %s\n", WiFi.localIP().toString().c_str());
+
+		// hostname must be refreshed there
+		// otherwise some routers cache the previous (ex. UniFi)
+		if (WiFi.setHostname(STA_HOSTNAME->c_str())) {
+			if (VERBOSE) Serial.printf("[INFO] STA WiFi hostname has been reset to: %s\n", WiFi.getHostname());
+		}
+		else {
+			if (VERBOSE) Serial.printf("[ERR] STA WiFi hostname could not be reset to a random one! It is: %s\n", WiFi.getHostname());
+		}
+
+        if (VERBOSE) Serial.printf("[INFO] LAN IP Address: %s\n", WiFi.localIP().toString().c_str());
         delay(500);
 
         nextStep = 7;
@@ -343,10 +342,10 @@ void loop() {
             cfg->SERIAL_ENC_KEY.append(SERIAL_ENC_KEY->c_str());
             cfg->VERBOSE = VERBOSE;
             cfg->writeConfig();
-            Serial.println("\nConfiguration file written!");
+            Serial.println("\n[INFO] Configuration file written!");
         }
 		else {
-			Serial.println("\nPassword must be 16 chars! Configuration file NOT written!");
+			Serial.println("\n[INFO] Password must be 16 chars! Configuration file NOT written!");
 		}
 
         // Now cleanup not anymore needed infos
@@ -356,12 +355,12 @@ void loop() {
 
 		// Initialize AP interface
 
-		if(VERBOSE) Serial.println("Now initializing AP interface...");
+		if(VERBOSE) Serial.println("[INFO] Now initializing AP interface...");
 
 		auto apEssid = Briand::BriandUtils::GetRandomSSID();
 		auto apPassword = Briand::BriandUtils::GetRandomPassword(WIFI_AP_PASSWORD_LEN);
 		if (WiFi.softAP(apEssid.get(), apPassword.get(), WIFI_AP_CH, WIFI_AP_HIDDEN, WIFI_AP_MAX_CONN)) {
-			if(VERBOSE) Serial.printf("AP Ready. ESSID: %s PASSWORD: %s\n", apEssid.get(), apPassword.get());
+			if(VERBOSE) Serial.printf("[INFO] AP Ready. ESSID: %s PASSWORD: %s\n", apEssid.get(), apPassword.get());
 			AP_ESSID = make_unique<string>( apEssid.get() );
 			AP_PASSW = make_unique<string>( apPassword.get() );
 			
@@ -381,36 +380,25 @@ void loop() {
     }
     else if (nextStep == 9) {
 
-        if (VERBOSE) printLocalTime();
-        if (VERBOSE) Serial.println("Sync time to UTC+0 (no daylight saving) with NTP");
-
-        //For UTC -5.00 : -5 * 60 * 60 : -18000
-        //For UTC +1.00 : 1 * 60 * 60 : 3600
-        //For UTC +0.00 : 0 * 60 * 60 : 0
-        const long  gmtOffset_sec = 0;
-
-        // to 3600 if daylight saving
-        const int daylightOffset_sec = 0; 
-
-        // init and get the time
-        configTime(gmtOffset_sec, daylightOffset_sec, NTP_SERVER);
-
-        if (VERBOSE) printLocalTime();
+		// Sync time with NTP (VERY IMPORTANT!)
+        syncTimeWithNTP();
 
         // Proceed to next steps
         nextStep = 100;
     }
     else if (nextStep == 100) {
-        Serial.println("Creating TOR circuits");
+        Serial.println("[INFO] Creating TOR circuits");
         
         // ... todo
 
         nextStep = 900;
 
-        Serial.println("\n\nSYSTEM READY! Type help for commands.\n");
+        Serial.println("\n\n[INFO] SYSTEM READY! Type help for commands.\n");
 
         // Start heap-leak warning watch
-        HEAP_LEAK_CHECK = ESP.getFreeHeap();
+        HEAP_LEAK_CHECK = ESP.getFreeHeap() + ESP.getFreePsram();
+
+		if (VERBOSE) Serial.printf("[INFO] Free heap at system start is %lu bytes.\n", HEAP_LEAK_CHECK);
     }
     else if (nextStep == 900) {
         // Here system ready for commands
@@ -451,14 +439,32 @@ void printLogo() {
     Serial.println("                                               ");
 }
 
+void syncTimeWithNTP() {
+	if (VERBOSE) Serial.printf("[INFO] Sync time to UTC+0 (no daylight saving) with NTP server %s\n", NTP_SERVER);
+
+	//For UTC -5.00 : -5 * 60 * 60 : -18000
+	//For UTC +1.00 : 1 * 60 * 60 : 3600
+	//For UTC +0.00 : 0 * 60 * 60 : 0
+	const long  gmtOffset_sec = 0;
+
+	// to 3600 if daylight saving
+	const int daylightOffset_sec = 0; 
+
+	// init and get the time
+	configTime(gmtOffset_sec, daylightOffset_sec, NTP_SERVER);
+
+	if (VERBOSE) printLocalTime();
+}
+
 void printLocalTime()
 {
     struct tm timeinfo;
     if(!getLocalTime(&timeinfo)){
-        Serial.println("Failed to obtain time");
+        if (VERBOSE) Serial.println("[ERR] Failed to obtain time");
         return;
     }
-    Serial.println(&timeinfo, "Local time: %A, %B %d %Y %H:%M:%S");
+    Serial.println(&timeinfo, "[INFO] Local time: %A, %B %d %Y %H:%M:%S");
+	Serial.printf("[INFO] UNIX time: %lu\n", Briand::BriandUtils::GetUnixTime());
 }
 
 void reboot() {
@@ -483,7 +489,7 @@ void startSerialRead(string* sPtr) {
 
 void executeCommand(string& cmd) {
 	// Get heap size before command
-	unsigned long int heapBefore = ESP.getFreeHeap();
+	int heapBefore = static_cast<int>( ESP.getFreeHeap() + ESP.getFreePsram() );
 
     // Assign a command ID for external processing (will reset after max value for long tasks)
     if ( COMMANDID == ULLONG_MAX)
@@ -496,7 +502,7 @@ void executeCommand(string& cmd) {
 
 	if (cmd.compare("help") == 0) {
         Serial.println("COMMAND : description");
-		Serial.println("GENERAL-------------------------------------------------------------------");
+		Serial.println("GENERAL---------------------------------------------------------------------------");
 		Serial.println("help : display this.");
         Serial.println("time : display date and time.");
 		Serial.println("devinfo : display device information.");
@@ -504,21 +510,26 @@ void executeCommand(string& cmd) {
 		Serial.println("netinfo : display network STA/AP interfaces information.");
 		Serial.println("apoff : turn off AP interface.");
 		Serial.println("apon : turn on AP interface (will keep intact hostname/essid/password).");
+		Serial.println("synctime : sync localtime time with NTP.");
 		Serial.println("reboot : restart device.");
 
 		if (DEBUG) {
-			Serial.println("TOR TESTING (DEBUG ACTIVE)------------------------------------------------");
+			Serial.println("TESTING (DEBUG ACTIVE)--------------------------------------------------------");
 			Serial.println("search-guard : if DEBUG active, search and display info for a guard node.");
 			Serial.println("search-exit : if DEBUG active, search and display info for an exit node.");
 			Serial.println("search-middle : if DEBUG active, search and display info for a middle node.");
 			Serial.println("testcircuit : if DEBUG active, build a new circuit just for testing.");
+			Serial.println("heapleak : if DEBUG active, leaks the heap to test leak warning.");
 		}
 
-		Serial.println("TOR TESTING------------------------------------------------------------------");
+		Serial.println("TOR TESTING-----------------------------------------------------------------------");
 		Serial.println("ifconfig.me : Show ifconfig.me information (NON-TOR REQUEST, REAL ADDRESS).");
     }
     else if (cmd.compare("time") == 0) {
         printLocalTime();
+    }
+	else if (cmd.compare("synctime") == 0) {
+        syncTimeWithNTP();
     }
     else if (cmd.compare("devinfo") == 0) {
         Serial.printf("CPU Frequency: %uMHz\n", ESP.getCpuFreqMHz());
@@ -600,6 +611,12 @@ void executeCommand(string& cmd) {
 		else 
 			Serial.println("FAILED to build a circuit.");
     }
+	else if (cmd.compare("heapleak") == 0 && DEBUG)  {
+		auto leakingHeap = make_unique<unsigned char[]>(2048);
+		// release instead of reset
+		leakingHeap.release();
+		Serial.println("Heap has been leaked for 2048 bytes.");
+    }
 	else if (cmd.compare("ifconfig.me") == 0)  {
 		string info = Briand::BriandUtils::BriandIfConfigMe();
 		Serial.printf("\nInfo about your real identity:\n\n%s\n", info.c_str());
@@ -613,22 +630,22 @@ void executeCommand(string& cmd) {
     Serial.printf("[EXE][0x%016llx][END]\n", COMMANDID);
 
 	// Debug: print memory used by command
-    int consumption = (heapBefore - ESP.getFreeHeap());
-	if (DEBUG) Serial.printf("[DEBUG] Heap consumption: %lu (from %lu to %lu) bytes.\n", consumption, heapBefore, ESP.getFreeHeap());
+    int consumption = (heapBefore - static_cast<int>(ESP.getFreeHeap()));
+	if (DEBUG) Serial.printf("[DEBUG] Heap consumption: %d (from %d to %lu) bytes.\n", consumption, heapBefore, ESP.getFreeHeap());
 
     // Always useful: check if code has heap leaks 
-    // sometimes I do the mistake to use .release() insted of .reset() on smart pointers :P
+    // sometimes I do the mistake to use .release() insted of .reset() on smart pointers :P	
 
-    //
-    // TODO
-    //
-
-    if (false) {
-        Serial.println("!!!!!!!!!!WARNING!!!!!!!!! Heap is decreasing!");
-        HEAP_LEAK_CHECK++;
+	double testHeapLeak = static_cast<double>( HEAP_LEAK_CHECK - (ESP.getFreeHeap() + ESP.getFreePsram()) );
+	testHeapLeak = testHeapLeak / static_cast<double>(HEAP_LEAK_CHECK);
+	testHeapLeak = testHeapLeak * 100.0;
+	
+    if ( static_cast<char>( testHeapLeak ) >= HEAP_LEAK_LIMIT ){
+        Serial.println("[HEAP WARNING] !!!!!!!!!!WARNING!!!!!!!!! Heap is decreasing!");
+		// reset
+		HEAP_LEAK_CHECK = ESP.getFreeHeap() + ESP.getFreePsram();
     }
     
-
     // Clear COMMAND for next
     COMMAND->clear();
 }

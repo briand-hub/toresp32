@@ -312,7 +312,7 @@ namespace Briand
 			else limit = buffer.size();
 
 			for (unsigned int i=0; i < limit; i++) {
-				Serial.printf("%02X ", buffer.at(i));
+				Serial.printf("%02X", buffer.at(i));
 				if (i > 0 && i % newLineAfterBytes == 0) Serial.print("\n");
 			}
 			Serial.print("\n");
@@ -332,13 +332,12 @@ namespace Briand
 			else limit = size;
 
 			for (unsigned int i=0; i < limit; i++) {
-				Serial.printf("%02X ", buffer[i]);
+				Serial.printf("%02X", buffer[i]);
 				if (i > 0 && i % newLineAfterBytes == 0) Serial.print("\n");
 			}
 			Serial.print("\n");
 		}
 	
-
 		/**
 		 * Convert a command to a readable string
 		 * @param command Cell command 
@@ -379,6 +378,15 @@ namespace Briand
 			}
 
 			return std::move(buf);
+		}
+
+		/**
+		 * Method to get UNIX time from ESP32
+		*/
+		static unsigned long GetUnixTime() {
+			time_t now;
+			time(&now);
+			return now;
 		}
 	};
 	
