@@ -91,9 +91,10 @@ namespace Briand
 		 * @param content Request (raw bytes) to send (c++ vector must be used)
 		 * @param emptyContents set it to true if you want the input buffer empty after request. false to keep it.
 		 * @param closeConnection set it to true if you want close the connection (client->end).
-		 * @return an unique_ptr to the response buffer (c++ vector), empty vector if fails
+		 * @param expectResponse set it to false if a response is not expected.
+		 * @return an unique_ptr to the response buffer (c++ vector), empty vector if fails or response is not expected.
 		*/
-		static unique_ptr<vector<unsigned char>> RawSecureRequest(unique_ptr<WiFiClientSecure>& client, unique_ptr<vector<unsigned char>>& content, bool emptyContents = true, bool closeConnection = false) {
+		static unique_ptr<vector<unsigned char>> RawSecureRequest(unique_ptr<WiFiClientSecure>& client, unique_ptr<vector<unsigned char>>& content, bool emptyContents = true, bool closeConnection = false, bool expectResponse = true) {
 			auto output = make_unique<vector<unsigned char>>();
 
 			// Write request
@@ -112,36 +113,39 @@ namespace Briand
 			
 			client->flush();
 
-			// Wait response until timeout reached
-			
-			if (DEBUG) Serial.println("[DEBUG] Request sent.");
-			if (DEBUG) Serial.print("[DEBUG] Waiting response");
+			// If response expected
+			if (expectResponse) {
+				// Wait response until timeout reached
+				
+				if (DEBUG) Serial.println("[DEBUG] Request sent.");
+				if (DEBUG) Serial.print("[DEBUG] Waiting response");
 
-			unsigned long startedOn = millis();
-			bool timeout = false;
+				unsigned long startedOn = millis();
+				bool timeout = false;
 
-			while (client->available() == 0 && !timeout) {
-				delay(100);
-				timeout = ( millis() - startedOn ) >= NET_REQUEST_TIMEOUT_S*1000;
-				if (DEBUG) Serial.print(".");
+				while (client->available() == 0 && !timeout) {
+					delay(100);
+					timeout = ( millis() - startedOn ) >= NET_REQUEST_TIMEOUT_S*1000;
+					if (DEBUG) Serial.print(".");
+				}
+				if (DEBUG) Serial.print("\n");
+
+				if (timeout) {
+					if (VERBOSE) Serial.println("[ERR] Request has timed out.");
+					return output;
+				} 
+
+				// Response ready!
+
+				while (client->connected() && client->available() > 0) {
+					output->push_back( static_cast<unsigned char>( client->read() ) );
+				}
+				
+				if (DEBUG) Serial.printf("[DEBUG] Got response of %lu bytes.\n", output->size());
+
+				if (client->connected() && closeConnection)
+					client->stop();
 			}
-			if (DEBUG) Serial.print("\n");
-
-			if (timeout) {
-				if (VERBOSE) Serial.println("[ERR] Request has timed out.");
-				return output;
-			} 
-
-			// Response ready!
-
-			while (client->connected() && client->available() > 0) {
-				output->push_back( static_cast<unsigned char>( client->read() ) );
-			}
-			
-			if (DEBUG) Serial.printf("[DEBUG] Got response of %lu bytes.\n", output->size());
-
-			if (client->connected() && closeConnection)
-				client->stop();
 
 			return std::move(output);
 		}

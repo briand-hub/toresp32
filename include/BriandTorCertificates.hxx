@@ -181,7 +181,7 @@ namespace Briand {
 		string GetCertificateShortInfo() {
 			ostringstream builder;
 			builder << "Certificate Type: " << static_cast<unsigned short>(this->Type) << "/" << this->GetCertificateName();
-			builder << "Size: " << dec << this->Contents->size() << " bytes";
+			builder << " Size: " << dec << this->Contents->size() << " bytes";
 			builder << " Content bytes: ";
 
 			for (unsigned int i = 0; i<this->Contents->size(); i++)
@@ -451,7 +451,7 @@ namespace Briand {
 				
 				if (this->EXTENSIONS->size() > 0) {
 					for (int i = 0; i<this->N_EXTENSIONS; i++) {
-						Serial.printf("[DEBUG] Certificate Type: %d/%s Extension %d of %d : ->type = 0x%02X ->flags = 0x%02X ->len = %u bytes ->data = ", this->Type, this->GetCertificateName().c_str(), (i+1), this->N_EXTENSIONS, this->EXTENSIONS->at(i).ExtType, this->EXTENSIONS->at(i).ExtFlags, this->EXTENSIONS->at(i).ExtLength);
+						Serial.printf("[DEBUG] Certificate Type: %d/%s Extension %d of %d : ->type = 0x%02X ->flags = 0x%02X ->len = %hu bytes ->data = ", this->Type, this->GetCertificateName().c_str(), (i+1), this->N_EXTENSIONS, this->EXTENSIONS->at(i).ExtType, this->EXTENSIONS->at(i).ExtFlags, this->EXTENSIONS->at(i).ExtLength);
 						BriandUtils::PrintByteBuffer(*this->EXTENSIONS->at(i).ExtData.get(), this->EXTENSIONS->at(i).ExtLength+1, this->EXTENSIONS->at(i).ExtLength+1);
 					}
 				}
@@ -661,6 +661,11 @@ namespace Briand {
 			this->EXPIRATION_DATE = 0x00000000;
 			this->SIGNATURE = nullptr; 
 			this->SIGLEN = 0x00;
+
+			if (DEBUG) {
+				Serial.printf("[DEBUG] RSAEd25519CrossCertificate raw bytes: ");
+				BriandUtils::PrintByteBuffer(*raw_bytes.get(), raw_bytes->size()+1, raw_bytes->size()+1);
+			}
 
 			// start to build
 
