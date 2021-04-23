@@ -388,6 +388,170 @@ namespace Briand
 			time(&now);
 			return now;
 		}
+	
+		/**
+		 * Helper method convert vector to old-style buffer for libraries that needs it.
+		 * SIZE IS THE SAME AS INPUT VECTOR
+		 * @param input Pointer to the vector
+		 * @return Pointer to buffer
+		*/
+		static unique_ptr<unsigned char[]> VectorToArray(const unique_ptr<vector<unsigned char>>& input) {
+			auto b = make_unique<unsigned char[]>(input->size());
+			for (unsigned long int i = 0; i < input->size(); i++)
+				b[i] = input->at(i);
+			return std::move(b);
+		}
+
+		/**
+		 * Helper method convert old-style buffer for libraries that needs it to vector
+		 * @param input Pointer to buffer 
+		 * @param size Buffer size
+		 * @return Pointer to vector
+		*/
+		static unique_ptr<vector<unsigned char>> ArrayToVector(const unique_ptr<unsigned char[]>& input, const unsigned long int& size) {
+			auto v = make_unique<vector<unsigned char>>();
+			for (int i = 0; i < size; i++)
+				v->push_back(input[i]);
+			return std::move(v);
+		}
+
+		/**
+		 * Helper method convert string to old-style buffer for libraries that needs it.
+		 * SIZE IS THE SAME AS INPUT STRING
+		 * @param input The string
+		 * @param nullterminate If true, adds a null-terminate char 0x00
+		 * @return Pointer to buffer
+		*/
+		static unique_ptr<unsigned char[]> StringToOldBuffer(const string& input, bool nullterminate = false) {
+			unsigned long int size = input.length();
+
+			if (nullterminate) size++;
+
+			auto b = make_unique<unsigned char[]>(size);
+			for (unsigned long int i = 0; i < input.length(); i++)
+				b[i] = input.at(i);
+
+			return std::move(b);
+		}
+
+		/**
+		 * Helper method convert old-style buffer for libraries that needs it to string (do not include any null-terminate!)
+		 * @param input The string
+		 * @param size The buffer size
+		 * @return The string
+		*/
+		static string OldBufferToString(unique_ptr<unsigned char[]>& input, const unsigned long int& size) {
+			string output("");
+			unsigned long int limit = size;
+
+			// If null-terminated string, do not include
+			if (input[size-1] == 0x00) limit--;
+
+			for (unsigned long int i = 0; i < limit; i++) 
+				output.push_back(input[i]);
+			
+			return output;
+		}
+
+		/**
+		 * Helper method convert string to vector.
+		 * SIZE IS THE SAME AS INPUT STRING
+		 * @param input The string
+		 * @return Pointer to vector
+		*/
+		static unique_ptr<vector<unsigned char>> StringToVector(const string& input) {
+			auto v = make_unique<vector<unsigned char>>();
+			for (unsigned long int i = 0; i < input.length(); i++)
+				v->push_back(input.at(i));
+
+			return std::move(v);
+		}
+
+		/**
+		 * Helper method convert vector to string
+		 * @param input The vector
+		 * @return The string
+		*/
+		static string VectorToString(unique_ptr<vector<unsigned char>>& input) {
+			string output("");
+
+			for (unsigned long int i = 0; i < input->size(); i++) 
+				output.push_back(input->at(i));
+			
+			return output;
+		}
+
+		/**
+		 * Helper method convert an "hex" string to a vector<unsigned char>
+		 * SIZE IS THE SAME AS INPUT STRING
+		 * @param hexstring The string (must be a valid hex string), each hex value must occupy 2 chars
+		 * @param preNonHex Prepend this string with a non-hex format (char to raw bytes)
+		 * @return Pointer to vector (empty vector if input string not even size)
+		*/
+		static unique_ptr<vector<unsigned char>> HexStringToVector(const string& hexstring, const string& preNonHex) {
+			auto v = make_unique<vector<unsigned char>>();
+
+			if (hexstring.length() % 2 != 0)
+				return std::move(v);
+
+			// Copy prepended if any
+			for (unsigned long int i = 0; i < preNonHex.length(); i++) {	
+				v->push_back( static_cast<unsigned char>( preNonHex.at(i) ) );
+			}
+
+			// Copy other bytes, 2 digits per time
+			for (unsigned long int i = 0; i < hexstring.length(); i+= 2) {			
+				string h("");
+				h.push_back(hexstring.at(i));
+				h.push_back(hexstring.at(i+1));
+
+				v->push_back( static_cast<unsigned char>( std::stoi(h, 0, 16) ) );
+			}
+
+			return std::move(v);
+		}
+
+		/**
+		 * Helper method convert an "hex" string to an unsigned char buffer
+		 * SIZE IS THE SAME AS INPUT STRING
+		 * @param hexstring The string (must be a valid hex string), each hex value must occupy 2 chars
+		 * @param preNonHex Prepend this string with a non-hex format (raw char to bytes)
+		 * @return Pointer to buffer (all null if input string not even size)
+		*/
+		static 	unique_ptr<unsigned char[]> HexStringToOldBuffer(const string& hexstring, unsigned int& size, const string& preNonhex, bool nullterm = false) {
+			unsigned int i = 0;
+			unsigned int j = 0;
+			
+			size = (hexstring.length()/2) + preNonhex.length(); 
+			if( nullterm ) size++;
+
+			auto buffer = make_unique<unsigned char[]>(size);
+
+			if (hexstring.length() % 2 != 0)
+				return std::move(buffer);
+			
+			// init to zero is granted by make_unique
+			
+			// copy prepended if any
+			for (i = 0; i < preNonhex.length(); i++) {
+				buffer[j] = preNonhex.at(i);
+				j++;
+			}
+
+			// Copy 2 digits per time
+			for (i = 0; i < hexstring.length(); i += 2) {
+				string b = string("");
+				b.push_back(hexstring.at(i));
+				b.push_back(hexstring.at(i+1));
+
+				buffer[j] = static_cast<unsigned char>( stoi( b, 0, 16 ) );
+				j++;
+			}
+
+			return std::move(buffer);
+		}
+
+
 	};
 	
 }

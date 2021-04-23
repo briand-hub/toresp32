@@ -24,17 +24,10 @@
 #include <iomanip>
 #include <cstring>
 
-/* mbedTLS library for SSL / SHA / TLS / RSA */
-#include <mbedtls/ssl.h>
-#include <mbedtls/error.h>
-#include <mbedtls/certs.h>
-
-/* LibSodium found for Ed25519 signatures! It's on framwork :-D */
-#include <sodium.h>
-
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
 #include "BriandUtils.hxx"
+#include "BriandTorCertificateUtils.hxx"
 
 using namespace std;
 
@@ -45,102 +38,6 @@ namespace Briand {
 	*/
 	class BriandTorCertificateBase {
 		protected:
-
-		/**
-		 * Method verifies the current X.509 certificate (if applicable) against a root CA X.509 certificate.
-		 * All verifications (valid dates, valid signatures, etc.) <b>should</b> be done by the MbedTLS library.
-		 * @param x509CaCertificate the root certificate (RSA1024 Identity)
-		 * @param rsaMinKeySize minimum allowed rsa key size (mbedtls invalidates certificate if key size is less than 2048bits , April 2021)
-		 * @return true if valid, false otherwise
-		*/
-		virtual bool X509ValidateAgainstCa(const unique_ptr<vector<unsigned char>>& x509CaCertificateContents, unsigned short rsaMinKeySize = 1024) {
-			// Buffers needed
-			unique_ptr<unsigned char[]> tempBuffer = nullptr;
-			unsigned int caSize = x509CaCertificateContents->size() + 1; // +1 because MUST be null-terminated
-			unsigned int peerSize = this->Contents->size() + 1;
-
-			// Data structures needed
-			mbedtls_x509_crt chain;
-			mbedtls_x509_crt root_ca;
-			mbedtls_x509_crt_profile profile;
-
-			// Initialize data structures
-			mbedtls_x509_crt_init(&chain);
-			mbedtls_x509_crt_init(&root_ca);
-			
-			// Copy the default profile and set it to allow a 1024 RSA key
-			// Otherwise will throw "The certificate is signed with an unacceptable key (eg bad curve, RSA too short)."
-			memcpy(&profile, &mbedtls_x509_crt_profile_default, sizeof(mbedtls_x509_crt_profile_default) );
-			profile.rsa_min_bitlen = 1024;
-
-			// Start to parse the CA and add it to chain
-			// CA MUST BE THE FIRST IN THE CHAIN!!!
-			tempBuffer = BriandUtils::GetOneOldBuffer( caSize ); // MUST be zero-init
-
-			// Copy contents
-			std::copy(x509CaCertificateContents->begin(), x509CaCertificateContents->end(), tempBuffer.get() );
-
-			// Parse CA and add to chain
-			if ( mbedtls_x509_crt_parse(&chain, reinterpret_cast<const unsigned char*>(tempBuffer.get()), caSize) != 0) {
-				if (DEBUG) Serial.printf("[DEBUG] %s validation: failed to parse rootCA.", this->GetCertificateName().c_str());
-
-				// free
-				mbedtls_x509_crt_free(&chain);
-				mbedtls_x509_crt_free(&root_ca);
-
-				return false;
-			}	
-
-			// Parse CA again but add to ROOTCA chain to verify against
-			mbedtls_x509_crt_parse(&root_ca, reinterpret_cast<const unsigned char*>(tempBuffer.get()), caSize);
-
-			// Reset buffer and parse the peer (this) certificate
-
-			tempBuffer = BriandUtils::GetOneOldBuffer( peerSize ); // MUST be zero-init
-
-			// Copy contents
-			std::copy(this->Contents->begin(), this->Contents->end(), tempBuffer.get() );
-
-			// Parse Peer and add to chain
-			if ( mbedtls_x509_crt_parse(&chain, reinterpret_cast<const unsigned char*>(tempBuffer.get()), peerSize) != 0) {
-				if (DEBUG) Serial.printf("[DEBUG] %s validation: failed to parse peer.", this->GetCertificateName().c_str());
-
-				// free
-				mbedtls_x509_crt_free(&chain);
-				mbedtls_x509_crt_free(&root_ca);
-
-				return false;
-			}	
-
-			// Not need anymore the buffer, save RAM
-			tempBuffer.reset();
-
-			// Validate
-			// to see validation results the verify callback could be added.
-			unsigned int verification_flags;
-			
-			if (mbedtls_x509_crt_verify_with_profile(&chain, &root_ca, NULL,  &profile, NULL, &verification_flags, NULL, NULL) != 0) {
-				if (DEBUG) {
-					tempBuffer = BriandUtils::GetOneOldBuffer(256 + 1);
-					mbedtls_x509_crt_verify_info( reinterpret_cast<char*>(tempBuffer.get()), 256,"", verification_flags);
-					Serial.printf("[DEBUG] %s validation: failed because %s\n", this->GetCertificateName().c_str(), reinterpret_cast<const char*>(tempBuffer.get()));
-				} 
-
-				// free 
-				mbedtls_x509_crt_free(&chain);
-				mbedtls_x509_crt_free(&root_ca);
-
-				return false;
-			}
-
-			if (DEBUG) Serial.printf("[DEBUG] Type %s validation: success.\n", this->GetCertificateName().c_str());
-
-			// free data structs
-			mbedtls_x509_crt_free(&chain);
-			mbedtls_x509_crt_free(&root_ca);
-
-			return true;
-		}
 
 		public:
 
@@ -477,9 +374,14 @@ namespace Briand {
 		 * @return true if all valid, false otherwise 
 		*/
 		virtual bool IsValid() {
-			// Just call the base method because this certificate is a DER-encoded X.509 
-			// The CA is .... myself
-			return this->X509ValidateAgainstCa(this->Contents);
+			// This certificate is a DER-encoded X.509 
+			// The CA is the Cert type 2 and is ... myself!
+
+			if (DEBUG) Serial.printf("[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
+			bool validationResult = BriandTorCertificateUtils::X509Validate(this->Contents, this->Contents);
+			if (DEBUG) Serial.printf("[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
+
+			return validationResult;
 		}
 
 		/**
@@ -531,9 +433,14 @@ namespace Briand {
 		 * @return true if all valid, false otherwise 
 		*/
 		virtual bool IsValid(const BriandTorCertificate_RSA1024Identity& signAuthenticator) {
-			// Just call the base method because this certificate is a DER-encoded X.509 
+			// This certificate is a DER-encoded X.509 
 			// The CA is the Cert type 2.
-			return this->X509ValidateAgainstCa(signAuthenticator.Contents);
+
+			if (DEBUG) Serial.printf("[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
+			bool validationResult = BriandTorCertificateUtils::X509Validate(this->Contents, signAuthenticator.Contents);
+			if (DEBUG) Serial.printf("[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
+
+			return validationResult;
 		}
 	};
 
@@ -549,9 +456,14 @@ namespace Briand {
 		 * @return true if all valid, false otherwise 
 		*/
 		virtual bool IsValid(const BriandTorCertificate_RSA1024Identity& signAuthenticator) {
-			// Just call the base method because this certificate is a DER-encoded X.509 
+			// This certificate is a DER-encoded X.509 
 			// The CA is the Cert type 2.
-			return this->X509ValidateAgainstCa(signAuthenticator.Contents);
+
+			if (DEBUG) Serial.printf("[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
+			bool validationResult = BriandTorCertificateUtils::X509Validate(this->Contents, signAuthenticator.Contents);
+			if (DEBUG) Serial.printf("[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
+
+			return validationResult;
 		}
 	};
 
@@ -694,8 +606,8 @@ namespace Briand {
 
 			this->SIGNATURE = make_unique<unsigned char[]>( this->SIGLEN );
 
-			// copy data
-			std::copy(raw_bytes->begin()+36, raw_bytes->begin()+36+this->SIGLEN, this->SIGNATURE.get());
+			// copy data from byte 37 for siglen bytes
+			std::copy(raw_bytes->begin()+37, raw_bytes->begin()+37+this->SIGLEN, this->SIGNATURE.get());
 
 			if (DEBUG) Serial.println("[DEBUG] RSAEd25519CrossCertificate structure validated.");
 
@@ -732,14 +644,26 @@ namespace Briand {
 				return false;
 			}
 				
+			// Check signature
+			if (DEBUG) Serial.println("[DEBUG] RSAEd25519CrossCertificate check if signed by RSA1024 Identity.");
 
-			//
-			// TODO
-			//
+			/*The signature is computed on the SHA256 hash of the non-signature parts of the certificate, prefixed with the	string "Tor TLS RSA/Ed25519 cross-certificate".*/
 
-			if (DEBUG) Serial.println("[DEBUG] RSAEd25519CrossCertificate is valid.");
+			// HINT: non-signature means all bytes but NOT SIGLEN and SIGNATURE. So only prepended string + EXPIRATIONDATE + EDKEY
+			// in such way prepare buffer
+			auto messageToVerify = BriandUtils::HexStringToVector("", "Tor TLS RSA/Ed25519 cross-certificate");
+			for (unsigned int i=0; i<ed25519_key_size; i++) messageToVerify->push_back( this->ED25519_KEY[i] );
+			messageToVerify->push_back( static_cast<unsigned char>(this->EXPIRATION_DATE & 0xFF000000) );
+			messageToVerify->push_back( static_cast<unsigned char>(this->EXPIRATION_DATE & 0x00FF0000) );
+			messageToVerify->push_back( static_cast<unsigned char>(this->EXPIRATION_DATE & 0x0000FF00) );
+			messageToVerify->push_back( static_cast<unsigned char>(this->EXPIRATION_DATE & 0x000000FF) );
+			
+			bool signedCorrectly = BriandTorCertificateUtils::CheckSignature_RSASHA256(messageToVerify, signAuthenticator.Contents, BriandUtils::ArrayToVector(this->SIGNATURE, this->SIGLEN));
 
-			return true;
+			if (DEBUG && signedCorrectly) Serial.println("[DEBUG] RSAEd25519CrossCertificate has valid signature.");
+			else if (DEBUG && !signedCorrectly) Serial.println("[DEBUG] RSAEd25519CrossCertificate has invalid signature!");
+
+			return signedCorrectly;
 		}
 
 		/**
@@ -749,7 +673,7 @@ namespace Briand {
 			if (DEBUG) {				
 				Serial.printf("[DEBUG] RSAEd25519CrossCertificate->ED25519_KEY = ");
 				BriandUtils::PrintOldStyleByteBuffer(this->ED25519_KEY.get(), this->ed25519_key_size, this->ed25519_key_size+1, this->ed25519_key_size);
-				Serial.printf("[DEBUG] RSAEd25519CrossCertificate->EXPIRATION_DATE (Unix time HOURS) = %u\n", this->EXPIRATION_DATE);
+				Serial.printf("[DEBUG] RSAEd25519CrossCertificate->EXPIRATION_DATE (Unix time HOURS) = 0x %08X\n", this->EXPIRATION_DATE);
 				//Serial.printf("[DEBUG] RSAEd25519CrossCertificate->EXPIRATION_DATE valid = %d\n", !this->isExpired() );
 				Serial.printf("[DEBUG] RSAEd25519CrossCertificate->SIGNATURE = ");
 				BriandUtils::PrintOldStyleByteBuffer(this->SIGNATURE.get(), this->SIGLEN, this->SIGLEN+1, this->SIGLEN);

@@ -188,6 +188,13 @@ namespace Briand {
 					return false;
 				}
 
+				/* The RSA->Ed25519 cross-certificate certifies the Ed25519 identity, and is signed with the RSA identity listed in the "ID" certificate. */
+				if (!this->certRSAEd25519CrossCertificate->IsValid( *this->certRsa1024Identity.get() )) 
+				{
+					Serial.println("[DEBUG] Error, RSAEd25519CrossCertificate is expired or not correctly signed by RSA identity.");
+					return false;
+				}
+
 				/*
 					* The certified key in the Link certificate matches the link key that was used to negotiate the TLS connection.
 				*/
@@ -200,11 +207,8 @@ namespace Briand {
 					
 				*/
 
-				/* The RSA->Ed25519 cross-certificate certifies the Ed25519 identity, and is signed with the RSA identity listed in the "ID" certificate. */
-
-				//
-				// TODO
-				//
+				
+				
 
 				if (DEBUG) Serial.println("[DEBUG] Relay with RSA+Ed25519 identity has the right and valid certificates.");
 				

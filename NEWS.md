@@ -7,10 +7,11 @@
 * Prepare stub method to authenticate client
 * Send NETINFO cell after CERTS cell authentication
 * Authenticate cell?
-* Maybe Switch to wolfSSL library for better performace, clean code and Ed25519 support.
 
 ## ?
 
+* Added an utility class for certificate utilities if the mbedtls library will change in future
+* Solved mbedtls signature verification (see https://github.com/ARMmbed/mbedtls/issues/4400)
 * Added expcted or not response parameter to raw request method
 * Changed classes to manage certificates with polymorphism and base:derived
 * Added Tor's Ed25519 certificate managing class

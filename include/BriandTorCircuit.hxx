@@ -280,7 +280,7 @@ namespace Briand {
 					return false;
 				}
 
-				if (DEBUG) Serial.println("[DEBUG] Cell response! :-D Contents (first 32 bytes):");
+				if (DEBUG) Serial.printf("[DEBUG] Cell response! :-D Contents (first 32 bytes): ");
 				if (DEBUG) Briand::BriandUtils::PrintByteBuffer( *(tempCellResponse.get()), 128, 32 );
 				
 				// The response contents should have a lot of informations.
@@ -312,7 +312,7 @@ namespace Briand {
 
 				tempCellResponse->erase(tempCellResponse->begin(), tempCellResponse->begin() + tempCell->GetCellTotalSizeBytes() );
 
-				if (DEBUG) Serial.print("[DEBUG] Next chunk (first 32 bytes printed):\n");
+				if (DEBUG) Serial.print("[DEBUG] Next chunk (first 32 bytes printed): ");
 				if (DEBUG) Briand::BriandUtils::PrintByteBuffer( *(tempCellResponse.get()), 128, 32 );
 
 				tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION);
