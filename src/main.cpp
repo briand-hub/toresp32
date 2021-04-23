@@ -46,6 +46,8 @@
 #include "BriandTorCircuit.hxx"
 #include "BriandTorCertificateUtils.hxx"
 
+/* Startup tests */
+
 using namespace std;
 
 /* Global parameters (change it if you want by editing global file) */
@@ -100,6 +102,9 @@ void setup() {
     digitalWrite(LED_BUILTIN, 1); // 1 => off, 0 => on
     
     if (VERBOSE) {
+        // Benchmarking
+        unsigned long testStart = 0;
+
         // Execute tests
         Serial.printf("[TEST] UULONG MAX VALUE (hex): 0x%016llx\n", ULLONG_MAX);
 
@@ -115,10 +120,14 @@ void setup() {
         int t = 0;
         auto config = make_unique<Briand::BriandTorEsp32Config>(key);
         Serial.printf("[TEST] AES Encryption test, string <%s> with key <%s>\n", test.c_str(), key.c_str());
+        testStart = millis();
         auto buf = config->encrypt(test);
+        Serial.printf("[TEST] Took %lu milliseconds.\n", (millis() - testStart));
         Serial.print("[TEST] Encrypted Bytes: ");
 		Briand::BriandUtils::PrintOldStyleByteBuffer(buf.get(), test.length(), test.length()+1, test.length());
-        Serial.printf("\n[TEST] Decrypted Bytes: <%s>\n", config->decrypt(buf, test.length()).c_str());
+        testStart = millis();
+        Serial.printf("[TEST] Decrypted Bytes: <%s>\n", config->decrypt(buf, test.length()).c_str());
+        Serial.printf("[TEST] Took %lu milliseconds.\n", (millis() - testStart));
         Serial.println("[TEST] AES Test success.");
 		buf.reset();
 		config.reset();
@@ -129,11 +138,12 @@ void setup() {
 		auto message = Briand::BriandUtils::HexStringToVector(testMessage, "");
 		Serial.printf("[TEST] Perform SHA256 hash of:  %s\n", testMessage.c_str());
 		Serial.printf("[TEST] Expected output:         %s\n", expResult.c_str());
+        testStart = millis();
 		auto hash = Briand::BriandTorCertificateUtils::GetDigest_SHA256(message);
-		Serial.printf("[TEST] SHA256 computed hash is: ");
+		Serial.printf("[TEST] Took %lu milliseconds.\n", (millis() - testStart));
+        Serial.printf("[TEST] SHA256 computed hash is: ");
 		Briand::BriandUtils::PrintByteBuffer(*(hash.get()), hash->size()+1, hash->size());
 		auto expResultV = Briand::BriandUtils::HexStringToVector(expResult, "");
-
 		if (expResultV->size() != hash->size()) Serial.printf("[TEST] FAIL SHA256, sizes do not math (%d against expected %d).\n", hash->size(), expResultV->size());
 		else {
 			bool differentFound = false;
@@ -142,7 +152,6 @@ void setup() {
 			if (!differentFound) Serial.printf("[TEST] SHA256 test success!\n");
 			else Serial.printf("[TEST] SHA256 test failure! (hash does not match expected result).\n");
 		}
-
 		message.reset();
 		hash.reset();
 		expResultV.reset();
@@ -556,31 +565,6 @@ void executeCommand(string& cmd) {
     }
 	else if (cmd.compare("synctime") == 0) {
         syncTimeWithNTP();
-    }
-	else if (cmd.compare("sha") == 0) {
-        // Test SHA256
-		string testMessage = string("546F7220544C53205253412F456432353531392063726F73732D63657274696669636174651EAE084E96C9150FAE941A28DD7A9B718EFD0F759D7021A9754A717C65D19B350006EA89");
-		string expResult = string("457E063D5CE929FE98AF745D1DA20306422E9203298E69408F75B0595EA703C7");
-		auto message = Briand::BriandUtils::HexStringToVector(testMessage, "");
-		Serial.printf("[TEST] Perform SHA256 hash of:  %s\n", testMessage.c_str());
-		Serial.printf("[TEST] Expected output:         %s\n", expResult.c_str());
-		auto hash = Briand::BriandTorCertificateUtils::GetDigest_SHA256(message);
-		Serial.printf("[TEST] SHA256 computed hash is: ");
-		Briand::BriandUtils::PrintByteBuffer(*(hash.get()), hash->size()+1, hash->size());
-		auto expResultV = Briand::BriandUtils::HexStringToVector(expResult, "");
-
-		if (expResultV->size() != hash->size()) Serial.printf("[TEST] FAIL SHA256, sizes do not math (%d against expected %d).\n", hash->size(), expResultV->size());
-		else {
-			bool differentFound = false;
-			for (int i=0; i<hash->size() && !differentFound; i++)
-				differentFound = ( hash->at(i) != expResultV->at(i) );
-			if (!differentFound) Serial.printf("[TEST] SHA256 test success!\n");
-			else Serial.printf("[TEST] SHA256 test failure! (hash does not match expected result).\n");
-		}
-
-		message.reset();
-		hash.reset();
-		expResultV.reset();
     }
     else if (cmd.compare("devinfo") == 0) {
         Serial.printf("CPU Frequency: %uMHz\n", ESP.getCpuFreqMHz());

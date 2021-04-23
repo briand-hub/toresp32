@@ -169,6 +169,8 @@ namespace Briand {
 					* The RSA ID certificate is correctly self-signed.
 				*/
 
+				// Expiration dates are always verified by any IsValid method
+
 				// Check for X509 types (1,2,3)
 				if (!this->certRsa1024Identity->IsValid() ||
 					!this->certLinkKey->IsValid( *this->certRsa1024Identity.get() ) ||

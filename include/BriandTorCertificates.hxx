@@ -653,10 +653,10 @@ namespace Briand {
 			// in such way prepare buffer
 			auto messageToVerify = BriandUtils::HexStringToVector("", "Tor TLS RSA/Ed25519 cross-certificate");
 			for (unsigned int i=0; i<ed25519_key_size; i++) messageToVerify->push_back( this->ED25519_KEY[i] );
-			messageToVerify->push_back( static_cast<unsigned char>(this->EXPIRATION_DATE & 0xFF000000) );
-			messageToVerify->push_back( static_cast<unsigned char>(this->EXPIRATION_DATE & 0x00FF0000) );
-			messageToVerify->push_back( static_cast<unsigned char>(this->EXPIRATION_DATE & 0x0000FF00) );
-			messageToVerify->push_back( static_cast<unsigned char>(this->EXPIRATION_DATE & 0x000000FF) );
+			messageToVerify->push_back( static_cast<unsigned char>( (this->EXPIRATION_DATE & 0xFF000000) >> 24 ));
+			messageToVerify->push_back( static_cast<unsigned char>( (this->EXPIRATION_DATE & 0x00FF0000) >> 16 ));
+			messageToVerify->push_back( static_cast<unsigned char>( (this->EXPIRATION_DATE & 0x0000FF00) >> 8 ));
+			messageToVerify->push_back( static_cast<unsigned char>( (this->EXPIRATION_DATE & 0x000000FF) ));
 			
 			bool signedCorrectly = BriandTorCertificateUtils::CheckSignature_RSASHA256(messageToVerify, signAuthenticator.Contents, BriandUtils::ArrayToVector(this->SIGNATURE, this->SIGLEN));
 

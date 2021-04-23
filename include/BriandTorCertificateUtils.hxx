@@ -67,21 +67,35 @@ namespace Briand {
 			
 			// Using mbedtls_md() not working as expected!!
 
-			mbedtls_md_context_t mdCtx;
-			mbedtls_md_setup(&mdCtx, mdInfo, 0);
-			mbedtls_md_starts(&mdCtx);
-			mbedtls_md_update(&mdCtx, inputRaw.get(), input->size());
-			mbedtls_md_finish(&mdCtx, hashedMessageRaw.get());
+			auto mdCtx = make_unique<mbedtls_md_context_t>();
+
+			mbedtls_md_setup(mdCtx.get(), mdInfo, 0);
+			mbedtls_md_starts(mdCtx.get());
+			mbedtls_md_update(mdCtx.get(), inputRaw.get(), input->size());
+			mbedtls_md_finish(mdCtx.get(), hashedMessageRaw.get());
+
+			// HINT : using this:
+			// mbedtls_md_context_t mdCtx;
+			// mbedtls_md_setup(&mdCtx, mdInfo, 0);
+			// mbedtls_md_starts(&mdCtx);
+			// mbedtls_md_update(&mdCtx, inputRaw.get(), input->size());
+			// mbedtls_md_finish(&mdCtx, hashedMessageRaw.get());
+			// mbedtls_md_free(&mdCtx);
+
+			// will led to:
+			// free(): invalid pointer
+			// made by calling mbedtls_md_free(&mdCtx);
+			// however not calling will leak heap!
+			// solution found: use unique_ptr , always working! Thanks C++
 			
 			if (DEBUG) Serial.printf("[DEBUG] SHA256 Raw output: ");
 			BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size+1, mdInfo->size);
 
 			auto digest = BriandUtils::ArrayToVector(hashedMessageRaw, mdInfo->size);
 
-			// Free (MUST)
-			// TODO : verify exception
-			//mbedtls_md_free(&mdCtx);
-			
+			// Free (MUST!)
+			mbedtls_md_free(mdCtx.get());
+
 			return std::move(digest);
 		}
 
