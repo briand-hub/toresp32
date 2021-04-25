@@ -38,7 +38,6 @@ namespace Briand
 	 * line 1: contains wifi ESSID
 	 * line 2: contains wifi PASSWORD
 	 * line 3: serial encryption PASSWORD (empty if none) 
-	 * line 4: verbose or not 
 	*/ 
 	class BriandTorEsp32Config {
 		private:
@@ -108,7 +107,6 @@ namespace Briand
 		string WESSID;
 		string WPASSWORD;
 		string SERIAL_ENC_KEY;
-		bool VERBOSE;
 
 		/**
 		 * Constructor, you must take care of encryptionKey exactly 16 char long!
@@ -119,14 +117,12 @@ namespace Briand
 			this->WESSID = string("");
 			this->WPASSWORD = string("");
 			this->SERIAL_ENC_KEY = string("");
-			this->VERBOSE = false;
 		}
 
 		~BriandTorEsp32Config() {
 			this->enc_key.resize(1);
 			this->WPASSWORD.resize(1);
 			this->SERIAL_ENC_KEY.resize(1);
-			this->VERBOSE = true;
 		}
 
 		/**
@@ -189,12 +185,6 @@ namespace Briand
 				contents.erase(0, pos + 2);
 				if (DEBUG) Serial.printf("[DEBUG] Enc KEY: %s\n", this->SERIAL_ENC_KEY.c_str());
 
-				// 4th line => Verbosity
-				pos = contents.find("\r\n");
-				if (pos == string::npos) return false;
-				this->VERBOSE = contents.substr(0, pos).compare("true") == 0;
-				if (DEBUG) Serial.printf("[DEBUG] Verbose: %d\n", this->VERBOSE);
-
 				return true;
 			}
 		}
@@ -216,10 +206,6 @@ namespace Briand
 				contents.append(this->SERIAL_ENC_KEY);
 				contents.append("\r\n");
 			}
-			if (this->VERBOSE)
-				contents.append("true\r\n");
-			else
-				contents.append("false\r\n");
 
 			auto buffer = this->encrypt(contents);
 

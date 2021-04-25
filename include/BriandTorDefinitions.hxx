@@ -93,4 +93,34 @@ namespace Briand {
 		AUTHORIZE = 132  			// AUTHORIZE (Client authorization)    (Not yet used)
 	};
 	
+	/* ED25519 certificate types (CERT_TYPE field). HAS NOTHING TO DO WITH CERTS CELL TYPES! */
+	enum BriandTorEd25519CerType : unsigned char {
+		/* [00],[01],[02],[03] - Reserved to avoid conflict with types used in CERTS cells.*/
+		/* [07] - Reserved for RSA identity cross-certification; (see section 2.3 above, and tor-spec.txt section 4.2)*/
+
+		Ed25519_signing_key_with_an_identity_key = 4,
+		TLS_link_certificate_signed_with_ed25519_signing_key = 5,
+		Ed25519_authentication_key_signed_with_ed25519_signing_key = 6,
+		
+		OS_short_term_descriptor_signing_key = 8, // signed with blinded public key.
+		OS_intro_point_auth_key_cross_certifies_descriptor_key = 9,
+		ntor_onion_key_corss_certifies_ed25519_identity_key = 0xA,
+		ntor_extra_encryption_key_corss_certifies_descriptor_key = 0xB
+	};
+
+	enum BriandTorDestroyReason : unsigned char {
+		NONE = 0, 				// -- NONE            (No reason given.)
+		PROTOCOL = 1, 			// -- PROTOCOL        (Tor protocol violation.)
+		INTERNAL = 2, 			// -- INTERNAL        (Internal error.)
+		REQUESTED = 3, 			// -- REQUESTED       (A client sent a TRUNCATE command.)
+		HIBERNATING = 4, 		// -- HIBERNATING     (Not currently operating; trying to save bandwidth.)
+		RESOURCELIMIT = 5, 		// -- RESOURCELIMIT   (Out of memory, sockets, or circuit IDs.)
+		CONNECTFAILED = 6, 		// -- CONNECTFAILED   (Unable to reach relay.)
+		OR_IDENTITY = 7, 		// -- OR_IDENTITY     (Connected to relay, but its OR identity was not as expected.)
+		CHANNEL_CLOSED = 8, 	// -- CHANNEL_CLOSED  (The OR connection that was carrying this circuit died.)
+		FINISHED = 9, 			// -- FINISHED        (The circuit has expired for being dirty or old.)
+		TIMEOUT = 10, 			// -- TIMEOUT         (Circuit construction took too long)
+		DESTROYED = 11, 		// -- DESTROYED       (The circuit was destroyed w/o client TRUNCATE)
+		NOSUCHSERVICE = 12, 	// -- NOSUCHSERVICE   (Request for unknown hidden service)
+	};
 }

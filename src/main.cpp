@@ -227,6 +227,15 @@ void setup() {
 
 /* Loop: executed repeatedly */
 void loop() {
+    //
+    // TODO
+    //
+    // In this place, if something is received/sent from serial or socks
+    // or ap etc... handle it!
+    // eg. circuit tear down request / new circuits to build etc.
+    // this should be done only if all has been setup (nextStep >= 10000)
+    //
+
     // If during serial input reading, wait while the command is entered and confirmed.
     if (SERIAL_INPUT_READING) {
         if (Serial.available() > 0) {
@@ -254,6 +263,12 @@ void loop() {
             return;
         }
     }
+    // ---------------------------------------------------------------------------------
+    // STEPS: 
+    //  SERIAL_INPUT_READING (only for reading serial commands)
+    //  from      0 to   999 initial setup
+    //  from  1.000 to 9.999 tor setup
+    //  from 10.000 to ..... commands
     // ---------------------------------------------------------------------------------
     else if (nextStep == 1) {
         // Setup done, check if there is any saved configuration.
@@ -285,7 +300,6 @@ void loop() {
             else {
                 STA_ESSID->append(cfg->WESSID);
                 STA_PASSW->append(cfg->WPASSWORD);
-                VERBOSE = cfg->VERBOSE;
                 SERIAL_ENC_KEY->append(cfg->SERIAL_ENC_KEY);
 
                 // If a serial encoding key is set, use crypt.
@@ -375,7 +389,6 @@ void loop() {
             cfg->WESSID.append( STA_ESSID->c_str() );
             cfg->WPASSWORD.append(STA_PASSW->c_str());
             cfg->SERIAL_ENC_KEY.append(SERIAL_ENC_KEY->c_str());
-            cfg->VERBOSE = VERBOSE;
             cfg->writeConfig();
             Serial.println("\n[INFO] Configuration file written!");
         }
@@ -419,14 +432,14 @@ void loop() {
         syncTimeWithNTP();
 
         // Proceed to next steps
-        nextStep = 100;
+        nextStep = 1000;
     }
-    else if (nextStep == 100) {
+    else if (nextStep == 1000) {
         Serial.println("[INFO] Creating TOR circuits");
         
         // ... todo
 
-        nextStep = 900;
+        nextStep = 10000;
 
         Serial.println("\n\n[INFO] SYSTEM READY! Type help for commands.\n");
 
@@ -435,21 +448,20 @@ void loop() {
 
 		if (VERBOSE) Serial.printf("[INFO] Free heap at system start is %lu bytes.\n", HEAP_LEAK_CHECK);
     }
-    else if (nextStep == 900) {
+    else if (nextStep == 10000) {
         // Here system ready for commands
         Serial.print("briand toresp32 > ");
         startSerialRead(COMMAND.get());
-        nextStep = 901;
+        nextStep = 10001;
     }
-    else if (nextStep == 901) {
+    else if (nextStep == 10001) {
         
-
         // Command received
         // Execute.....
         executeCommand( *(COMMAND.get()) );
 
         // Wait for next command
-        nextStep = 900;
+        nextStep = 10000;
     }
 }
 
@@ -545,7 +557,9 @@ void executeCommand(string& cmd) {
 		Serial.println("netinfo : display network STA/AP interfaces information.");
 		Serial.println("apoff : turn off AP interface.");
 		Serial.println("apon : turn on AP interface (will keep intact hostname/essid/password).");
-		Serial.println("synctime : sync localtime time with NTP.");
+		Serial.println("torcache : print out the local node cache, all 3 files.");
+        Serial.println("torcache-refresh : refresh the tor cache.");
+        Serial.println("synctime : sync localtime time with NTP.");
 		Serial.println("reboot : restart device.");
 
 		if (DEBUG) {
@@ -553,15 +567,23 @@ void executeCommand(string& cmd) {
 			Serial.println("search-guard : if DEBUG active, search and display info for a guard node.");
 			Serial.println("search-exit : if DEBUG active, search and display info for an exit node.");
 			Serial.println("search-middle : if DEBUG active, search and display info for a middle node.");
-			Serial.println("testcircuit : if DEBUG active, build a new circuit just for testing.");
+			Serial.println("testcircuit : if DEBUG active, build and destroy a new circuit just for testing.");
 			Serial.println("heapleak : if DEBUG active, leaks the heap to test leak warning.");
 		}
 
 		Serial.println("TOR TESTING-----------------------------------------------------------------------");
-		Serial.println("ifconfig.me : Show ifconfig.me information (NON-TOR REQUEST, REAL ADDRESS).");
+		Serial.println("ifconfig.me : Show **REAL** ifconfig.me information (NON-TOR REQUEST, REAL ADDRESS).");
     }
     else if (cmd.compare("time") == 0) {
         printLocalTime();
+    }
+    else if (cmd.compare("torcache") == 0) {
+        auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
+        relaySearcher->PrintCacheContents();
+    }
+    else if (cmd.compare("torcache-refresh") == 0) {
+        auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
+        relaySearcher->InvalidateCache(true);
     }
 	else if (cmd.compare("synctime") == 0) {
         syncTimeWithNTP();
@@ -612,36 +634,42 @@ void executeCommand(string& cmd) {
 	else if (cmd.compare("search-guard") == 0 && DEBUG)  {
 		auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
 		auto relay = relaySearcher->GetGuardRelay();
-		
-		if (relay != nullptr)
-			Serial.println("SUCCESS");
+        
+		if (relay != nullptr && relay->FetchDescriptorsFromOR())
+            Serial.println("SUCCESS");
 		else 
 			Serial.println("FAILED");
+
+        relay->PrintRelayInfo();
     }
 	else if (cmd.compare("search-exit") == 0 && DEBUG)  {
 		auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
-		auto relay = relaySearcher->GetExitRelay();
-		
-		if (relay != nullptr)
+		auto relay = relaySearcher->GetExitRelay("", "");
+        
+		if (relay != nullptr && relay->FetchDescriptorsFromOR())
 			Serial.println("SUCCESS");
 		else 
 			Serial.println("FAILED");
+        
+        relay->PrintRelayInfo();
     }
 	else if (cmd.compare("search-middle") == 0 && DEBUG)  {
 		auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
-		auto relay = relaySearcher->GetMiddleRelay();
+		auto relay = relaySearcher->GetMiddleRelay("");
 		
-		if (relay != nullptr)
+		if (relay != nullptr && relay->FetchDescriptorsFromOR())
 			Serial.println("SUCCESS");
 		else 
 			Serial.println("FAILED");
+
+        relay->PrintRelayInfo();
     }
 	else if (cmd.compare("testcircuit") == 0 && DEBUG)  {
 		auto tempCircuit = make_unique<Briand::BriandTorCircuit>();
 		
 		if (tempCircuit->BuildCircuit()) {
-			Serial.println("SUCCESS! Cuircuit built:");
-			Serial.printf("You <----> G[%s] <----> M[%s] <----> E[%s] <----> Web\n", tempCircuit->guardNode->nickname->c_str(), tempCircuit->middleNode->nickname->c_str(), tempCircuit->exitNode->nickname->c_str());
+			Serial.println("SUCCESS! Cuircuit built!");
+            tempCircuit->PrintCircuitInfo();
 		}
 		else 
 			Serial.println("FAILED to build a circuit.");

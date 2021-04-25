@@ -20,14 +20,10 @@
 
 #include <iostream>
 #include <memory>
-#include <sstream>
-#include <iomanip>
-#include <cstring>
+#include <vector>
 
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
-#include "BriandUtils.hxx"
-#include "BriandTorCertificateUtils.hxx"
 
 using namespace std;
 
@@ -49,21 +45,13 @@ namespace Briand {
 		unique_ptr<vector<unsigned char>> Contents;
 
 		/** Constructor inits the Contents vector */
-		BriandTorCertificateBase() {
-			this->Type = 0;
-			this->Contents = make_unique<vector<unsigned char>>();
-		}
+		BriandTorCertificateBase();
 	
 		/** Copy constructor to avoid error "use of deleted function..." */
-		BriandTorCertificateBase(const BriandTorCertificateBase& other) {
-			this->Contents = make_unique<vector<unsigned char>>();
-			this->Contents->insert(this->Contents->begin(), other.Contents->begin(), other.Contents->end());
-		}
-
+		BriandTorCertificateBase(const BriandTorCertificateBase& other);
+		
 		/** Destructor  */
-		~BriandTorCertificateBase() {
-			this->Contents.reset();
-		}
+		~BriandTorCertificateBase();
 
 		/** 
 		 * Method return certificate name human-readable (for debug). MUST be implemented by derived classes. 
@@ -75,26 +63,12 @@ namespace Briand {
 		 * Method return string containing certificate type and raw bytes 
 		 * @return string with short info
 		*/
-		string GetCertificateShortInfo() {
-			ostringstream builder;
-			builder << "Certificate Type: " << static_cast<unsigned short>(this->Type) << "/" << this->GetCertificateName();
-			builder << " Size: " << dec << this->Contents->size() << " bytes";
-			builder << " Content bytes: ";
+		string GetCertificateShortInfo();
 
-			for (unsigned int i = 0; i<this->Contents->size(); i++)
-				builder << hex << std::setfill('0') << std::setw(2) << std::uppercase << static_cast<unsigned short>(this->Contents->at(i));
-
-			return builder.str();
-		}
-	
 		/**
 		 * Print to serial certificate informations (debug) 
 		*/
-		virtual void PrintCertInfo() {
-			if (DEBUG) {
-				Serial.printf("[DEBUG] %s\n", this->GetCertificateShortInfo().c_str());
-			}
-		}
+		virtual void PrintCertInfo();
 	};
 
 	/**
@@ -111,70 +85,20 @@ namespace Briand {
 		/**
 		 * Build extension starting from raw bytes. Please check valid attribute! 
 		*/
-		BriandTorEd25519CertificateExtension(const unique_ptr<vector<unsigned char>>& rawdata) {
-			this->valid = false;
-			this->ExtLength = 0x0000;
-			this->ExtType = 0x00;
-			this->ExtFlags = 0x00;
-			this->ExtData = make_unique<vector<unsigned char>>();
-			
-			if (DEBUG) {
-				Serial.print("[DEBUG] Ed25519CertificateExtension raw bytes: ");
-				BriandUtils::PrintByteBuffer(*rawdata.get(), rawdata->size()+1, rawdata->size()+1);
-			}
-
-			if (rawdata->size() < 4) {
-				if (DEBUG) Serial.println("[DEBUG] Ed25519CertificateExtension has poor bytes.");
-				return;
-			}
-
-			this->ExtLength += static_cast<unsigned char>(rawdata->at(0) << 8);
-			this->ExtLength += rawdata->at(1);
-			this->ExtType = rawdata->at(2);
-			this->ExtFlags = rawdata->at(3);
-
-			if (DEBUG) Serial.printf("[DEBUG] Ed25519CertificateExtension length is of %d bytes.\n", this->ExtLength);
-
-			if ( (rawdata->size() - 4) < this->ExtLength ) {
-				if (DEBUG) Serial.println("[DEBUG] Ed25519CertificateExtension has poor bytes for content.");
-				return;
-			}
-
-			this->ExtData->insert(this->ExtData->begin(), rawdata->begin() + 4, rawdata->begin() + 4 + this->ExtLength);
-			
-			if (DEBUG) {
-				Serial.printf("[DEBUG] Ed25519CertificateExtension ExtData: ");
-				BriandUtils::PrintByteBuffer(*this->ExtData.get(), this->ExtLength + 1, this->ExtLength + 1);
-			} 
-
-			if (DEBUG) Serial.println("[DEBUG] Ed25519CertificateExtension structure is valid.");
-
-			this->valid = true;
-		}
+		BriandTorEd25519CertificateExtension(const unique_ptr<vector<unsigned char>>& rawdata);
 
 		/**
 		 * Copy-constructor to avoid error: use of deleted function with make_unique
 		*/
-		BriandTorEd25519CertificateExtension(const BriandTorEd25519CertificateExtension& other) {
-			this->ExtType = other.ExtType;
-			this->ExtType = other.ExtType;
-			this->ExtFlags = other.ExtFlags;
-			this->valid = other.valid;
-			this->ExtData = make_unique<vector<unsigned char>>();
-			this->ExtData->insert(this->ExtData->begin(), other.ExtData->begin(), other.ExtData->end());
-		}
+		BriandTorEd25519CertificateExtension(const BriandTorEd25519CertificateExtension& other);
 
-		~BriandTorEd25519CertificateExtension() {
-			if (this->ExtData != nullptr) this->ExtData.reset();
-		}
+		~BriandTorEd25519CertificateExtension();
 
 		/**
 		 * Method returns extension total size in bytes
 		 * @return Extension size in bytes (header + data)
 		*/
-		unsigned int TotalSize() {
-			return 4 + this->ExtLength;
-		}
+		unsigned int TotalSize();
 	};
 
 	/**
@@ -186,6 +110,8 @@ namespace Briand {
 		const unsigned short certified_key_len = 32;
 		const unsigned short signature_len = 64;
 		bool isStructValid;
+		/* This will hold all non-signature parts to verify signature */
+		unique_ptr<vector<unsigned char>> non_signature_parts;
 
 		public:
 		/** Cert Type */
@@ -194,141 +120,37 @@ namespace Briand {
         unsigned char CERT_TYPE; // [1 Byte]
         unsigned int EXPIRATION_DATE; // [4 Bytes] HOURS since Unix epoch
         unsigned char CERT_KEY_TYPE;   // [1 byte]
-        unique_ptr<unsigned char[]> CERTIFIED_KEY; // [32 Bytes] see certified_key_len
+        unique_ptr<vector<unsigned char>> CERTIFIED_KEY; // [32 Bytes] see certified_key_len
         unsigned char N_EXTENSIONS;    // [1 byte]
         unique_ptr<vector<BriandTorEd25519CertificateExtension>> EXTENSIONS; // [N_EXTENSIONS times]
-        unique_ptr<unsigned char[]> SIGNATURE;       // [64 Bytes] see signature_len
-
-		/* List of ED25519 certificate types (CERT_TYPE field). HAS NOTHING TO DO WITH CERTS CELL!!!! */
-		enum BriandTorEd25519CerType : unsigned char {
-			/* [00],[01],[02],[03] - Reserved to avoid conflict with types used in CERTS cells.*/
-			/* [07] - Reserved for RSA identity cross-certification; (see section 2.3 above, and tor-spec.txt section 4.2)*/
-
-			Ed25519_signing_key_with_an_identity_key = 4,
-			TLS_link_certificate_signed_with_ed25519_signing_key = 5,
-			Ed25519_authentication_key_signed_with_ed25519_signing_key = 6,
-			
-			OS_short_term_descriptor_signing_key = 8, // signed with blinded public key.
-			OS_intro_point_auth_key_cross_certifies_descriptor_key = 9,
-			ntor_onion_key_corss_certifies_ed25519_identity_key = 0xA,
-			ntor_extra_encryption_key_corss_certifies_descriptor_key = 0xB
-		};
+        unique_ptr<vector<unsigned char>> SIGNATURE;       // [64 Bytes] see signature_len
 
 		/**
 		 * Constructor builds the certificate starting from the raw bytes. MUST call isStructValid() after
 		 * @param raw_bytes Raw bytes (will not be touched or modified!) 
 		*/
-		BriandTorEd25519CertificateBase(const unique_ptr<vector<unsigned char>>& raw_bytes) {
-			this->Type = 0;
-			this->isStructValid = false;
-			this->VERSION = 0x00;
-			this->CERT_TYPE = 0x00;
-			this->EXPIRATION_DATE = 0x00000000;
-			this->CERT_KEY_TYPE = 0x00;
-			this->N_EXTENSIONS = 0x00;
-			this->CERTIFIED_KEY = make_unique<unsigned char[]>( this->certified_key_len );
-			this->SIGNATURE = make_unique<unsigned char[]>( this->signature_len );
-			this->EXTENSIONS = make_unique<vector<BriandTorEd25519CertificateExtension>>();
+		BriandTorEd25519CertificateBase(const unique_ptr<vector<unsigned char>>& raw_bytes);
 
-			// start to build
-
-			if (DEBUG) {
-				Serial.printf("[DEBUG] Ed25519Certificate raw bytes: ");
-				BriandUtils::PrintByteBuffer(*raw_bytes.get(), raw_bytes->size() + 1, raw_bytes->size() +1);
-			} 
-
-			if (raw_bytes->size() < 40) {
-				if (DEBUG) Serial.println("[DEBUG] Ed25519Certificate has too poor bytes.");
-				return;
-			}
-
-			this->VERSION += raw_bytes->at(0);
-			this->CERT_TYPE += raw_bytes->at(1);
-			this->EXPIRATION_DATE += raw_bytes->at(2) << 24;
-			this->EXPIRATION_DATE += raw_bytes->at(3) << 16;
-			this->EXPIRATION_DATE += raw_bytes->at(4) << 8;
-			this->EXPIRATION_DATE += raw_bytes->at(5);
-			this->CERT_KEY_TYPE += raw_bytes->at(6);
-
-			// First validity checks
-
-			// The "VERSION" field holds the value [01]
-			// However I just check > 0 for future versions
-			if (this->VERSION < 0x01) {
-				if (DEBUG) Serial.println("[DEBUG] Ed25519Certificate has invalid VERSION.");
-				return;
-			}
-
-			// The "CERT_TYPE" field holds a value depending on the type of certificate. (See appendix A.1.)
-			// no check there...
-
-			// The CERTIFIED_KEY field is an Ed25519 public key if CERT_KEY_TYPE is [01], or a digest of some other key type
-   			// depending on the value of CERT_KEY_TYPE
-			
-			// no check there...
-
-			// copy data
-			std::copy(raw_bytes->begin() + 7, raw_bytes->begin() + 7 + certified_key_len, this->CERTIFIED_KEY.get());
-
-			this->N_EXTENSIONS = raw_bytes->at(7 + certified_key_len);
-
-			if (this->N_EXTENSIONS > 0x00) {
-				// There are extensions, each can have a variable size.
-				// In order to do a right work, prepare a copy of the buffer 
-				// and erase for the first Extension->TotalSize() bytes to do the next one.
-
-				if (DEBUG) Serial.printf("[DEBUG] Ed25519Certificate has %d extensions, checking.\n", this->N_EXTENSIONS);
-
-				unsigned int extensionsStartAt = 7 + certified_key_len + 1;
-				unsigned char remainingExtensions = this->N_EXTENSIONS;
-				auto extBuffer = make_unique<vector<unsigned char>>();
-				extBuffer->insert(extBuffer->begin(), raw_bytes->begin() + extensionsStartAt, raw_bytes->end());
-
-				while (remainingExtensions > 0) {
-					BriandTorEd25519CertificateExtension ext { extBuffer };
-					if (!ext.valid) {
-						if (DEBUG) Serial.printf("[DEBUG] Ed25519Certificate extension %d of %d is invalid.\n", (this->N_EXTENSIONS - remainingExtensions) + 1, this->N_EXTENSIONS);
-						return;
-					}
-
-					this->EXTENSIONS->push_back(ext);
-					remainingExtensions--;
-					extBuffer->erase(extBuffer->begin(), extBuffer->begin() + ext.TotalSize());
-				}
-
-				extBuffer.reset();
-			}
-
-			// The last 64 bytes are signature, do not check, certificate validation will do.
-			
-			std::copy(raw_bytes->end() - this->signature_len, raw_bytes->end(), this->SIGNATURE.get());
-
-			if (DEBUG) Serial.println("[DEBUG] Ed25519Certificate structure validated.");
-
-			this->isStructValid = true; 
-		}
-
-		~BriandTorEd25519CertificateBase() {
-			this->CERTIFIED_KEY.reset();
-			this->SIGNATURE.reset();
-			this->EXTENSIONS.reset();
-		}
+		~BriandTorEd25519CertificateBase();
 
 		/**
 		 * Method to check if certificate has been correctly built from raw bytes 
 		 * @return true if valid, false otherwise
 		*/
-		virtual bool IsStructureValid() {
-			return this->isStructValid;
-		}
+		virtual bool IsStructureValid();
 	
 		/**
 		 * Method determines if certificate is expired (passed EXPIRATION_DATE (in hours!) since Unix epoch 
 		 * @return true if expired , false if not
 		*/
-		virtual bool IsExpired() {
-			return (this->EXPIRATION_DATE*3600 <= BriandUtils::GetUnixTime());
-		}
+		virtual bool IsExpired();
+
+		/**
+		 * Method verify signature is validated by another Ed25519 public key
+		 * @param ed25519PK Ed25519 public key 
+		 * @return true if valid, false otherwise
+		*/
+		virtual bool IsSignatureIsValid(const unique_ptr<vector<unsigned char>>& ed25519PK);
 
 		/** 
 		 * Method return certificate name human-readable (for debug). MUST be implemented by derived classes. 
@@ -339,211 +161,32 @@ namespace Briand {
 		/**
 		 * Print to serial certificate informations (debug) 
 		*/
-		virtual void PrintCertInfo() {
-			if (DEBUG) {		
-				Serial.printf("[DEBUG] Certificate Type: %d/%s->EXPIRATION_DATE (Unix time HOURS) = %u\n", this->Type, this->GetCertificateName().c_str(), this->EXPIRATION_DATE);
-				Serial.printf("[DEBUG] Certificate Type: %d/%s->EXPIRATION_DATE valid = %d\n", this->Type, this->GetCertificateName().c_str(), !this->IsExpired() );
-				Serial.printf("[DEBUG] Certificate Type: %d/%s->CERTIFIED_KEY = ", this->Type, this->GetCertificateName().c_str());
-				BriandUtils::PrintOldStyleByteBuffer(this->CERTIFIED_KEY.get(), this->certified_key_len, this->certified_key_len+1, this->certified_key_len);
-				
-				if (this->EXTENSIONS->size() > 0) {
-					for (int i = 0; i<this->N_EXTENSIONS; i++) {
-						Serial.printf("[DEBUG] Certificate Type: %d/%s Extension %d of %d : ->type = 0x%02X ->flags = 0x%02X ->len = %hu bytes ->data = ", this->Type, this->GetCertificateName().c_str(), (i+1), this->N_EXTENSIONS, this->EXTENSIONS->at(i).ExtType, this->EXTENSIONS->at(i).ExtFlags, this->EXTENSIONS->at(i).ExtLength);
-						BriandUtils::PrintByteBuffer(*this->EXTENSIONS->at(i).ExtData.get(), this->EXTENSIONS->at(i).ExtLength+1, this->EXTENSIONS->at(i).ExtLength+1);
-					}
-				}
-				else {
-					Serial.printf("[DEBUG] Certificate Type: %d/%s has no extensions.\n", this->Type, this->GetCertificateName().c_str());	
-				}
-
-				Serial.printf("[DEBUG] Certificate Type: %d/%s->SIGNATURE = ", this->Type, this->GetCertificateName().c_str());
-				BriandUtils::PrintOldStyleByteBuffer(this->SIGNATURE.get(), this->signature_len, this->signature_len+1, this->signature_len);
-			}
-		}
+		virtual void PrintCertInfo();
+	
 	};
 
 	/** CertType 2: RSA1024 Identity certificate, self-signed. DER encoded X509 */
 	class BriandTorCertificate_RSA1024Identity : public BriandTorCertificateBase {
 		public: 
 
-		virtual string GetCertificateName() { return "RSA1024Identity certificate"; }
+		virtual string GetCertificateName();
 		
 		/**
 		 * Method verify X.509 certificate (valid dates, signatures and chain) against itself
 		 * @param signAuthenticator CA root certificate
 		 * @return true if all valid, false otherwise 
 		*/
-		virtual bool IsValid() {
-			// This certificate is a DER-encoded X.509 
-			// The CA is the Cert type 2 and is ... myself!
-
-			if (DEBUG) Serial.printf("[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
-			bool validationResult = BriandTorCertificateUtils::X509Validate(this->Contents, this->Contents);
-			if (DEBUG) Serial.printf("[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
-
-			return validationResult;
-		}
+		virtual bool IsValid();
 
 		/**
 		 * Method returns the RSA key length (in bits) of this certificate
 		 * @return RSA key length in bits, 0 if error.
 		*/
-		virtual unsigned short GetRsaKeyLength() {
-			// Buffers needed
-			unsigned int certSize = this->Contents->size() + 1; // +1 because MUST be null-terminated
-			auto tempBuffer = BriandUtils::GetOneOldBuffer( certSize ); // MUST be zero-init
-
-			// Data structures needed
-			mbedtls_x509_crt certificate;
-
-			// Initialize data structures
-			mbedtls_x509_crt_init(&certificate);
-
-			// Copy contents
-			std::copy(this->Contents->begin(), this->Contents->end(), tempBuffer.get() );
-
-			// Parse certificate
-			if ( mbedtls_x509_crt_parse(&certificate, reinterpret_cast<const unsigned char*>(tempBuffer.get()), certSize) != 0) {
-				if (DEBUG) Serial.println("[DEBUG] RSA1024Identity certificate validation: failed to parse certificate.");
-
-				// free
-				mbedtls_x509_crt_free(&certificate);
-
-				return 0;
-			}
-
-			unsigned int ks = mbedtls_rsa_get_len( mbedtls_pk_rsa(certificate.pk) ) * 8;
-
-			// Free
-			mbedtls_x509_crt_free(&certificate);
-
-			return ks;
-		}
-	};
-
-	/** CertType 1: Link key certificate certified by RSA1024 identity. DER encoded X509 */
-	class BriandTorCertificate_LinkKey : public BriandTorCertificateBase {
-		public:
+		virtual unsigned short GetRsaKeyLength();
 		
-		virtual string GetCertificateName() { return "LinkKey certificate"; }
-
-		/**
-		 * Method verify X.509 certificate (valid dates, signatures and chain) against the CA provided
-		 * @param signAuthenticator CA root certificate
-		 * @return true if all valid, false otherwise 
-		*/
-		virtual bool IsValid(const BriandTorCertificate_RSA1024Identity& signAuthenticator) {
-			// This certificate is a DER-encoded X.509 
-			// The CA is the Cert type 2.
-
-			if (DEBUG) Serial.printf("[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
-			bool validationResult = BriandTorCertificateUtils::X509Validate(this->Contents, signAuthenticator.Contents);
-			if (DEBUG) Serial.printf("[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
-
-			return validationResult;
-		}
 	};
 
-	/** CertType 3: RSA1024 AUTHENTICATE cell link certificate, signed with RSA1024 key. DER encoded X509 */
-	class BriandTorCertificate_RSA1024AuthenticateCellLink : public BriandTorCertificateBase {
-		public: 
-
-		virtual string GetCertificateName() { return "RSA1024AuthenticateCellLink certificate"; }
-		
-		/**
-		 * Method verify X.509 certificate (valid dates, signatures and chain) against the CA provided
-		 * @param signAuthenticator CA root certificate
-		 * @return true if all valid, false otherwise 
-		*/
-		virtual bool IsValid(const BriandTorCertificate_RSA1024Identity& signAuthenticator) {
-			// This certificate is a DER-encoded X.509 
-			// The CA is the Cert type 2.
-
-			if (DEBUG) Serial.printf("[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
-			bool validationResult = BriandTorCertificateUtils::X509Validate(this->Contents, signAuthenticator.Contents);
-			if (DEBUG) Serial.printf("[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
-
-			return validationResult;
-		}
-	};
-
-	/** CertType 4: Ed25519 signing key, signed with RSA1024 Identity key. Tor-specific format. */
-	class BriandTorCertificate_Ed25519SigningKey : public BriandTorEd25519CertificateBase {
-		public:
-
-		BriandTorCertificate_Ed25519SigningKey(const unique_ptr<vector<unsigned char>>& raw_bytes) : BriandTorEd25519CertificateBase(raw_bytes) {}
-
-		virtual string GetCertificateName() { return "Ed25519SigningKey certificate"; }
-
-		virtual bool IsValid(const BriandTorCertificate_RSA1024Identity& signAuthenticator) {
-			if (this->IsExpired()) {
-				if (DEBUG) Serial.println("[DEBUG] Ed25519SigningKey is expired.");
-				return false;
-			}
-				
-
-			//
-			// TODO
-			//
-
-			if (DEBUG) Serial.println("[DEBUG] Ed25519SigningKey is valid.");
-
-			return true;
-		}
-	};
-
-	/** CertType 5: TLS link certificate, signed with ed25519 signing key. Tor-specific format. */
-	class BriandTorCertificate_TLSLink : public BriandTorEd25519CertificateBase {
-		public:
-
-		BriandTorCertificate_TLSLink(const unique_ptr<vector<unsigned char>>& raw_bytes) : BriandTorEd25519CertificateBase(raw_bytes) {}
-
-		virtual string GetCertificateName() { return "TLSLink certificate"; }
-
-		virtual bool IsValid(const BriandTorCertificate_Ed25519SigningKey& signAuthenticator) {
-			if (this->IsExpired()) {
-				if (DEBUG) Serial.println("[DEBUG] TLSLink is expired.");
-				return false;
-			}
-				
-
-			//
-			// TODO
-			//
-
-			if (DEBUG) Serial.println("[DEBUG] TLSLink is valid.");
-
-			return true;
-		}
-	};
-
-	/** CertType 6: Ed25519 AUTHENTICATE cell key, signed with ed25519 signing key. Tor-specific format. */
-	class BriandTorCertificate_Ed25519AuthenticateCellLink : public BriandTorEd25519CertificateBase {
-		public:
-
-		BriandTorCertificate_Ed25519AuthenticateCellLink(const unique_ptr<vector<unsigned char>>& raw_bytes) : BriandTorEd25519CertificateBase(raw_bytes) {}
-
-		virtual string GetCertificateName() { return "Ed25519AuthenticateCellLink certificate"; }
-
-		virtual bool IsValid(const BriandTorCertificate_Ed25519SigningKey& signAuthenticator) {
-			if (this->IsExpired()) {
-				if (DEBUG) Serial.println("[DEBUG] Ed25519SigningKey is expired.");
-				return false;
-			}
-				
-
-			//
-			// TODO
-			//
-
-			if (DEBUG) Serial.println("[DEBUG] Ed25519SigningKey is valid.");
-
-			return true;
-		}
-	};
-
-	/**
-	 * CertType 7: Ed25519 identity, signed with RSA identity. Tor-specific format. 
+	/** CertType 7: Ed25519 identity, signed with RSA identity. Tor-specific format. 
 	 * This class is useful to handle Tor specific RSA->Ed25519 Cross Certificate. 
 	 * See https://gitweb.torproject.org/torspec.git/tree/cert-spec.txt
 	*/
@@ -557,127 +200,106 @@ namespace Briand {
 		public:
 		/** Cert Type */
 		unsigned char Type;
-		unique_ptr<unsigned char[]> ED25519_KEY; // [32 bytes]
+		unique_ptr<vector<unsigned char>> ED25519_KEY; // [32 bytes]
        	unsigned int EXPIRATION_DATE; // [4 bytes] HOURS since Unix epoch
        	unsigned char SIGLEN; // [1 byte]
-        unique_ptr<unsigned char[]> SIGNATURE; // [SIGLEN bytes]
+        unique_ptr<vector<unsigned char>> SIGNATURE; // [SIGLEN bytes]
 
 		/**
 		 * Constructor builds the certificate starting from the raw bytes. MUST call isStructValid() after
 		 * @param raw_bytes Raw bytes (will not be touched or modified!) 
 		*/
-		BriandTorCertificate_RSAEd25519CrossCertificate(const unique_ptr<vector<unsigned char>>& raw_bytes) {
-			this->Type = 0;
-			this->isStructValid = false;
-			this->ED25519_KEY = make_unique<unsigned char[]>(ed25519_key_size);
-			this->EXPIRATION_DATE = 0x00000000;
-			this->SIGNATURE = nullptr; 
-			this->SIGLEN = 0x00;
+		BriandTorCertificate_RSAEd25519CrossCertificate(const unique_ptr<vector<unsigned char>>& raw_bytes);
 
-			if (DEBUG) {
-				Serial.printf("[DEBUG] RSAEd25519CrossCertificate raw bytes: ");
-				BriandUtils::PrintByteBuffer(*raw_bytes.get(), raw_bytes->size()+1, raw_bytes->size()+1);
-			}
-
-			// start to build
-
-			if (raw_bytes->size() < 37) {
-				if (DEBUG) Serial.println("[DEBUG] RSAEd25519CrossCertificate has too poor bytes.");
-				return;
-			} 
-			
-			// copy data
-			std::copy(raw_bytes->begin(), raw_bytes->begin() + this->ed25519_key_size, this->ED25519_KEY.get());
-			
-			this->EXPIRATION_DATE += raw_bytes->at(32) << 24;
-			this->EXPIRATION_DATE += raw_bytes->at(33) << 16;
-			this->EXPIRATION_DATE += raw_bytes->at(34) << 8;
-			this->EXPIRATION_DATE += raw_bytes->at(35);
-			this->SIGLEN += raw_bytes->at(36);
-
-			if (raw_bytes->size() < (36 + this->SIGLEN)) {
-				if (DEBUG) Serial.println("[DEBUG] RSAEd25519CrossCertificate has too poor bytes for signature.");
-				return;
-			} 
-			if (this->SIGLEN < 1) {
-				if (DEBUG) Serial.println("[DEBUG] RSAEd25519CrossCertificate has an invalid SIGLEN value.");
-				return;
-			}
-
-			this->SIGNATURE = make_unique<unsigned char[]>( this->SIGLEN );
-
-			// copy data from byte 37 for siglen bytes
-			std::copy(raw_bytes->begin()+37, raw_bytes->begin()+37+this->SIGLEN, this->SIGNATURE.get());
-
-			if (DEBUG) Serial.println("[DEBUG] RSAEd25519CrossCertificate structure validated.");
-
-			this->isStructValid = true; 
-		}
-
-		~BriandTorCertificate_RSAEd25519CrossCertificate() {
-			this->ED25519_KEY.reset();
-			if (this->SIGNATURE != nullptr) this->SIGNATURE.reset();
-		}
+		~BriandTorCertificate_RSAEd25519CrossCertificate();
 
 		/**
 		 * Method to check if certificate has been correctly built from raw bytes 
 		 * @return true if valid, false otherwise
 		*/
-		bool IsStructureValid() {
-			return this->isStructValid;
-		}
-	
+		bool IsStructureValid();
+
 		/**
 		 * Method determines if certificate is expired (passed EXPIRATION_DATE (in hours!) since Unix epoch 
 		 * @return true if expired , false if not
 		*/
-		bool IsExpired() {
-			return (this->EXPIRATION_DATE*3600 <= BriandUtils::GetUnixTime());
-		}
+		bool IsExpired();
 
 		/**
 		 * Method validates the certificate (check signature validated by RSA 1024 Identity key) 
 		*/
-		bool IsValid(const BriandTorCertificate_RSA1024Identity& signAuthenticator) {
-			if (this->IsExpired()) {
-				if (DEBUG) Serial.println("[DEBUG] RSAEd25519CrossCertificate is expired.");
-				return false;
-			}
-				
-			// Check signature
-			if (DEBUG) Serial.println("[DEBUG] RSAEd25519CrossCertificate check if signed by RSA1024 Identity.");
-
-			/*The signature is computed on the SHA256 hash of the non-signature parts of the certificate, prefixed with the	string "Tor TLS RSA/Ed25519 cross-certificate".*/
-
-			// HINT: non-signature means all bytes but NOT SIGLEN and SIGNATURE. So only prepended string + EXPIRATIONDATE + EDKEY
-			// in such way prepare buffer
-			auto messageToVerify = BriandUtils::HexStringToVector("", "Tor TLS RSA/Ed25519 cross-certificate");
-			for (unsigned int i=0; i<ed25519_key_size; i++) messageToVerify->push_back( this->ED25519_KEY[i] );
-			messageToVerify->push_back( static_cast<unsigned char>( (this->EXPIRATION_DATE & 0xFF000000) >> 24 ));
-			messageToVerify->push_back( static_cast<unsigned char>( (this->EXPIRATION_DATE & 0x00FF0000) >> 16 ));
-			messageToVerify->push_back( static_cast<unsigned char>( (this->EXPIRATION_DATE & 0x0000FF00) >> 8 ));
-			messageToVerify->push_back( static_cast<unsigned char>( (this->EXPIRATION_DATE & 0x000000FF) ));
-			
-			bool signedCorrectly = BriandTorCertificateUtils::CheckSignature_RSASHA256(messageToVerify, signAuthenticator.Contents, BriandUtils::ArrayToVector(this->SIGNATURE, this->SIGLEN));
-
-			if (DEBUG && signedCorrectly) Serial.println("[DEBUG] RSAEd25519CrossCertificate has valid signature.");
-			else if (DEBUG && !signedCorrectly) Serial.println("[DEBUG] RSAEd25519CrossCertificate has invalid signature!");
-
-			return signedCorrectly;
-		}
+		bool IsValid(const BriandTorCertificate_RSA1024Identity& signAuthenticator);
 
 		/**
 		 * Print to serial certificate informations (debug) 
 		*/
-		void PrintCertInfo() {
-			if (DEBUG) {				
-				Serial.printf("[DEBUG] RSAEd25519CrossCertificate->ED25519_KEY = ");
-				BriandUtils::PrintOldStyleByteBuffer(this->ED25519_KEY.get(), this->ed25519_key_size, this->ed25519_key_size+1, this->ed25519_key_size);
-				Serial.printf("[DEBUG] RSAEd25519CrossCertificate->EXPIRATION_DATE (Unix time HOURS) = 0x %08X\n", this->EXPIRATION_DATE);
-				//Serial.printf("[DEBUG] RSAEd25519CrossCertificate->EXPIRATION_DATE valid = %d\n", !this->isExpired() );
-				Serial.printf("[DEBUG] RSAEd25519CrossCertificate->SIGNATURE = ");
-				BriandUtils::PrintOldStyleByteBuffer(this->SIGNATURE.get(), this->SIGLEN, this->SIGLEN+1, this->SIGLEN);
-			}
-		}
+		void PrintCertInfo();
+
 	};
+
+	/** CertType 1: Link key certificate certified by RSA1024 identity. DER encoded X509 */
+	class BriandTorCertificate_LinkKey : public BriandTorCertificateBase {
+		public:
+		
+		virtual string GetCertificateName();
+
+		/**
+		 * Method verify X.509 certificate (valid dates, signatures and chain) against the CA provided
+		 * @param signAuthenticator CA root certificate
+		 * @return true if all valid, false otherwise 
+		*/
+		virtual bool IsValid(const BriandTorCertificate_RSA1024Identity& signAuthenticator);
+	};
+
+	/** CertType 3: RSA1024 AUTHENTICATE cell link certificate, signed with RSA1024 key. DER encoded X509 */
+	class BriandTorCertificate_RSA1024AuthenticateCellLink : public BriandTorCertificateBase {
+		public: 
+
+		virtual string GetCertificateName();
+		
+		/**
+		 * Method verify X.509 certificate (valid dates, signatures and chain) against the CA provided
+		 * @param signAuthenticator CA root certificate
+		 * @return true if all valid, false otherwise 
+		*/
+		virtual bool IsValid(const BriandTorCertificate_RSA1024Identity& signAuthenticator);
+
+	};
+
+	/** CertType 4: Ed25519 signing key, signed with RSA1024 Identity key. Tor-specific format. */
+	class BriandTorCertificate_Ed25519SigningKey : public BriandTorEd25519CertificateBase {
+		public:
+
+		BriandTorCertificate_Ed25519SigningKey(const unique_ptr<vector<unsigned char>>& raw_bytes) : BriandTorEd25519CertificateBase(raw_bytes) {}
+
+		virtual string GetCertificateName();
+
+		virtual bool IsValid(const BriandTorCertificate_RSAEd25519CrossCertificate& signAuthenticator);
+
+	};
+
+	/** CertType 5: TLS link certificate, signed with ed25519 signing key. Tor-specific format. */
+	class BriandTorCertificate_TLSLink : public BriandTorEd25519CertificateBase {
+		public:
+
+		BriandTorCertificate_TLSLink(const unique_ptr<vector<unsigned char>>& raw_bytes) : BriandTorEd25519CertificateBase(raw_bytes) {}
+
+		virtual string GetCertificateName();
+
+		virtual bool IsValid(const BriandTorCertificate_Ed25519SigningKey& signAuthenticator, const BriandTorCertificate_LinkKey& linkKeyCert);
+
+	};
+
+	/** CertType 6: Ed25519 AUTHENTICATE cell key, signed with ed25519 signing key. Tor-specific format. */
+	class BriandTorCertificate_Ed25519AuthenticateCellLink : public BriandTorEd25519CertificateBase {
+		public:
+
+		BriandTorCertificate_Ed25519AuthenticateCellLink(const unique_ptr<vector<unsigned char>>& raw_bytes) : BriandTorEd25519CertificateBase(raw_bytes) {}
+
+		virtual string GetCertificateName();
+
+		virtual bool IsValid(const BriandTorCertificate_Ed25519SigningKey& signAuthenticator);
+
+	};
+
 }
