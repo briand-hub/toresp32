@@ -211,7 +211,7 @@ namespace Briand {
 
 		this->cellTotalSizeBytes = cellBuffer->size();
 
-		if (DEBUG) Serial.printf("[DEBUG] %s Cell of %d bytes is going to be sent. Contents:\n", Briand::BriandUtils::BriandTorCellCommandToString(this->Command).c_str(), cellBuffer->size());
+		if (DEBUG) Serial.printf("[DEBUG] %s Cell of %d bytes is going to be sent. Contents: ", Briand::BriandUtils::BriandTorCellCommandToString(this->Command).c_str(), cellBuffer->size());
 		if (DEBUG) Briand::BriandUtils::PrintByteBuffer( *(cellBuffer.get()), this->cellTotalSizeBytes, this->cellTotalSizeBytes );
 
 		// That's all, send cell through network!
@@ -610,12 +610,12 @@ namespace Briand {
 			CLIENT_PK   X                       [G_LENGTH bytes]
 		*/
 
-		unsigned short ID_LENGTH = 20;
-		unsigned short H_LENGTH = 32;
-		unsigned short G_LENGTH = 32;
+		constexpr unsigned short ID_LENGTH = 20;
+		constexpr unsigned short H_LENGTH = 32;
+		constexpr unsigned short G_LENGTH = 32;
 
 		// so....
-		unsigned short HLEN = ID_LENGTH + H_LENGTH + G_LENGTH;
+		constexpr unsigned short HLEN = ID_LENGTH + H_LENGTH + G_LENGTH;
 
 		this->AppendTwoBytesToPayload(HLEN);
 
@@ -630,7 +630,7 @@ namespace Briand {
 
 		// Append ntor onion key, decoded
 		auto KEYID = BriandTorCertificateUtils::Base64Decode(*relay.descriptorNtorOnionKey.get());
-		// Warning: sometimes the ntor key has additional byte, remove it. (maybe due to the "may remove the last "=" from base64..... see dir-spec.txt)
+		// Warning: sometimes the ntor key has additional byte, remove it. (maybe due to the "may remove the last "=" from base64....." see dir-spec.txt)
 		while (KEYID->size() > H_LENGTH) KEYID->pop_back();
 		// Check
 		if (KEYID->size() != H_LENGTH) {

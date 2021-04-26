@@ -127,7 +127,7 @@ namespace Briand
 		return move(temp);
 	}
 
-	string BriandUtils::BriandTorRelayFlagsToString(unsigned short flagMask, const string& prepend, const string& separator) {
+	string BriandUtils::BriandTorRelayFlagsToString(unsigned short flagMask, const string& prepend /* = ""*/, const string& separator /* = " "*/) {
 		string output("");
 
 		if (flagMask & Briand::BriandTorRelayFlag::AUTHORITY) {
@@ -345,7 +345,7 @@ namespace Briand
 		return std::move(v);
 	}
 
-	unique_ptr<unsigned char[]> BriandUtils::StringToOldBuffer(const string& input, bool nullterminate) {
+	unique_ptr<unsigned char[]> BriandUtils::StringToOldBuffer(const string& input, bool nullterminate /* = false*/) {
 		unsigned long int size = input.length();
 
 		if (nullterminate) size++;

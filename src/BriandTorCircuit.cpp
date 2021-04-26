@@ -107,7 +107,7 @@ namespace Briand {
 		return done;
 	}
 
-	bool BriandTorCircuit::StartInProtocolWithGuard(bool authenticateSelf) {
+	bool BriandTorCircuit::StartInProtocolWithGuard(bool authenticateSelf /* = false*/) {
 		// Choose a first, random CircID (does not matter here, see CREATE2)
 		// The first VERSIONS cell, and any cells sent before the first VERSIONS cell, always have CIRCID_LEN == 2 for backward compatibility.
 
@@ -342,19 +342,18 @@ namespace Briand {
 		if (DEBUG) Serial.println("[DEBUG] Got CREATED2, payload:");
 		if (DEBUG) tempCell->PrintCellPayloadToSerial();
 
-		/*
-			A CREATED2 cell contains:
+		// Finish the handshake!
+		if (!this->guardNode->FinishHandshake(tempCell->GetPayload())) {
+			if (VERBOSE) Serial.printf("[ERR] Error on concluding handshake!\n");
+			// From now... always destroy
+			this->TearDown();
+			this->Cleanup();
+			return false;
+		}
 
-				HLEN      (Server Handshake Data Len) [2 bytes]
-				HDATA     (Server Handshake Data)     [HLEN bytes]
-		*/
-
-
-		
-
-		//
-		// TODO
-		//
+		// Free buffers
+		tempCell.reset();
+		tempCellResponse.reset();
 
 		return true;
 	}
@@ -406,7 +405,7 @@ namespace Briand {
 		if (this->relaySearcher != nullptr) this->relaySearcher.reset();
 	}
 
-	bool BriandTorCircuit::BuildCircuit(bool forceTorCacheRefresh) {
+	bool BriandTorCircuit::BuildCircuit(bool forceTorCacheRefresh /* = false*/) {
 		// If it was previously created or a tentative was in place, tear down the previous.
 		if ( (this->isCreating || this->isBuilt) && !(this->isClosed || this->isClosing) ) {
 			this->TearDown();
@@ -449,13 +448,19 @@ namespace Briand {
 
 		if (!this->FindAndPopulateRelay(0)) return false; // GUARD
 
+		if (DEBUG) this->guardNode->PrintRelayInfo();
+
 		if (DEBUG) Serial.println("[DEBUG] Starting relay search for middle node.");
 		
-		// DEBUG TODO REMOVE if (!this->FindAndPopulateRelay(1)) return false; // MIDDLE
+		if (!this->FindAndPopulateRelay(1)) return false; // MIDDLE
+
+		if (DEBUG) this->middleNode->PrintRelayInfo();
 		
 		if (DEBUG) Serial.println("[DEBUG] Starting relay search for exit node.");
 
-		// DEBUG TODO REMOVE if (!this->FindAndPopulateRelay(2)) return false; // EXIT
+		if (!this->FindAndPopulateRelay(2)) return false; // EXIT
+
+		if (DEBUG) this->exitNode->PrintRelayInfo();
 
 		if (DEBUG) Serial.println("[DEBUG] Guard node ready, start sending VERSION to guard.");
 
@@ -583,10 +588,14 @@ namespace Briand {
 
 	
 
+
 	// Stream functions
 	// MUST check if built / closed / closing ....
 	
-	void BriandTorCircuit::TearDown(BriandTorDestroyReason reason) {
+
+
+
+	void BriandTorCircuit::TearDown(BriandTorDestroyReason reason /*  = BriandTorDestroyReason::NONE */) {
 		this->isClosing = true;
 
 		/*
@@ -620,7 +629,7 @@ namespace Briand {
 				12 -- NOSUCHSERVICE   (Request for unknown hidden service)
 		*/
 
-		if (this->sClient != nullptr && this->sClient->connected() && (this->isBuilt || this->isCreating) && !(this->isClosed || this->isClosing)) {
+		if (this->sClient != nullptr && this->sClient->connected() && (this->isBuilt || this->isCreating) && !this->isClosed) {
 			if (DEBUG) Serial.printf("[DEBUG] Sending DESTROY cell to Guard with reason %u\n", static_cast<unsigned char>(reason));
 
 			auto tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::DESTROY);
@@ -628,19 +637,24 @@ namespace Briand {
 			tempCell->AppendToPayload(static_cast<unsigned char>(reason));
 			tempCell->SendCell(this->sClient, true, false);
 
-			if (DEBUG) Serial.println("[DEBUG] Circuit TearDown success.");
+			if (DEBUG) Serial.println("[DEBUG] DESTROY cell sent.");
+						
 			this->sClient->stop();
 			this->sClient.reset();
 
-			this->isClosing = false;
-			this->isCreating = false;
-			this->isClean = false;
-			this->isBuilt = false;
-			this->isClosed = true;
+			if (DEBUG) Serial.println("[DEBUG] Circuit TearDown success.");
 		}
 		else {
 			if (DEBUG) Serial.println("[DEBUG] Circuit does not need TearDown.");
 		}
+
+		// However, always reset values to avoid misunderstandings
+		// after calling this function
+		this->isClosing = false;
+		this->isCreating = false;
+		this->isClean = false;
+		this->isBuilt = false;
+		this->isClosed = true;
 	}
 
 	void BriandTorCircuit::PrintCircuitInfo() {

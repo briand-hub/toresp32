@@ -72,7 +72,7 @@ namespace Briand {
 		*/
 	}
 
-	unique_ptr<string> BriandTorRelaySearcher::GetOnionooJson(const string& type, const string& fields, const unsigned short& flagsMask, bool& success, const unsigned short overrideLimit) {
+	unique_ptr<string> BriandTorRelaySearcher::GetOnionooJson(const string& type, const string& fields, const unsigned short& flagsMask, bool& success, const unsigned short overrideLimit /* = 0*/) {
 		// Randomize for subsequent method invoke
 		this->randomize();
 

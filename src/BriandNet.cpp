@@ -32,7 +32,7 @@ using namespace std;
 namespace Briand
 {
 
-	unique_ptr<vector<unsigned char>> BriandNet::StringToUnsignedCharVector(unique_ptr<string>& input, bool emptyContents ) {
+	unique_ptr<vector<unsigned char>> BriandNet::StringToUnsignedCharVector(unique_ptr<string>& input, bool emptyContents /* = true*/) {
 		auto output = make_unique<vector<unsigned char>>();
 
 		if (emptyContents) {
@@ -50,7 +50,7 @@ namespace Briand
 		return output;
 	}
 
-	unique_ptr<string> BriandNet::UnsignedCharVectorToString(unique_ptr<vector<unsigned char>>& input, bool emptyContents) {
+	unique_ptr<string> BriandNet::UnsignedCharVectorToString(unique_ptr<vector<unsigned char>>& input, bool emptyContents /* = true*/) {
 		auto output = make_unique<string>();
 
 		if (emptyContents) {
@@ -68,7 +68,7 @@ namespace Briand
 		return output;
 	}
 
-	unique_ptr<vector<unsigned char>> BriandNet::RawInsecureRequest(const string& host, const short& port, unique_ptr<vector<unsigned char>>& content, bool emptyContents) {
+	unique_ptr<vector<unsigned char>> BriandNet::RawInsecureRequest(const string& host, const short& port, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/) {
 		auto output = make_unique<vector<unsigned char>>();
 
 		auto client = make_unique<WiFiClient>();
@@ -136,7 +136,7 @@ namespace Briand
 		return std::move(output);
 	}
 
-	unique_ptr<vector<unsigned char>> BriandNet::RawSecureRequest(unique_ptr<WiFiClientSecure>& client, unique_ptr<vector<unsigned char>>& content, bool emptyContents, bool closeConnection /* = false*/, bool expectResponse /* = true */) {
+	unique_ptr<vector<unsigned char>> BriandNet::RawSecureRequest(unique_ptr<WiFiClientSecure>& client, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/, bool closeConnection /* = false*/, bool expectResponse /* = true */) {
 		auto output = make_unique<vector<unsigned char>>();
 
 		// Write request
@@ -193,7 +193,7 @@ namespace Briand
 		return std::move(output);
 	}
 
-	unique_ptr<vector<unsigned char>> BriandNet::RawSecureRequest(const string& host, const short& port, unique_ptr<vector<unsigned char>>& content, bool emptyContents) {
+	unique_ptr<vector<unsigned char>> BriandNet::RawSecureRequest(const string& host, const short& port, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/) {
 		auto output = make_unique<vector<unsigned char>>();
 
 		auto client = make_unique<WiFiClientSecure>();
@@ -265,7 +265,7 @@ namespace Briand
 		return std::move(output);
 	}
 
-	unique_ptr<string> BriandNet::HttpsGet(const string& host, const short& port, const string& path, short& httpReturnCode, const string& agent, const bool& returnBodyOnly) {
+	unique_ptr<string> BriandNet::HttpsGet(const string& host, const short& port, const string& path, short& httpReturnCode, const string& agent /* = "empty"*/, const bool& returnBodyOnly /* = false*/) {
 		if (DEBUG) Serial.printf("[DEBUG] HttpsGet called to https://%s:%d%s\n", host.c_str(), port, path.c_str());
 
 		// Prepare request
@@ -309,7 +309,7 @@ namespace Briand
 		}
 	}
 
-	DynamicJsonDocument BriandNet::HttpsGetJson(const string& host, const short& port, const string& path, short& httpReturnCode, bool& deserializationSuccess, const string& agent, const unsigned int& expectedSize) {
+	DynamicJsonDocument BriandNet::HttpsGetJson(const string& host, const short& port, const string& path, short& httpReturnCode, bool& deserializationSuccess, const string& agent  /* = "empty"*/, const unsigned int& expectedSize /* = 1024*/) {
 		if (DEBUG) Serial.printf("[DEBUG] HttpsGetJson called to https://%s:%d/%s\n", host.c_str(), port, path.c_str());
 		
 		deserializationSuccess = false;
@@ -349,7 +349,7 @@ namespace Briand
 		}
 	}
 
-	unique_ptr<string> BriandNet::HttpInsecureGet(const string& host, const short& port, const string& path, short& httpReturnCode, const string& agent, const bool& returnBodyOnly) {
+	unique_ptr<string> BriandNet::HttpInsecureGet(const string& host, const short& port, const string& path, short& httpReturnCode, const string& agent /* = "empty"*/, const bool& returnBodyOnly /* = false*/) {
 		if (DEBUG) Serial.printf("[DEBUG] HttpInsecureGet called to http://%s:%d%s\n", host.c_str(), port, path.c_str());
 
 		// Prepare request

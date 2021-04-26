@@ -59,8 +59,10 @@ namespace Briand {
 		this->certEd25519AuthenticateCellLink = nullptr;
 		this->certRSAEd25519CrossCertificate = nullptr;
 		this->ECDH_CURVE25519_CLIENT_TO_SERVER = nullptr;
-
 		this->ECDH_CURVE25519_CONTEXT = nullptr;
+		this->CREATED_EXTENDED_RESPONSE_SERVER_PK = nullptr;
+		this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH = nullptr;
+		this->KEYSEED = nullptr;
 	}
 
 	BriandTorRelay::~BriandTorRelay() {
@@ -77,8 +79,10 @@ namespace Briand {
 		if(this->certEd25519AuthenticateCellLink != nullptr) this->certEd25519AuthenticateCellLink.reset();
 		if(this->certRSAEd25519CrossCertificate != nullptr) this->certRSAEd25519CrossCertificate.reset();
 		if(this->ECDH_CURVE25519_CLIENT_TO_SERVER != nullptr) this->ECDH_CURVE25519_CLIENT_TO_SERVER.reset();
-
 		if (this->ECDH_CURVE25519_CONTEXT != nullptr) this->ECDH_CURVE25519_CONTEXT.reset();
+		if (this->CREATED_EXTENDED_RESPONSE_SERVER_PK != nullptr) this->CREATED_EXTENDED_RESPONSE_SERVER_PK.reset();
+		if (this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH != nullptr) this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH.reset();
+		if (this->KEYSEED != nullptr) this->KEYSEED.reset();
 	}
 
 	string BriandTorRelay::GetHost() {
@@ -283,9 +287,9 @@ namespace Briand {
 
 		while(httpCode != 200 && curDir != firstDir) {
 			auto randomDirectory = TOR_DIR_AUTHORITIES[curDir];
-			if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromAuthority Query to dir #%u.\n", curDir);
+			if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromAuthority Query to dir #%u (%s).\n", curDir, randomDirectory.nickname);
 
-			string path = "/tor/server/fp/" + *this->fingerprint.get();
+			string path = "/tor/server/fp/" + *this->fingerprint.get();	// also /tor/server/d/<F> working
 			bool secureRequest = false;
 
 			if (secureRequest)
@@ -338,6 +342,65 @@ namespace Briand {
 		return true;
 	}
 
+	bool BriandTorRelay::FinishHandshake(const unique_ptr<vector<unsigned char>>& created2_extended2_payload) {
+		/*
+			A CREATED2 cell contains:
+
+				HLEN      (Server Handshake Data Len) [2 bytes]
+				HDATA     (Server Handshake Data)     [HLEN bytes]
+
+			where HDATA with ntor protocol is:
+			
+			SERVER_PK   Y                       [G_LENGTH bytes] => 32 bytes
+       		AUTH        H(auth_input, t_mac)    [H_LENGTH bytes] => 32 bytes
+		*/
+
+		// In future may change...
+		constexpr unsigned int G_LENGTH = 32;
+		constexpr unsigned int H_LENGTH = 32;
+
+		// Check if data is enough WARNING: in future the length may change!
+		if (created2_extended2_payload->size() < 2+G_LENGTH+H_LENGTH) {
+			if (VERBOSE) Serial.printf("[ERR] Error, CREATED2 contains inconsistent payload (%u bytes against %u expected). Failure.\n", created2_extended2_payload->size(), 2+G_LENGTH+H_LENGTH);
+			return false;
+		}
+
+		unsigned short HLEN = 0;
+		HLEN += static_cast<unsigned short>( created2_extended2_payload->at(0) << 8 );
+		HLEN += static_cast<unsigned short>( created2_extended2_payload->at(1) );
+
+		// Check HLEN consistent
+		if (HLEN != G_LENGTH+H_LENGTH) {
+			if (VERBOSE) Serial.printf("[ERR] Error, CREATED2 contains inconsistent HLEN payload (%u bytes against %u expected). Failure.\n", HLEN, G_LENGTH+H_LENGTH);
+			return false;
+		}
+
+		// Prepare and copy first G_LENGTH bytes
+		this->CREATED_EXTENDED_RESPONSE_SERVER_PK = make_unique<vector<unsigned char>>();
+		this->CREATED_EXTENDED_RESPONSE_SERVER_PK->insert(
+				this->CREATED_EXTENDED_RESPONSE_SERVER_PK->begin(), 
+				created2_extended2_payload->begin() + 2, 
+				created2_extended2_payload->begin() + 2 + G_LENGTH
+			);
+		
+		// And the other H_LENGTH 32 bytes
+		this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH = make_unique<vector<unsigned char>>();
+		this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH->insert(
+				this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH->begin(), 
+				created2_extended2_payload->begin() + 2 + G_LENGTH, 
+				created2_extended2_payload->begin() + 2 + G_LENGTH + H_LENGTH
+			);
+
+		// Do the calculations needed to finish the handshake
+		this->KEYSEED = make_unique<vector<unsigned char>>();
+
+		//
+		// TODO
+		//
+
+		return true;
+	}
+
 	void BriandTorRelay::PrintAllCertificateShortInfo() {
 		if (DEBUG) {
 			if (this->certLinkKey != nullptr) this->certLinkKey->PrintCertInfo();
@@ -363,4 +426,6 @@ namespace Briand {
 			BriandUtils::PrintByteBuffer(*dec.get(), dec->size(), dec->size());
 		}
 	}
+
+
 }
