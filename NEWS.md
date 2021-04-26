@@ -8,6 +8,7 @@
 * Authenticate cell?
 
 ## 2021-04-25
+* Added authoritiy directory list for descriptors query after reading dir-spec.txt
 * Debug/Verbose available as constexpr only
 * Switched to hxx + cpp structure (things are going to be complicated)
 * Added realay descriptor NTOR Onion Key for handshakes

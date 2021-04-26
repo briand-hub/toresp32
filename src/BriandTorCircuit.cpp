@@ -88,7 +88,7 @@ namespace Briand {
 
 			if (DEBUG) Serial.printf("[DEBUG] Retrieving descriptors for %s node...\n", relayS.c_str());
 
-			if (tentative->FetchDescriptorsFromOR()) {
+			if (tentative->FetchDescriptorsFromAuthority()) {
 
 				if (relayType == 0) this->guardNode = std::move(tentative);
 				else if (relayType == 1) this->middleNode = std::move(tentative);
@@ -328,6 +328,11 @@ namespace Briand {
 		tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
 		tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION);
 		
+		// If a DESTROY given, tell me why
+		if (tempCell->GetCommand() == BriandTorCellCommand::DESTROY) {
+			if (VERBOSE) Serial.printf("[ERR] Error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
+		}
+
 		if (tempCell->GetCommand() != BriandTorCellCommand::CREATED2) {
 			if (VERBOSE) Serial.printf("[ERR] Error, response contains %s cell instead of CREATED2. Failure.\n", BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
 			this->Cleanup();

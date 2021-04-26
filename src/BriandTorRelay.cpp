@@ -34,6 +34,7 @@
 
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
+#include "BriandTorDirAuthority.hxx"
 #include "BriandUtils.hxx"
 #include "BriandNet.hxx"
 #include "BriandTorCertificates.hxx"
@@ -47,7 +48,6 @@ namespace Briand {
 		this->nickname = make_unique<string>("");
 		this->first_address = make_unique<string>("");
 		this->fingerprint = make_unique<string>("");
-		this->dir_address = make_unique<string>("");
 		this->flags = 0x0000;
 		this->effective_family = make_unique<string>("");
 		this->descriptorNtorOnionKey = make_unique<string>("");
@@ -67,9 +67,7 @@ namespace Briand {
 		this->nickname.reset();
 		this->first_address.reset();
 		this->fingerprint.reset();
-		this->dir_address.reset();
 		this->effective_family.reset();
-		this->descriptorNtorOnionKey.reset();
 
 		if(this->certLinkKey != nullptr) this->certLinkKey.reset();
 		if(this->certRsa1024Identity != nullptr) this->certRsa1024Identity.reset();
@@ -272,27 +270,37 @@ namespace Briand {
 		*/
 	}
 
-	bool BriandTorRelay::FetchDescriptorsFromOR(bool secureRequest) {
+	bool BriandTorRelay::FetchDescriptorsFromAuthority() {
 		// Call via http
 		unique_ptr<string> response = nullptr;
-
-		if (this->dir_address->length() < 1) {
-			if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromOR failed, no dir_addess!\n");
-			return false;
-		}
-
-		string host = this->dir_address->substr(0, this->dir_address->find_first_of(":"));
-		unsigned short port = stoi( this->dir_address->substr(this->dir_address->find_first_of(":")+1, this->dir_address->length()) );
 		string agent = string( BriandUtils::GetRandomHostName().get() );
 		short httpCode;
 
-		if (secureRequest)
-			response = BriandNet::HttpsGet(host, port, "/tor/server/authority", httpCode, agent, false);
-		else
-			response = BriandNet::HttpInsecureGet(host, port, "/tor/server/authority", httpCode, agent, false);
+		// Auth dir enquiry : choose a random one then enquiry another if one fails
+
+		unsigned short firstDir = BriandUtils::GetRandomByte() % TOR_DIR_AUTHORITIES_NUMBER;
+		unsigned short curDir = (firstDir + 1) % TOR_DIR_AUTHORITIES_NUMBER;
+
+		while(httpCode != 200 && curDir != firstDir) {
+			auto randomDirectory = TOR_DIR_AUTHORITIES[curDir];
+			if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromAuthority Query to dir #%u.\n", curDir);
+
+			string path = "/tor/server/fp/" + *this->fingerprint.get();
+			bool secureRequest = false;
+
+			if (secureRequest)
+				response = BriandNet::HttpsGet(randomDirectory.host, randomDirectory.port, path, httpCode, agent, false);
+			else
+				response = BriandNet::HttpInsecureGet(randomDirectory.host, randomDirectory.port, path, httpCode, agent, false);
+
+			if (httpCode != 200) {
+				curDir = (curDir + 1) % TOR_DIR_AUTHORITIES_NUMBER;
+				if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromAuthority missed valid response, retry with dir #%u.\n", curDir);
+			} 
+		}
 
 		if (httpCode == 200) {
-			if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromOR GET success.\n");
+			if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromAuthority GET success.\n");
 			unsigned int starts, ends;
 
 			// Find the ntor-onion-key 
@@ -300,7 +308,7 @@ namespace Briand {
 			ends = response->find("\n", starts);
 			
 			if (starts == string::npos || ends == string::npos) {
-				if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromOR ntor-onion-key failed.\n");
+				if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromAuthority ntor-onion-key failed.\n");
 				this->descriptorNtorOnionKey->assign("");
 				return false;
 			}
@@ -323,7 +331,7 @@ namespace Briand {
 			// TODO : other descriptors needed??
 		}
 		else {
-			if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromOR has failed, httpcode: %d\n", httpCode);
+			if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromAuthority has failed, httpcode: %d\n", httpCode);
 			return false;
 		}
 
@@ -348,7 +356,6 @@ namespace Briand {
 			Serial.printf("[DEBUG] Nickame: %s\n", this->nickname->c_str());
 			Serial.printf("[DEBUG] Address: %s\n", this->first_address->c_str());
 			Serial.printf("[DEBUG] Fingerprint: %s\n", this->fingerprint->c_str());
-			Serial.printf("[DEBUG] Dir address: %s\n", this->dir_address->c_str());
 			Serial.printf("[DEBUG] Effective Family (raw contents): %s\n", this->effective_family->c_str());
 			Serial.printf("[DEBUG] Encoded descriptor NTOR onion key: %s\n", this->descriptorNtorOnionKey->c_str());
 			Serial.printf("[DEBUG] Decoded descriptor NTOR onion key: ");

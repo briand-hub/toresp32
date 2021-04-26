@@ -598,7 +598,8 @@ namespace Briand {
 			return false;
 		}
 
-		// The identity digest is the node's fingerprint!
+		// The identity digest is the node's fingerprint! 
+		// (that is, verified by sending a CREATE2 with a correct one -> received CREATED2, with a wrong one received DESTROY! :D)
 		// The onion key is retrieved by relay information from descriptor
 
 		/*
@@ -629,8 +630,8 @@ namespace Briand {
 
 		// Append ntor onion key, decoded
 		auto KEYID = BriandTorCertificateUtils::Base64Decode(*relay.descriptorNtorOnionKey.get());
-		// Warning: sometimes the ntor key has additional byte, remove it.
-		KEYID->pop_back();
+		// Warning: sometimes the ntor key has additional byte, remove it. (maybe due to the "may remove the last "=" from base64..... see dir-spec.txt)
+		while (KEYID->size() > H_LENGTH) KEYID->pop_back();
 		// Check
 		if (KEYID->size() != H_LENGTH) {
 			if (DEBUG) Serial.printf("[DEBUG] CREATE2 construction failed because relay ntor key was expected to have %u bytes but decoded has %u\n", H_LENGTH, KEYID->size());

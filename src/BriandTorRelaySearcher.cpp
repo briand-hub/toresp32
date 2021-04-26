@@ -161,7 +161,7 @@ namespace Briand {
 		while (!success && tentative < maxTentatives) {
 			if (DEBUG) Serial.printf("[DEBUG] Downloading guard cache from Oniooo, tentative %d of %d.\n", tentative+1, maxTentatives);
 			// effective_family and exit_policy_summary removed due to too much bytes...
-			auto json = this->GetOnionooJson("relay", "nickname,or_addresses,fingerprint,dir_address", TOR_FLAGS_GUARD_MUST_HAVE, success, TOR_NODES_CACHE_SIZE);
+			auto json = this->GetOnionooJson("relay", "nickname,or_addresses,fingerprint", TOR_FLAGS_GUARD_MUST_HAVE, success, TOR_NODES_CACHE_SIZE);
 			if (success) {
 				if (DEBUG) Serial.printf("[DEBUG] Downloading guard cache from Oniooo success, saving cache.\n");
 				// Prepend the time to object (the first byte is the "{" initialization)
@@ -199,7 +199,7 @@ namespace Briand {
 		while (!success && tentative < maxTentatives) {
 			if (DEBUG) Serial.printf("[DEBUG] Downloading middle cache from Oniooo, tentative %d of %d.\n", tentative+1, maxTentatives);
 			// effective_family and exit_policy_summary removed due to too much bytes...			
-			auto json = this->GetOnionooJson("relay", "nickname,or_addresses,fingerprint,dir_address", TOR_FLAGS_MIDDLE_MUST_HAVE, success, TOR_NODES_CACHE_SIZE);
+			auto json = this->GetOnionooJson("relay", "nickname,or_addresses,fingerprint", TOR_FLAGS_MIDDLE_MUST_HAVE, success, TOR_NODES_CACHE_SIZE);
 			if (success) {
 				if (DEBUG) Serial.printf("[DEBUG] Downloading middle cache from Oniooo success, saving cache.\n");
 				// Prepend the time to object (the first byte is the "{" initialization)
@@ -238,7 +238,7 @@ namespace Briand {
 			if (DEBUG) Serial.printf("[DEBUG] Downloading exit cache from Oniooo, tentative %d of %d.\n", tentative+1, maxTentatives);
 			// Exit nodes => require exit_summary!
 			// effective_family and exit_policy_summary removed due to too much bytes...
-			auto json = this->GetOnionooJson("relay", "nickname,or_addresses,fingerprint,dir_address", TOR_FLAGS_EXIT_MUST_HAVE, success, TOR_NODES_CACHE_SIZE);
+			auto json = this->GetOnionooJson("relay", "nickname,or_addresses,fingerprint", TOR_FLAGS_EXIT_MUST_HAVE, success, TOR_NODES_CACHE_SIZE);
 			if (success) {
 				if (DEBUG) Serial.printf("[DEBUG] Downloading exit cache from Oniooo success, saving cache.\n");
 				// Prepend the time to object (the first byte is the "{" initialization)
@@ -351,9 +351,6 @@ namespace Briand {
 				relay->nickname->assign( json["relays"][this->randomPick]["nickname"].as<const char*>() );
 				relay->fingerprint->assign( json["relays"][this->randomPick]["fingerprint"].as<const char*>() );
 				relay->first_address->assign( json["relays"][this->randomPick]["or_addresses"][0].as<const char*>() );
-				
-				if (json["relays"][this->randomPick].containsKey("dir_address"))
-					relay->dir_address->assign( json["relays"][this->randomPick]["dir_address"].as<const char*>() );
 
 				if (json["relays"][this->randomPick].containsKey("effective_family"))
 					relay->effective_family->assign( json["relays"][this->randomPick]["effective_family"].as<const char*>() );
@@ -427,9 +424,6 @@ namespace Briand {
 				relay->nickname->assign( json["relays"][this->randomPick]["nickname"].as<const char*>() );
 				relay->fingerprint->assign( json["relays"][this->randomPick]["fingerprint"].as<const char*>() );
 				relay->first_address->assign( json["relays"][this->randomPick]["or_addresses"][0].as<const char*>() );
-
-				if (json["relays"][this->randomPick].containsKey("dir_address"))
-					relay->dir_address->assign( json["relays"][this->randomPick]["dir_address"].as<const char*>() );
 
 				if (json["relays"][this->randomPick].containsKey("effective_family"))
 					relay->effective_family->assign( json["relays"][this->randomPick]["effective_family"].as<const char*>() );
@@ -507,9 +501,6 @@ namespace Briand {
 				relay->nickname->assign( json["relays"][this->randomPick]["nickname"].as<const char*>() );
 				relay->fingerprint->assign( json["relays"][this->randomPick]["fingerprint"].as<const char*>() );
 				relay->first_address->assign( json["relays"][this->randomPick]["or_addresses"][0].as<const char*>() );
-				
-				if (json["relays"][this->randomPick].containsKey("dir_address"))
-					relay->dir_address->assign( json["relays"][this->randomPick]["dir_address"].as<const char*>() );
 
 				if (json["relays"][this->randomPick].containsKey("effective_family"))
 					relay->effective_family->assign( json["relays"][this->randomPick]["effective_family"].as<const char*>() );

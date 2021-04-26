@@ -39,6 +39,6 @@
     constexpr char HEAP_LEAK_LIMIT = 5;						// Heap consumption since system readiness more than HEAP_LEAK_LIMIT% will warn
     constexpr unsigned char TOR_CIRCUITS_KEEPALIVE = 3;		// No. of Tor circuits to be kept always open and ready
     constexpr unsigned char TOR_NODES_CACHE_SIZE = 50;		// No. of Tor nodes, for each type (guard/exit/middle) to keep saved. (Avoid more than 50)
-    constexpr unsigned char TOR_NODES_CACHE_VAL_H = 24;		// Hours since the chache of nodes is considered OLD and must be downloaded again
+    constexpr unsigned char TOR_NODES_CACHE_VAL_H = 1;		// Hours since the chache of nodes is considered OLD and must be downloaded again
 
 #endif /* BRIANDDEFINES_H_ */

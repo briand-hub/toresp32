@@ -635,7 +635,7 @@ void executeCommand(string& cmd) {
 		auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
 		auto relay = relaySearcher->GetGuardRelay();
         
-		if (relay != nullptr && relay->FetchDescriptorsFromOR())
+		if (relay != nullptr && relay->FetchDescriptorsFromAuthority())
             Serial.println("SUCCESS");
 		else 
 			Serial.println("FAILED");
@@ -646,7 +646,7 @@ void executeCommand(string& cmd) {
 		auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
 		auto relay = relaySearcher->GetExitRelay("", "");
         
-		if (relay != nullptr && relay->FetchDescriptorsFromOR())
+		if (relay != nullptr && relay->FetchDescriptorsFromAuthority())
 			Serial.println("SUCCESS");
 		else 
 			Serial.println("FAILED");
@@ -657,7 +657,7 @@ void executeCommand(string& cmd) {
 		auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
 		auto relay = relaySearcher->GetMiddleRelay("");
 		
-		if (relay != nullptr && relay->FetchDescriptorsFromOR())
+		if (relay != nullptr && relay->FetchDescriptorsFromAuthority())
 			Serial.println("SUCCESS");
 		else 
 			Serial.println("FAILED");

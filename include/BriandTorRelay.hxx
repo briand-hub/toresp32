@@ -41,7 +41,7 @@ namespace Briand {
 		unique_ptr<string> nickname;
 		unique_ptr<string> first_address;
 		unique_ptr<string> fingerprint;
-		unique_ptr<string> dir_address;
+		/** @deprecated unused! */
 		unique_ptr<string> effective_family;
 		
 		// TODO : add exit policy summary accept/reject
@@ -98,13 +98,12 @@ namespace Briand {
 		bool ValidateCertificates();
 		
 		/**
-		 * Method fetches the relay (OR) descriptors needed by requesting <dir_address>/tor/server/authority
-		 *  WARNING: request to the relay and not to authority at moment due to high space requirements for downloading consensus!!
-		 * @param secureRequest Use http (false) or https (true)
+		 * Method fetches the relay (OR) descriptors needed by requesting it to an authority directory. 
+		 * After calling this method descriptors will be populated.
 		 * @return true if success, false instead
 		*/
-		bool FetchDescriptorsFromOR(bool secureRequest = false);
-		
+		bool FetchDescriptorsFromAuthority();
+
 		/**
 		 * Method (only if debug active) print all short info of certificates, order of CertType
 		*/
