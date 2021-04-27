@@ -53,7 +53,7 @@ namespace Briand {
 		unique_ptr<WiFiClientSecure> sClient;	// Client used for communications
 
 		/**
-		 * Method to cleanup pointers etc. before returning a failed operation
+		 * Method to cleanup pointers etc. before returning after a failed operation in BuildCircuit()
 		*/
 		void Cleanup();
 

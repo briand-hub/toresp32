@@ -44,7 +44,7 @@
 #include "BriandNet.hxx"
 #include "BriandTorRelay.hxx"
 #include "BriandTorCircuit.hxx"
-#include "BriandTorCertificateUtils.hxx"
+#include "BriandTorCryptoUtils.hxx"
 
 /* Startup tests */
 
@@ -139,7 +139,7 @@ void setup() {
 		Serial.printf("[TEST] Perform SHA256 hash of:  %s\n", testMessage.c_str());
 		Serial.printf("[TEST] Expected output:         %s\n", expResult.c_str());
         testStart = millis();
-		auto hash = Briand::BriandTorCertificateUtils::GetDigest_SHA256(message);
+		auto hash = Briand::BriandTorCryptoUtils::GetDigest_SHA256(message);
 		Serial.printf("[TEST] Took %lu milliseconds.\n", (millis() - testStart));
         Serial.printf("[TEST] SHA256 computed hash is: ");
 		Briand::BriandUtils::PrintByteBuffer(*(hash.get()), hash->size()+1, hash->size());

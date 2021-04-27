@@ -18,7 +18,7 @@
 
 #include <Arduino.h>
 
-#include "BriandTorCertificateUtils.hxx"
+#include "BriandTorCryptoUtils.hxx"
 
 #include <iostream>
 #include <memory>
@@ -37,6 +37,7 @@
 #include <mbedtls/md_internal.h>
 #include <mbedtls/pk.h>
 #include <mbedtls/base64.h>
+#include <mbedtls/hkdf.h>
 
 /* LibSodium found for Ed25519 signatures! It's on framwork :-D */
 #include <sodium.h>
@@ -50,7 +51,7 @@ using namespace std;
 
 namespace Briand {
 
-	unique_ptr<vector<unsigned char>> BriandTorCertificateUtils::GetDigest_SHA256(const unique_ptr<vector<unsigned char>>& input) {	
+	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::GetDigest_SHA256(const unique_ptr<vector<unsigned char>>& input) {	
 		// Using mbedtls
 
 		auto mdInfo = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
@@ -95,7 +96,7 @@ namespace Briand {
 		return std::move(digest);
 	}
 
-	bool BriandTorCertificateUtils::CheckSignature_RSASHA256(const unique_ptr<vector<unsigned char>>& message, const unique_ptr<vector<unsigned char>>& x509DerCertificate, const unique_ptr<vector<unsigned char>>& signature) {
+	bool BriandTorCryptoUtils::CheckSignature_RSASHA256(const unique_ptr<vector<unsigned char>>& message, const unique_ptr<vector<unsigned char>>& x509DerCertificate, const unique_ptr<vector<unsigned char>>& signature) {
 		// Using mbedtls
 
 		// First, calculate hash SHA256 of the message
@@ -146,7 +147,7 @@ namespace Briand {
 		return true;
 	}	
 
-	bool BriandTorCertificateUtils::X509Validate(const unique_ptr<vector<unsigned char>>& x509PeerCertificate, const unique_ptr<vector<unsigned char>>& x509CACertificate) {
+	bool BriandTorCryptoUtils::X509Validate(const unique_ptr<vector<unsigned char>>& x509PeerCertificate, const unique_ptr<vector<unsigned char>>& x509CACertificate) {
 		// Using mbedtls
 
 		// Data structures needed
@@ -229,7 +230,7 @@ namespace Briand {
 		return true;
 	}
 
-	bool BriandTorCertificateUtils::CheckSignature_Ed25519(const unique_ptr<vector<unsigned char>>& message, const unique_ptr<vector<unsigned char>>& ed25519PK, const unique_ptr<vector<unsigned char>>& signature) {
+	bool BriandTorCryptoUtils::CheckSignature_Ed25519(const unique_ptr<vector<unsigned char>>& message, const unique_ptr<vector<unsigned char>>& ed25519PK, const unique_ptr<vector<unsigned char>>& signature) {
 		// using libsodium
 
 		// initializes the library and should be called before any other function provided by Sodium. 
@@ -258,7 +259,7 @@ namespace Briand {
 		return true;
 	}
 
-	unique_ptr<vector<unsigned char>> BriandTorCertificateUtils::Base64Decode(const string& input) {
+	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::Base64Decode(const string& input) {
 		// using mbedtls
 		
 		auto output = make_unique<vector<unsigned char>>();
@@ -280,7 +281,7 @@ namespace Briand {
 		return output;
 	}
 
-	bool BriandTorCertificateUtils::ECDH_CURVE25519_GenKeys(BriandTorRelay& relay) {
+	bool BriandTorCryptoUtils::ECDH_CURVE25519_GenKeys(BriandTorRelay& relay) {
 		// using mbedtls
 
 		// Prepare relay
@@ -378,6 +379,175 @@ namespace Briand {
 		mbedtls_entropy_free( &entropy );
 
 		return true;
+	}
+
+	bool BriandTorCryptoUtils::NtorHandshakeComplete(BriandTorRelay& relay) {
+		// using mbedtls
+		
+		// Check if fields are OK (should be but...)
+		if (relay.ECDH_CURVE25519_CONTEXT == nullptr) {
+			Serial.println("[DEBUG] NtorHandshakeComplete: error! ECDH_CURVE25519_CONTEXT context is null!");
+			return false;
+		}
+		if (relay.ECDH_CURVE25519_CLIENT_TO_SERVER == nullptr) {
+			Serial.println("[DEBUG] NtorHandshakeComplete: error! ECDH_CURVE25519_CLIENT_TO_SERVER context is null!");
+			return false;
+		}
+		if (relay.CREATED_EXTENDED_RESPONSE_SERVER_PK == nullptr) {
+			Serial.println("[DEBUG] NtorHandshakeComplete: error! CREATED_EXTENDED_RESPONSE_SERVER_PK context is null!");
+			return false;
+		}
+		if (relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH == nullptr) {
+			Serial.println("[DEBUG] NtorHandshakeComplete: error! CREATED_EXTENDED_RESPONSE_SERVER_AUTH context is null!");
+			return false;
+		}
+
+		// Ok, let's go
+
+		/*
+			In this section, define:
+
+			H(x,t) as HMAC_SHA256 with message x and key t.
+			H_LENGTH  = 32.
+			ID_LENGTH = 20.
+			G_LENGTH  = 32
+			PROTOID   = "ntor-curve25519-sha256-1"
+			t_mac     = PROTOID | ":mac"
+			t_key     = PROTOID | ":key_extract"
+			t_verify  = PROTOID | ":verify"
+			MULT(a,b) = the multiplication of the curve25519 point 'a' by the
+						scalar 'b'.
+			G         = The preferred base point for curve25519 ([9])
+			KEYGEN()  = The curve25519 key generation algorithm, returning
+						a private/public keypair.
+			m_expand  = PROTOID | ":key_expand"
+			KEYID(A)  = A
+		*/
+
+		// The "|" operator is a simple concatenation of the bytes
+
+		constexpr unsigned int G_LENGTH = 32;
+		constexpr unsigned int H_LENGTH = 32;
+		string protoid_string = "ntor-curve25519-sha256-1";
+
+		// using mbedtls works better the old-buffer version ....
+		auto PROTOID = BriandUtils::StringToOldBuffer(protoid_string);
+		auto t_mac = BriandUtils::StringToOldBuffer(protoid_string + ":mac");
+		auto t_key = BriandUtils::StringToOldBuffer(protoid_string + ":key_extract");
+		auto t_verify = BriandUtils::StringToOldBuffer(protoid_string + ":verify");
+
+		/*
+			The server's handshake reply is:
+
+			SERVER_PK   Y                       [G_LENGTH bytes]
+			AUTH        H(auth_input, t_mac)    [H_LENGTH bytes]
+		
+			and computes:
+			secret_input = EXP(Y,x) | EXP(B,x) | ID | B | X | Y | PROTOID
+		*/
+
+		auto secret_input = make_unique<vector<unsigned char>>();
+
+		// temporary common data
+		unsigned int tempSize;
+		unique_ptr<unsigned char[]> tempBuffer;
+		mbedtls_mpi tempResult, tempIndex;
+
+		// Needed for calculations
+		mbedtls_mpi Y, x, B;
+		
+		// Initialize mpi with mbedtls
+		mbedtls_mpi_init(&Y);
+		mbedtls_mpi_init(&x);
+		mbedtls_mpi_init(&B);
+		mbedtls_mpi_init(&tempResult);
+		mbedtls_mpi_init(&tempIndex);
+
+		// Where B is the ntor onion key of the relay
+		auto ntorKeyVec = Base64Decode(*relay.descriptorNtorOnionKey.get());
+		mbedtls_mpi_read_binary(&B, reinterpret_cast<const unsigned char*>( BriandUtils::VectorToArray(ntorKeyVec).get() ), ntorKeyVec->size());
+		// x is the client's private key generated previously (p field)
+		mbedtls_mpi_copy(&x, (const mbedtls_mpi*)relay.ECDH_CURVE25519_CONTEXT->d.p);
+		// and Y is in the relay response 
+		mbedtls_mpi_read_binary(&Y, reinterpret_cast<const unsigned char*>( BriandUtils::VectorToArray(relay.CREATED_EXTENDED_RESPONSE_SERVER_PK).get() ), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->size());
+
+		// Start with Y^x mbedtls has no direct exp function (only modular) so multiply 
+		mbedtls_mpi_copy(&tempResult, &Y);
+		mbedtls_mpi_copy(&tempIndex, &x);
+		mbedtls_mpi_sub_int(&tempIndex, &tempIndex, 1); // the first (^1) has been made with copy
+		while (mbedtls_mpi_cmp_int(&tempIndex, 0) > 0) {
+			mbedtls_mpi_mul_mpi(&tempResult, &tempResult, &Y);
+			mbedtls_mpi_sub_int(&tempIndex, &tempIndex, 1);
+		}
+
+		// Start to save bytes
+		tempSize = mbedtls_mpi_size(&tempResult);
+		tempBuffer = make_unique<unsigned char[]>( tempSize );
+		mbedtls_mpi_write_binary(&tempResult, tempBuffer.get(), tempSize);
+		secret_input->insert(secret_input->begin(), tempBuffer.get(), tempBuffer.get() + tempSize); // safe!
+		tempBuffer.reset();
+		tempSize = 0;
+
+		// Now calculate B^x
+		mbedtls_mpi_copy(&tempResult, &B);
+		mbedtls_mpi_copy(&tempIndex, &x);
+		mbedtls_mpi_sub_int(&tempIndex, &tempIndex, 1); // the first (^1) has been made with copy
+		while (mbedtls_mpi_cmp_int(&tempIndex, 0) > 0) {
+			mbedtls_mpi_mul_mpi(&tempResult, &tempResult, &B);
+			mbedtls_mpi_sub_int(&tempIndex, &tempIndex, 1);
+		}
+
+		// Append bytes
+		tempSize = mbedtls_mpi_size(&tempResult);
+		tempBuffer = make_unique<unsigned char[]>( tempSize );
+		mbedtls_mpi_write_binary(&tempResult, tempBuffer.get(), tempSize);
+		secret_input->insert(secret_input->begin() + secret_input->size(), tempBuffer.get(), tempBuffer.get() + tempSize); // safe!
+		tempBuffer.reset();
+		tempSize = 0;
+
+		// Now free not anymore needed mpis
+		mbedtls_mpi_free(&Y);
+		mbedtls_mpi_free(&x);
+		mbedtls_mpi_free(&B);
+		mbedtls_mpi_free(&tempResult);
+		mbedtls_mpi_free(&tempIndex);
+
+		// Append the fingerprint (ID)
+		auto tempVector = BriandUtils::HexStringToVector(*relay.fingerprint.get(), "");
+		secret_input->insert(secret_input->begin() + secret_input->size(), tempVector->begin(), tempVector->end());
+		// Append the ntorKey (B)
+		secret_input->insert(secret_input->begin() + secret_input->size(), ntorKeyVec->begin(), ntorKeyVec->end());
+		// Append X (my public key)
+		secret_input->insert(secret_input->begin() + secret_input->size(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->begin(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->end());
+		// Append Y (relay's public key)
+		secret_input->insert(secret_input->begin() + secret_input->size(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->begin(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->end());
+
+		// TODO : secret_input->insert(secret_input->end() ) ? better????
+
+		/*	KEY_SEED = H(secret_input, t_key) */
+
+
+
+
+		/*
+				verify = H(secret_input, t_verify)
+				auth_input = verify | ID | B | Y | X | PROTOID | "Server"
+
+			The client verifies that AUTH == H(auth_input, t_mac).
+		*/
+
+	
+		/*
+			The client then checks Y is in G^* =======>>>> Both parties check that none of the EXP() operations produced the 
+			point at infinity. [NOTE: This is an adequate replacement for checking Y for group membership, if the group is curve25519.]
+		*/
+
+
+			
+		
+
+
+
 	}
 
 }

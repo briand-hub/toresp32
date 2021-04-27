@@ -523,6 +523,17 @@ namespace Briand {
 		this->CIRCID += ( Briand::BriandUtils::GetRandomByte() << 8 );
 		this->CIRCID += Briand::BriandUtils::GetRandomByte();
 
+		// However looking at tor sources this seems much more important:
+
+		/*
+			In link protocol version 4 or higher, whichever node initiated the
+   			connection sets its MSB to 1, and whichever node didn't initiate the
+   			connection sets its MSB to 0
+		*/
+
+		// So it's clear, my circid must have MSB to 1
+		this->CIRCID = this->CIRCID | 0x80000000;
+
 		if (DEBUG) Serial.printf("[DEBUG] NEW CircID: %08X \n", this->CIRCID);
 
 		// CREATE/CREATE2

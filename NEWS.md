@@ -3,9 +3,10 @@
 ## Next steps
 * Find a way to get a small-size official consensus from directories
 * Simplify code in TorCircuit class
-* Prepare stub method to authenticate client
-* Send NETINFO cell after CERTS cell authentication
-* Authenticate cell?
+* Authenticate cell? => Prepare stub method to authenticate client
+
+## 
+* Rename CertificateUtils class to CryptoUtils class
 
 ## 2021-04-25
 * Added authoritiy directory list for descriptors query after reading dir-spec.txt
@@ -15,6 +16,7 @@
 * Test new cache success
 * Added function to avoid same-family nodes
 * Changes and optimizations
+* Send NETINFO cell after CERTS cell authentication
 
 ## 2021-04-24
 

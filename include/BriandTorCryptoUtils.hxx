@@ -26,7 +26,7 @@ using namespace std;
 namespace Briand {
 
 	/* This class contains utility methods to perform hashing and certificate validation, depending on the chosen implementation/library */
-	class BriandTorCertificateUtils {
+	class BriandTorCryptoUtils {
 		public:
 
 		/**
@@ -75,6 +75,14 @@ namespace Briand {
 		 * @return true if success, false instead
 		*/
 		static bool ECDH_CURVE25519_GenKeys(BriandTorRelay& relay);
+
+		/**
+		 * Method generates keypair and saves informations (keys and client to server vector) on given relay
+		 * @param relay The relay to conclude handshake with. WARNING: MUST have initialized the ECDH_CURVE25519_CONTEXT, ECDH_CURVE25519_CLIENT_TO_SERVER, 
+		 * CREATED_EXTENDED_RESPONSE_SERVER_PK and CREATED_EXTENDED_RESPONSE_SERVER_AUTH fields. Fields are NOT cleared after the work.
+		 * @return true if success, false instead. If everything is ok, fields KEY_***** are populated.
+		*/
+		static bool NtorHandshakeComplete(BriandTorRelay& relay);
 
 	};
 }

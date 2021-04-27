@@ -38,7 +38,7 @@
 #include "BriandUtils.hxx"
 #include "BriandNet.hxx"
 #include "BriandTorCertificates.hxx"
-#include "BriandTorCertificateUtils.hxx"
+#include "BriandTorCryptoUtils.hxx"
 
 using namespace std;
 
@@ -63,6 +63,11 @@ namespace Briand {
 		this->CREATED_EXTENDED_RESPONSE_SERVER_PK = nullptr;
 		this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH = nullptr;
 		this->KEYSEED = nullptr;
+		this->KEY_Backward_Kb = nullptr;
+		this->KEY_BackwardDigest_Db = nullptr;
+		this->KEY_Forward_Kf = nullptr;
+		this->KEY_ForwardDigest_Df = nullptr;
+		this->KEY_HiddenService_Nonce = nullptr;
 	}
 
 	BriandTorRelay::~BriandTorRelay() {
@@ -79,10 +84,15 @@ namespace Briand {
 		if(this->certEd25519AuthenticateCellLink != nullptr) this->certEd25519AuthenticateCellLink.reset();
 		if(this->certRSAEd25519CrossCertificate != nullptr) this->certRSAEd25519CrossCertificate.reset();
 		if(this->ECDH_CURVE25519_CLIENT_TO_SERVER != nullptr) this->ECDH_CURVE25519_CLIENT_TO_SERVER.reset();
-		if (this->ECDH_CURVE25519_CONTEXT != nullptr) this->ECDH_CURVE25519_CONTEXT.reset();
-		if (this->CREATED_EXTENDED_RESPONSE_SERVER_PK != nullptr) this->CREATED_EXTENDED_RESPONSE_SERVER_PK.reset();
-		if (this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH != nullptr) this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH.reset();
-		if (this->KEYSEED != nullptr) this->KEYSEED.reset();
+		if(this->ECDH_CURVE25519_CONTEXT != nullptr) this->ECDH_CURVE25519_CONTEXT.reset();
+		if(this->CREATED_EXTENDED_RESPONSE_SERVER_PK != nullptr) this->CREATED_EXTENDED_RESPONSE_SERVER_PK.reset();
+		if(this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH != nullptr) this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH.reset();
+		if(this->KEYSEED != nullptr) this->KEYSEED.reset();
+		if(this->KEY_Backward_Kb != nullptr) this->KEY_Backward_Kb.reset();
+		if(this->KEY_BackwardDigest_Db != nullptr) this->KEY_BackwardDigest_Db.reset();
+		if(this->KEY_Forward_Kf != nullptr) this->KEY_Forward_Kf.reset();
+		if(this->KEY_ForwardDigest_Df != nullptr) this->KEY_ForwardDigest_Df.reset();
+		if(this->KEY_HiddenService_Nonce != nullptr) this->KEY_HiddenService_Nonce.reset();
 	}
 
 	string BriandTorRelay::GetHost() {
@@ -391,14 +401,32 @@ namespace Briand {
 				created2_extended2_payload->begin() + 2 + G_LENGTH + H_LENGTH
 			);
 
+		// Prepare relay's fields if, for any error, were populated
+		if(this->KEYSEED != nullptr) this->KEYSEED.reset();
+		if(this->KEY_Backward_Kb != nullptr) this->KEY_Backward_Kb.reset();
+		if(this->KEY_BackwardDigest_Db != nullptr) this->KEY_BackwardDigest_Db.reset();
+		if(this->KEY_Forward_Kf != nullptr) this->KEY_Forward_Kf.reset();
+		if(this->KEY_ForwardDigest_Df != nullptr) this->KEY_ForwardDigest_Df.reset();
+		if(this->KEY_HiddenService_Nonce != nullptr) this->KEY_HiddenService_Nonce.reset();
+
 		// Do the calculations needed to finish the handshake
-		this->KEYSEED = make_unique<vector<unsigned char>>();
+		bool keysReady = BriandTorCryptoUtils::NtorHandshakeComplete(*this);
 
-		//
-		// TODO
-		//
+		if (!keysReady) {
+			if (DEBUG) Serial.println("[DEBUG] The handshake is failed, no keys have been exchanged.");
+		}
 
-		return true;
+		// After this, clean no more needed fields!
+		this->CREATED_EXTENDED_RESPONSE_SERVER_PK.reset();
+		this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH.reset();
+		this->KEYSEED.reset();
+
+		// Also client-side context should be cleared and free (it was temporary)
+		this->ECDH_CURVE25519_CLIENT_TO_SERVER.reset();
+		mbedtls_ecdh_free(this->ECDH_CURVE25519_CONTEXT.get());
+		if (this->ECDH_CURVE25519_CONTEXT != nullptr) this->ECDH_CURVE25519_CONTEXT.reset();
+
+		return keysReady;
 	}
 
 	void BriandTorRelay::PrintAllCertificateShortInfo() {
@@ -422,7 +450,7 @@ namespace Briand {
 			Serial.printf("[DEBUG] Effective Family (raw contents): %s\n", this->effective_family->c_str());
 			Serial.printf("[DEBUG] Encoded descriptor NTOR onion key: %s\n", this->descriptorNtorOnionKey->c_str());
 			Serial.printf("[DEBUG] Decoded descriptor NTOR onion key: ");
-			auto dec = BriandTorCertificateUtils::Base64Decode(*this->descriptorNtorOnionKey.get());
+			auto dec = BriandTorCryptoUtils::Base64Decode(*this->descriptorNtorOnionKey.get());
 			BriandUtils::PrintByteBuffer(*dec.get(), dec->size(), dec->size());
 		}
 	}
