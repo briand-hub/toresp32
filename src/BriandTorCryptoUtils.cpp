@@ -96,6 +96,52 @@ namespace Briand {
 		return std::move(digest);
 	}
 
+	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::GetDigest_HMAC_SHA256(const unique_ptr<vector<unsigned char>>& input, const unique_ptr<vector<unsigned char>>& key) {	
+		// Using mbedtls
+
+		auto mdInfo = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+
+		auto hashedMessageRaw = BriandUtils::GetOneOldBuffer(mdInfo->size);
+		auto inputRaw = BriandUtils::VectorToArray(input);
+		auto keyRaw = BriandUtils::VectorToArray(key);
+
+		if (DEBUG) Serial.printf("[DEBUG] HMAC-SHA256 Raw message to encode: ");
+		BriandUtils::PrintOldStyleByteBuffer(inputRaw.get(), input->size(), input->size(), input->size());
+		
+		// Using mbedtls_md() not working as expected!!
+
+		auto mdCtx = make_unique<mbedtls_md_context_t>();
+
+		mbedtls_md_setup(mdCtx.get(), mdInfo, 1); // last 1: specify hmac
+		mbedtls_md_hmac_starts(mdCtx.get(), keyRaw.get(), key->size());
+		mbedtls_md_hmac_update(mdCtx.get(), inputRaw.get(), input->size());
+		mbedtls_md_hmac_finish(mdCtx.get(), hashedMessageRaw.get());
+
+		// HINT : using this:
+		// mbedtls_md_context_t mdCtx;
+		// mbedtls_md_setup(&mdCtx, mdInfo, 0);
+		// mbedtls_md_starts(&mdCtx);
+		// mbedtls_md_update(&mdCtx, inputRaw.get(), input->size());
+		// mbedtls_md_finish(&mdCtx, hashedMessageRaw.get());
+		// mbedtls_md_free(&mdCtx);
+
+		// will led to:
+		// free(): invalid pointer
+		// made by calling mbedtls_md_free(&mdCtx);
+		// however not calling will leak heap!
+		// solution found: use unique_ptr , always working! Thanks C++
+		
+		if (DEBUG) Serial.printf("[DEBUG] HMAC-SHA256 Raw output: ");
+		BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size, mdInfo->size);
+
+		auto digest = BriandUtils::ArrayToVector(hashedMessageRaw, mdInfo->size);
+
+		// Free (MUST!)
+		mbedtls_md_free(mdCtx.get());
+
+		return std::move(digest);
+	}
+
 	bool BriandTorCryptoUtils::CheckSignature_RSASHA256(const unique_ptr<vector<unsigned char>>& message, const unique_ptr<vector<unsigned char>>& x509DerCertificate, const unique_ptr<vector<unsigned char>>& signature) {
 		// Using mbedtls
 
@@ -431,10 +477,12 @@ namespace Briand {
 		string protoid_string = "ntor-curve25519-sha256-1";
 
 		// using mbedtls works better the old-buffer version ....
-		auto PROTOID = BriandUtils::StringToOldBuffer(protoid_string);
-		auto t_mac = BriandUtils::StringToOldBuffer(protoid_string + ":mac");
-		auto t_key = BriandUtils::StringToOldBuffer(protoid_string + ":key_extract");
-		auto t_verify = BriandUtils::StringToOldBuffer(protoid_string + ":verify");
+		auto PROTOID = BriandUtils::HexStringToVector("", protoid_string);
+		auto t_mac = BriandUtils::HexStringToVector("", protoid_string + ":mac");
+		auto t_key = BriandUtils::HexStringToVector("", protoid_string + ":key_extract");
+		auto t_verify = BriandUtils::HexStringToVector("", protoid_string + ":verify");
+		unsigned int m_expand_size;
+		auto m_expand = BriandUtils::HexStringToOldBuffer("", m_expand_size, protoid_string + ":key_expand");
 
 		/*
 			The server's handshake reply is:
@@ -501,7 +549,7 @@ namespace Briand {
 		tempSize = mbedtls_mpi_size(&tempResult);
 		tempBuffer = make_unique<unsigned char[]>( tempSize );
 		mbedtls_mpi_write_binary(&tempResult, tempBuffer.get(), tempSize);
-		secret_input->insert(secret_input->begin() + secret_input->size(), tempBuffer.get(), tempBuffer.get() + tempSize); // safe!
+		secret_input->insert(secret_input->end(), tempBuffer.get(), tempBuffer.get() + tempSize); // safe!
 		tempBuffer.reset();
 		tempSize = 0;
 
@@ -513,41 +561,119 @@ namespace Briand {
 		mbedtls_mpi_free(&tempIndex);
 
 		// Append the fingerprint (ID)
-		auto tempVector = BriandUtils::HexStringToVector(*relay.fingerprint.get(), "");
-		secret_input->insert(secret_input->begin() + secret_input->size(), tempVector->begin(), tempVector->end());
+		auto fingerprintVector = BriandUtils::HexStringToVector(*relay.fingerprint.get(), "");
+		secret_input->insert(secret_input->end(), fingerprintVector->begin(), fingerprintVector->end());
 		// Append the ntorKey (B)
-		secret_input->insert(secret_input->begin() + secret_input->size(), ntorKeyVec->begin(), ntorKeyVec->end());
+		secret_input->insert(secret_input->end(), ntorKeyVec->begin(), ntorKeyVec->end());
 		// Append X (my public key)
-		secret_input->insert(secret_input->begin() + secret_input->size(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->begin(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->end());
+		secret_input->insert(secret_input->end(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->begin(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->end());
 		// Append Y (relay's public key)
-		secret_input->insert(secret_input->begin() + secret_input->size(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->begin(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->end());
+		secret_input->insert(secret_input->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->begin(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->end());
+		// Append PROTOID
+		secret_input->insert(secret_input->end(), PROTOID->begin(), PROTOID->end());
 
-		// TODO : secret_input->insert(secret_input->end() ) ? better????
+		if (DEBUG)  {
+			Serial.printf("[DEBUG] secret_input: ");
+			BriandUtils::PrintByteBuffer(*secret_input.get(), secret_input->size(), secret_input->size());
+		}
 
 		/*	KEY_SEED = H(secret_input, t_key) */
 
+		relay.KEYSEED = GetDigest_HMAC_SHA256(secret_input, t_key);
 
+		if (DEBUG)  {
+			Serial.printf("[DEBUG] KEYSEED: ");
+			BriandUtils::PrintByteBuffer(*relay.KEYSEED.get(), relay.KEYSEED->size(), relay.KEYSEED->size());
+		}
 
+		/* verify = H(secret_input, t_verify) */
 
-		/*
-				verify = H(secret_input, t_verify)
-				auth_input = verify | ID | B | Y | X | PROTOID | "Server"
+		auto verify = GetDigest_HMAC_SHA256(secret_input, t_verify);
 
-			The client verifies that AUTH == H(auth_input, t_mac).
-		*/
+		/* auth_input = verify | ID | B | Y | X | PROTOID | "Server" */
+		
+		auto auth_input = make_unique<vector<unsigned char>>();
+		auth_input->insert(auth_input->begin(), verify->begin(), verify->end());
+		auth_input->insert(auth_input->end(), fingerprintVector->begin(), fingerprintVector->end());
+		auth_input->insert(auth_input->end(), ntorKeyVec->begin(), ntorKeyVec->end());
+		auth_input->insert(auth_input->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->begin(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->end());
+		auth_input->insert(auth_input->end(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->begin(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->end());
+		auth_input->insert(auth_input->end(), PROTOID->begin(), PROTOID->end());
+		auto serverStringVector = BriandUtils::HexStringToVector("", "Server");
+		auth_input->insert(auth_input->end(), serverStringVector->begin(), serverStringVector->end());
 
+		/* The client verifies that AUTH == H(auth_input, t_mac). */
+		auto auth_verify = GetDigest_HMAC_SHA256(auth_input, t_mac);
+		if (auth_verify->size() != relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size()) {
+			Serial.println("[DEBUG] Error, AUTH size and H(auth_input, t_mac) size does not match!");
+			return false;
+		}
+		if (!std::equal(auth_verify->begin(), auth_verify->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH->begin())) {
+			Serial.println("[DEBUG] Error, AUTH and H(auth_input, t_mac) not matching!");
+			return false;
+		}
+
+		if (DEBUG) Serial.println("[DEBUG] Relay response to CREATE2/EXTEND2 verified (success).");
 	
 		/*
 			The client then checks Y is in G^* =======>>>> Both parties check that none of the EXP() operations produced the 
 			point at infinity. [NOTE: This is an adequate replacement for checking Y for group membership, if the group is curve25519.]
 		*/
 
+		//
+		// TODO
+		// 
+
+		/* 
+			Both parties now have a shared value for KEY_SEED.  They expand this
+			into the keys needed for the Tor relay protocol, using the KDF
+			described in 5.2.2 and the tag m_expand. 
+
+			[...]
+
+			
+			For newer KDF needs, Tor uses the key derivation function HKDF from
+			RFC5869, instantiated with SHA256.  (This is due to a construction
+			from Krawczyk.)  The generated key material is:
+
+				K = K_1 | K_2 | K_3 | ...
+
+				Where H(x,t) is HMAC_SHA256 with value x and key t
+					and K_1     = H(m_expand | INT8(1) , KEY_SEED )
+					and K_(i+1) = H(K_i | m_expand | INT8(i+1) , KEY_SEED )
+					and m_expand is an arbitrarily chosen value,
+					and INT8(i) is a octet with the value "i".
+
+			In RFC5869's vocabulary, this is HKDF-SHA256 with info == m_expand,
+			salt == t_key, and IKM == secret_input.
+		*/
+
+		// Clear and simple:
+
+		if (DEBUG) Serial.print("[DEBUG] Generating keys with HKDF...");
+
+		auto hkdfBuffer = BriandUtils::GetOneOldBuffer(255);
+		mbedtls_hkdf(
+			mbedtls_md_info_from_type(MBEDTLS_MD_SHA256),
+			BriandUtils::VectorToArray(t_key).get(), t_key->size(), 
+			BriandUtils::VectorToArray(secret_input).get(), secret_input->size(), 
+			m_expand.get(), m_expand_size, 
+			hkdfBuffer.get(), 32
+		);
+		
+		/*
+			When used in the ntor handshake, the first HASH_LEN bytes form the
+			forward digest Df; the next HASH_LEN form the backward digest Db; the
+			next KEY_LEN form Kf, the next KEY_LEN form Kb, and the final
+			DIGEST_LEN bytes are taken as a nonce to use in the place of KH in the
+			hidden service protocol.  Excess bytes from K are discarded.
+   		*/
 
 			
 		
+	   if (DEBUG) Serial.print("done!\n");
 
-
-
+		return true;
 	}
 
 }

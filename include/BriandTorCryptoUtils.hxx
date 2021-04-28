@@ -37,6 +37,14 @@ namespace Briand {
 		static unique_ptr<vector<unsigned char>> GetDigest_SHA256(const unique_ptr<vector<unsigned char>>& input);
 
 		/**
+		 * Method perform HMAC-SHA256 on the input bytes.
+		 * @param input input bytes
+		 * @param key key required for HMAC
+		 * @return Pointer to vector containing result.
+		*/
+		static unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::GetDigest_HMAC_SHA256(const unique_ptr<vector<unsigned char>>& input, const unique_ptr<vector<unsigned char>>& key);
+
+		/**
 		 * Method verifies SHA256 RSA PKCS#1 v1.5 signature
 		 * @param message The message (raw data)
 		 * @param x509DerCertificate The DER-encoded X.509 certificate containing the PublicKey (PK) to check signature
