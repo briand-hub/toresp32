@@ -29,7 +29,7 @@
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
 #include "BriandUtils.hxx"
-#include "BriandTorCertificateUtils.hxx"
+#include "BriandTorCryptoUtils.hxx"
 
 using namespace std;
 
@@ -252,7 +252,7 @@ namespace Briand {
 
 		if (DEBUG) Serial.printf("[DEBUG] %s signature verification.\n", this->GetCertificateName().c_str());
 
-		bool signatureValid = BriandTorCertificateUtils::CheckSignature_Ed25519(this->non_signature_parts, ed25519PK, this->SIGNATURE);
+		bool signatureValid = BriandTorCryptoUtils::CheckSignature_Ed25519(this->non_signature_parts, ed25519PK, this->SIGNATURE);
 
 		if (DEBUG) Serial.printf("[DEBUG] %s signature verification result: %d\n", this->GetCertificateName().c_str(), signatureValid);
 
@@ -293,7 +293,7 @@ namespace Briand {
 		// The CA is the Cert type 2 and is ... myself!
 
 		if (DEBUG) Serial.printf("[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
-		bool validationResult = BriandTorCertificateUtils::X509Validate(this->Contents, this->Contents);
+		bool validationResult = BriandTorCryptoUtils::X509Validate(this->Contents, this->Contents);
 		if (DEBUG) Serial.printf("[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
 
 		return validationResult;
@@ -418,7 +418,7 @@ namespace Briand {
 		messageToVerify->push_back( static_cast<unsigned char>( (this->EXPIRATION_DATE & 0x0000FF00) >> 8 ));
 		messageToVerify->push_back( static_cast<unsigned char>( (this->EXPIRATION_DATE & 0x000000FF) ));
 		
-		bool signedCorrectly = BriandTorCertificateUtils::CheckSignature_RSASHA256(messageToVerify, signAuthenticator.Contents, this->SIGNATURE);
+		bool signedCorrectly = BriandTorCryptoUtils::CheckSignature_RSASHA256(messageToVerify, signAuthenticator.Contents, this->SIGNATURE);
 
 		if (DEBUG && signedCorrectly) Serial.println("[DEBUG] RSAEd25519CrossCertificate has valid signature.");
 		else if (DEBUG && !signedCorrectly) Serial.println("[DEBUG] RSAEd25519CrossCertificate has invalid signature!");
@@ -447,7 +447,7 @@ namespace Briand {
 		// The CA is the Cert type 2.
 
 		if (DEBUG) Serial.printf("[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
-		bool validationResult = BriandTorCertificateUtils::X509Validate(this->Contents, signAuthenticator.Contents);
+		bool validationResult = BriandTorCryptoUtils::X509Validate(this->Contents, signAuthenticator.Contents);
 		if (DEBUG) Serial.printf("[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
 
 		return validationResult;
@@ -463,7 +463,7 @@ namespace Briand {
 		// The CA is the Cert type 2.
 
 		if (DEBUG) Serial.printf("[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
-		bool validationResult = BriandTorCertificateUtils::X509Validate(this->Contents, signAuthenticator.Contents);
+		bool validationResult = BriandTorCryptoUtils::X509Validate(this->Contents, signAuthenticator.Contents);
 		if (DEBUG) Serial.printf("[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
 
 		return validationResult;
@@ -528,7 +528,7 @@ namespace Briand {
 
 		/* The certified key in the Signing->Link certificate matches the SHA256 digest of the certificate that was used to authenticate the TLS connection */
 
-		auto linkKeyDigest = BriandTorCertificateUtils::GetDigest_SHA256(linkKeyCert.Contents);
+		auto linkKeyDigest = BriandTorCryptoUtils::GetDigest_SHA256(linkKeyCert.Contents);
 
 		if (this->CERTIFIED_KEY->size() != linkKeyDigest->size() || 
 			!std::equal(CERTIFIED_KEY->begin(), CERTIFIED_KEY->end(), linkKeyDigest->begin()) 

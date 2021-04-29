@@ -393,6 +393,11 @@ namespace Briand {
 				created2_extended2_payload->begin() + 2 + G_LENGTH
 			);
 		
+		if (DEBUG) {
+			Serial.printf("[DEBUG] Relay's PK: ");
+			BriandUtils::PrintByteBuffer(*this->CREATED_EXTENDED_RESPONSE_SERVER_PK.get(), this->CREATED_EXTENDED_RESPONSE_SERVER_PK->size(), this->CREATED_EXTENDED_RESPONSE_SERVER_PK->size());
+		}
+
 		// And the other H_LENGTH 32 bytes
 		this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH = make_unique<vector<unsigned char>>();
 		this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH->insert(
@@ -400,6 +405,11 @@ namespace Briand {
 				created2_extended2_payload->begin() + 2 + G_LENGTH, 
 				created2_extended2_payload->begin() + 2 + G_LENGTH + H_LENGTH
 			);
+
+		if (DEBUG) {
+			Serial.printf("[DEBUG] Relay's AUTH: ");
+			BriandUtils::PrintByteBuffer(*this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH.get(), this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size(), this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size());
+		}
 
 		// Prepare relay's fields if, for any error, were populated
 		if(this->KEYSEED != nullptr) this->KEYSEED.reset();
@@ -414,9 +424,23 @@ namespace Briand {
 
 		if (!keysReady) {
 			if (DEBUG) Serial.println("[DEBUG] The handshake is failed, no keys have been exchanged.");
+			return false;
 		}
 
-		// After this, clean no more needed fields!
+		if (DEBUG) {
+			Serial.printf("[DEBUG] Forward key: ");
+			BriandUtils::PrintByteBuffer( *this->KEY_Forward_Kf.get() );
+			Serial.printf("[DEBUG] Backward key: ");
+			BriandUtils::PrintByteBuffer( *this->KEY_Backward_Kb.get() );
+			Serial.printf("[DEBUG] Forward digest: ");
+			BriandUtils::PrintByteBuffer( *this->KEY_ForwardDigest_Df.get() );
+			Serial.printf("[DEBUG] Backward digest: ");
+			BriandUtils::PrintByteBuffer( *this->KEY_BackwardDigest_Db.get() );
+			Serial.printf("[DEBUG] Hidden service nonce: ");
+			BriandUtils::PrintByteBuffer( *this->KEY_HiddenService_Nonce.get() );
+		}
+
+		// After that, clean no more needed fields!
 		this->CREATED_EXTENDED_RESPONSE_SERVER_PK.reset();
 		this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH.reset();
 		this->KEYSEED.reset();

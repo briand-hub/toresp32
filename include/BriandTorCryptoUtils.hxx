@@ -37,12 +37,28 @@ namespace Briand {
 		static unique_ptr<vector<unsigned char>> GetDigest_SHA256(const unique_ptr<vector<unsigned char>>& input);
 
 		/**
+		 * Method perform SHA1 digest on the input bytes.
+		 * @param input input bytes
+		 * @return Pointer to vector containing hash.
+		*/
+		static unique_ptr<vector<unsigned char>> GetDigest_SHA1(const unique_ptr<vector<unsigned char>>& input);
+
+		/**
 		 * Method perform HMAC-SHA256 on the input bytes.
 		 * @param input input bytes
 		 * @param key key required for HMAC
 		 * @return Pointer to vector containing result.
 		*/
-		static unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::GetDigest_HMAC_SHA256(const unique_ptr<vector<unsigned char>>& input, const unique_ptr<vector<unsigned char>>& key);
+		static unique_ptr<vector<unsigned char>> GetDigest_HMAC_SHA256(const unique_ptr<vector<unsigned char>>& input, const unique_ptr<vector<unsigned char>>& key);
+
+		/**
+		 * Method calculates the HKDF-SHA256 (RFC5869) from given input.
+		 * @param mExpand the info
+		 * @param keySeed the salt
+		 * @param bytesToProduce size needed
+		 * @return Pointer to bytes (of size bytesToProduce)
+		*/
+		static unique_ptr<vector<unsigned char>> Get_HKDF(const unique_ptr<vector<unsigned char>>& mExpand, const unique_ptr<vector<unsigned char>>& keySeed, const unsigned int bytesToProduce);
 
 		/**
 		 * Method verifies SHA256 RSA PKCS#1 v1.5 signature
@@ -83,6 +99,14 @@ namespace Briand {
 		 * @return true if success, false instead
 		*/
 		static bool ECDH_CURVE25519_GenKeys(BriandTorRelay& relay);
+
+		/**
+		 * Method computes the shared secret after an ECDH operation 
+		 * @param serverToClient The ECDH server's response
+		 * @param relay The relay that answered for handshake
+		 * @return Pointer to the shared secret vector (bytes), empty if fails.
+		*/
+		static unique_ptr<vector<unsigned char>> ECDH_CURVE25519_ComputeShared(const unique_ptr<vector<unsigned char>>& serverToClient, const BriandTorRelay& relay);
 
 		/**
 		 * Method generates keypair and saves informations (keys and client to server vector) on given relay

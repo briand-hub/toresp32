@@ -29,7 +29,7 @@
 #include "BriandUtils.hxx"
 #include "BriandNet.hxx"
 #include "BriandTorCertificates.hxx"
-#include "BriandTorCertificateUtils.hxx"
+#include "BriandTorCryptoUtils.hxx"
 #include "BriandTorRelay.hxx"
 
 using namespace std;
@@ -593,7 +593,7 @@ namespace Briand {
 		*/
 
 		// Generate DH Curve25519 keys
-		if (!BriandTorCertificateUtils::ECDH_CURVE25519_GenKeys(relay)) {
+		if (!BriandTorCryptoUtils::ECDH_CURVE25519_GenKeys(relay)) {
 			if (DEBUG) Serial.println("[DEBUG] CREATE2 construction failed because ECDH key generation fails.");
 			return false;
 		}
@@ -629,7 +629,7 @@ namespace Briand {
 		this->AppendBytesToPayload(*fingerprintBytes.get());
 
 		// Append ntor onion key, decoded
-		auto KEYID = BriandTorCertificateUtils::Base64Decode(*relay.descriptorNtorOnionKey.get());
+		auto KEYID = BriandTorCryptoUtils::Base64Decode(*relay.descriptorNtorOnionKey.get());
 		// Warning: sometimes the ntor key has additional byte, remove it. (maybe due to the "may remove the last "=" from base64....." see dir-spec.txt)
 		while (KEYID->size() > H_LENGTH) KEYID->pop_back();
 		// Check
