@@ -405,7 +405,7 @@ namespace Briand {
 		return output;
 	}
 
-	bool BriandTorCryptoUtils::Curve25519_GenKeys(BriandTorRelay& relay) {
+	bool BriandTorCryptoUtils::ECDH_Curve25519_GenKeys(BriandTorRelay& relay) {
 		// using mbedtls
 
 		// If output had a previous initialization, clear it!
@@ -416,7 +416,7 @@ namespace Briand {
 		mbedtls_entropy_context entropy;
 		mbedtls_ctr_drbg_context ctr_drbg;
 
-		string pers = "BriandTorCryptoUtils::Curve25519_GenKeys";
+		string pers = "BriandTorCryptoUtils::ECDH_Curve25519_GenKeys";
 		int ret;
 
 		// Initialize structures
@@ -429,7 +429,7 @@ namespace Briand {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] Curve25519_GenKeys failed initialize RNG: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			if (DEBUG) Serial.printf("[DEBUG] ECDH_Curve25519_GenKeys failed initialize RNG: %s\n", reinterpret_cast<char*>(errBuf.get()));
 			// Free
 			mbedtls_ctr_drbg_free( &ctr_drbg );
 			mbedtls_entropy_free( &entropy );
@@ -443,7 +443,7 @@ namespace Briand {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] Curve25519_GenKeys failed on generating keys: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			if (DEBUG) Serial.printf("[DEBUG] ECDH_Curve25519_GenKeys failed on generating keys: %s\n", reinterpret_cast<char*>(errBuf.get()));
 			// Free
 			mbedtls_ctr_drbg_free( &ctr_drbg );
 			mbedtls_entropy_free( &entropy );
@@ -471,6 +471,109 @@ namespace Briand {
 		mbedtls_entropy_free( &entropy );
 
 		return true;
+	}
+
+	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::ECDH_Curve25519_ComputeSharedSecret(const unique_ptr<vector<unsigned char>>& serverPublic, const unique_ptr<vector<unsigned char>>& privateKey) {
+		// using mbedtls
+
+		auto sharedSecret = make_unique<vector<unsigned char>>();
+
+		// Initialize data structures needed
+		unique_ptr<unsigned char[]> tempBuffer;
+		int ret;
+		mbedtls_ecp_point server_public;
+		mbedtls_mpi private_key;
+		mbedtls_mpi shared_secret;
+		mbedtls_ecp_group ecpGroup;
+
+		mbedtls_ecp_point_init(&server_public);
+		mbedtls_ecp_group_init(&ecpGroup);
+		mbedtls_mpi_init(&shared_secret);
+		mbedtls_mpi_init(&private_key);
+
+		// Curve25519 group initialization parameters
+		mbedtls_ecp_group_load(&ecpGroup, MBEDTLS_ECP_DP_CURVE25519);
+
+		// Set private key
+		tempBuffer = BriandUtils::VectorToArray(privateKey);
+		ret = mbedtls_mpi_read_binary(&private_key, tempBuffer.get(), privateKey->size());
+		tempBuffer.reset();
+		if (ret != 0) {
+			// Error description
+			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
+			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
+			if (DEBUG) Serial.printf("[DEBUG] ECDH_Curve25519_ComputeSharedSecret failed to read private key: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			// Free
+			mbedtls_ecp_group_free(&ecpGroup);
+			mbedtls_mpi_free(&shared_secret);
+			mbedtls_mpi_free(&private_key);
+			mbedtls_ecp_point_free(&server_public);
+			return std::move(sharedSecret);
+		}
+
+		// Public key received (only X must be filled!)
+		tempBuffer = BriandUtils::VectorToArray(serverPublic);
+		ret = mbedtls_mpi_read_binary(&server_public.X, tempBuffer.get(), serverPublic->size());
+		tempBuffer.reset();
+		if (ret != 0) {
+			// Error description
+			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
+			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
+			if (DEBUG) Serial.printf("[DEBUG] ECDH_Curve25519_ComputeSharedSecret failed to read public key: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			// Free
+			mbedtls_ecp_group_free(&ecpGroup);
+			mbedtls_mpi_free(&shared_secret);
+			mbedtls_mpi_free(&private_key);
+			mbedtls_ecp_point_free(&server_public);
+			return std::move(sharedSecret);
+		}
+
+		// Ensure that this point is non-infinity
+		mbedtls_mpi_lset(&server_public.Z, 1);
+
+		// Perform the shared secret as EXP(serverpublic, privatekey) or, in curve25519 language the multiplication of serverpublic*privatekey
+		ret = mbedtls_ecdh_compute_shared(&ecpGroup, &shared_secret, &server_public, &private_key, NULL, NULL);
+		if (ret != 0) {
+			// Error description
+			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
+			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
+			if (DEBUG) Serial.printf("[DEBUG] ECDH_Curve25519_ComputeSharedSecret failed to compute shared secret: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			// Free
+			mbedtls_ecp_group_free(&ecpGroup);
+			mbedtls_mpi_free(&shared_secret);
+			mbedtls_mpi_free(&private_key);
+			mbedtls_ecp_point_free(&server_public);
+			return std::move(sharedSecret);
+		}
+
+		// Save the result
+		unsigned int sharedSecretSize = mbedtls_mpi_size(&shared_secret);
+		tempBuffer = BriandUtils::GetOneOldBuffer(sharedSecretSize);
+		ret = mbedtls_mpi_write_binary(&shared_secret, tempBuffer.get(), sharedSecretSize);
+		if (ret != 0) {
+			// Error description
+			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
+			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
+			if (DEBUG) Serial.printf("[DEBUG] ECDH_Curve25519_ComputeSharedSecret failed to write out the shared secret: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			// Free
+			mbedtls_ecp_group_free(&ecpGroup);
+			mbedtls_mpi_free(&shared_secret);
+			mbedtls_mpi_free(&private_key);
+			mbedtls_ecp_point_free(&server_public);
+			return std::move(sharedSecret);
+		}
+
+		// Free
+		mbedtls_ecp_group_free(&ecpGroup);
+		mbedtls_mpi_free(&shared_secret);
+		mbedtls_mpi_free(&private_key);
+		mbedtls_ecp_point_free(&server_public);
+
+		// Copy data
+		sharedSecret->insert(sharedSecret->begin(), tempBuffer.get(), tempBuffer.get() + sharedSecretSize); // safe!
+		tempBuffer.reset();
+
+		return std::move(sharedSecret);
 	}
 
 
@@ -559,93 +662,100 @@ namespace Briand {
 
 		auto secret_input = make_unique<vector<unsigned char>>();
 
+		auto tempVector = BriandTorCryptoUtils::ECDH_Curve25519_ComputeSharedSecret(relay.CREATED_EXTENDED_RESPONSE_SERVER_PK, relay.CURVE25519_PRIVATE_KEY);
+		if (tempVector->size() == 0) {
+			if (DEBUG) Serial.println("[DEBUG] NtorHandshakeComplete: shared secret failed to compute: EXP(Y,x)!");
+			return false;
+		}
+		
+		if (DEBUG) {
+			Serial.printf("[DEBUG] NtorHandshakeComplete: EXP(Y,x) = ");
+			BriandUtils::PrintByteBuffer(*tempVector.get());
+		}
 
+		// Append EXP(Y,x)
+		secret_input->insert(secret_input->end(), tempVector->begin(), tempVector->end());
+		tempVector.reset();
+
+		auto ntorKeyVec = BriandTorCryptoUtils::Base64Decode(*relay.descriptorNtorOnionKey.get());
+		tempVector = BriandTorCryptoUtils::ECDH_Curve25519_ComputeSharedSecret(ntorKeyVec, relay.CURVE25519_PRIVATE_KEY);
+		if (tempVector->size() == 0) {
+			if (DEBUG) Serial.println("[DEBUG] NtorHandshakeComplete: shared secret failed to compute: EXP(B,x)!");
+			return false;
+		}
+
+		if (DEBUG) {
+			Serial.printf("[DEBUG] NtorHandshakeComplete: EXP(B,x) = ");
+			BriandUtils::PrintByteBuffer(*tempVector.get());
+		}
+		
+		// Append EXP(B,x)
+		secret_input->insert(secret_input->end(), tempVector->begin(), tempVector->end());
+		tempVector.reset();
+
+		// Append the fingerprint (ID)
+		auto fingerprintVector = BriandUtils::HexStringToVector(*relay.fingerprint.get(), "");
+		secret_input->insert(secret_input->end(), fingerprintVector->begin(), fingerprintVector->end());
+		// Append the ntorKey (B)
+		secret_input->insert(secret_input->end(), ntorKeyVec->begin(), ntorKeyVec->end());
+		// Append X (my public key)
+		secret_input->insert(secret_input->end(), relay.CURVE25519_PUBLIC_KEY->begin(), relay.CURVE25519_PUBLIC_KEY->end());
+		// Append Y (relay's public key)
+		secret_input->insert(secret_input->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->begin(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->end());
+		// Append PROTOID
+		secret_input->insert(secret_input->end(), PROTOID->begin(), PROTOID->end());
+
+		if (DEBUG)  {
+			Serial.printf("[DEBUG] NtorHandshakeComplete (complete) secret_input: ");
+			BriandUtils::PrintByteBuffer(*secret_input.get(), secret_input->size(), secret_input->size());
+		}
+
+		/*	KEY_SEED = H(secret_input, t_key) */
+
+		relay.KEYSEED = GetDigest_HMAC_SHA256(secret_input, t_key);
+
+		if (DEBUG)  {
+			Serial.printf("[DEBUG] NtorHandshakeComplete KEYSEED: ");
+			BriandUtils::PrintByteBuffer(*relay.KEYSEED.get(), relay.KEYSEED->size(), relay.KEYSEED->size());
+		}
+
+		/* verify = H(secret_input, t_verify) */
+
+		auto verify = GetDigest_HMAC_SHA256(secret_input, t_verify);
+
+		/* auth_input = verify | ID | B | Y | X | PROTOID | "Server" */
+		
+		auto auth_input = make_unique<vector<unsigned char>>();
+		auth_input->insert(auth_input->end(), verify->begin(), verify->end());
+		auth_input->insert(auth_input->end(), fingerprintVector->begin(), fingerprintVector->end());
+		auth_input->insert(auth_input->end(), ntorKeyVec->begin(), ntorKeyVec->end());
+		auth_input->insert(auth_input->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->begin(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->end());
+		auth_input->insert(auth_input->end(), relay.CURVE25519_PUBLIC_KEY->begin(), relay.CURVE25519_PUBLIC_KEY->end());
+		auth_input->insert(auth_input->end(), PROTOID->begin(), PROTOID->end());
+		auto serverStringVector = BriandUtils::HexStringToVector("", "Server");
+		auth_input->insert(auth_input->end(), serverStringVector->begin(), serverStringVector->end());
+
+		/* The client verifies that AUTH == H(auth_input, t_mac). */
+		auto auth_verify = GetDigest_HMAC_SHA256(auth_input, t_mac);
+		if (auth_verify->size() != relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size()) {
+			Serial.println("[DEBUG] NtorHandshakeComplete Error, AUTH size and H(auth_input, t_mac) size does not match!");
+			return false;
+		}
+		if (!std::equal(auth_verify->begin(), auth_verify->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH->begin())) {
+			Serial.println("[DEBUG] NtorHandshakeComplete Error, AUTH and H(auth_input, t_mac) not matching!");
+			return false;
+		}
+
+		if (DEBUG) Serial.println("[DEBUG] NtorHandshakeComplete Relay response to CREATE2/EXTEND2 verified (success).");
+	
 		return false;
 
-		// // EXP(Y,x) ===> Compute the shared secret by giving Y as input and my private key (my context)
-		// auto ExpYx = ECDH_CURVE25519_ComputeShared(relay.CREATED_EXTENDED_RESPONSE_SERVER_PK, relay);
-		// if (ExpYx->size() == 0) {
-		// 	Serial.println("[DEBUG] NtorHandshakeComplete: failed to compute EXP(Y,x) !");
-		// 	return false;
-		// }
-		
-		// // Append EXP(Y,x) and free
-		// secret_input->insert(secret_input->end(), ExpYx->begin(), ExpYx->end());
-		// ExpYx.reset();
-
-		// // EXP(B,x) ===> Compute the shared secret by giving B (the onion key!) as input and my private key (my context)
-		// auto ntorKeyVec = Base64Decode(*relay.descriptorNtorOnionKey.get());
-		// auto ExpBx = ECDH_CURVE25519_ComputeShared(ntorKeyVec, relay);
-		// if (ExpBx->size() == 0) {
-		// 	Serial.println("[DEBUG] NtorHandshakeComplete: failed to compute EXP(B,x) !");
-		// 	return false;
-		// }
-
-		// // Append EXP(B,x) and free
-		// secret_input->insert(secret_input->end(), ExpBx->begin(), ExpBx->end());
-		// ExpBx.reset();
-
-		// // Append the fingerprint (ID)
-		// auto fingerprintVector = BriandUtils::HexStringToVector(*relay.fingerprint.get(), "");
-		// secret_input->insert(secret_input->end(), fingerprintVector->begin(), fingerprintVector->end());
-		// // Append the ntorKey (B)
-		// secret_input->insert(secret_input->end(), ntorKeyVec->begin(), ntorKeyVec->end());
-		// // Append X (my public key)
-		// secret_input->insert(secret_input->end(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->begin(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->end());
-		// // Append Y (relay's public key)
-		// secret_input->insert(secret_input->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->begin(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->end());
-		// // Append PROTOID
-		// secret_input->insert(secret_input->end(), PROTOID->begin(), PROTOID->end());
-
-		// if (DEBUG)  {
-		// 	Serial.printf("[DEBUG] secret_input: ");
-		// 	BriandUtils::PrintByteBuffer(*secret_input.get(), secret_input->size(), secret_input->size());
-		// }
-
-		// /*	KEY_SEED = H(secret_input, t_key) */
-
-		// relay.KEYSEED = GetDigest_HMAC_SHA256(secret_input, t_key);
-
-		// if (DEBUG)  {
-		// 	Serial.printf("[DEBUG] KEYSEED: ");
-		// 	BriandUtils::PrintByteBuffer(*relay.KEYSEED.get(), relay.KEYSEED->size(), relay.KEYSEED->size());
-		// }
-
-		// /* verify = H(secret_input, t_verify) */
-
-		// auto verify = GetDigest_HMAC_SHA256(secret_input, t_verify);
-
-		// /* auth_input = verify | ID | B | Y | X | PROTOID | "Server" */
-		
-		// auto auth_input = make_unique<vector<unsigned char>>();
-		// auth_input->insert(auth_input->begin(), verify->begin(), verify->end());
-		// auth_input->insert(auth_input->end(), fingerprintVector->begin(), fingerprintVector->end());
-		// auth_input->insert(auth_input->end(), ntorKeyVec->begin(), ntorKeyVec->end());
-		// auth_input->insert(auth_input->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->begin(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->end());
-		// auth_input->insert(auth_input->end(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->begin(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->end());
-		// auth_input->insert(auth_input->end(), PROTOID->begin(), PROTOID->end());
-		// auto serverStringVector = BriandUtils::HexStringToVector("", "Server");
-		// auth_input->insert(auth_input->end(), serverStringVector->begin(), serverStringVector->end());
-
-		// /* The client verifies that AUTH == H(auth_input, t_mac). */
-		// auto auth_verify = GetDigest_HMAC_SHA256(auth_input, t_mac);
-		// if (auth_verify->size() != relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size()) {
-		// 	Serial.println("[DEBUG] Error, AUTH size and H(auth_input, t_mac) size does not match!");
-		// 	return false;
-		// }
-		// if (!std::equal(auth_verify->begin(), auth_verify->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH->begin())) {
-		// 	Serial.println("[DEBUG] Error, AUTH and H(auth_input, t_mac) not matching!");
-		// 	return false;
-		// }
-
-		// if (DEBUG) Serial.println("[DEBUG] Relay response to CREATE2/EXTEND2 verified (success).");
-	
 		/*
 			The client then checks Y is in G^* =======>>>> Both parties check that none of the EXP() operations produced the 
 			point at infinity. [NOTE: This is an adequate replacement for checking Y for group membership, if the group is curve25519.]
 		*/
 
-		// This is satisfied when Z is set to 1 (see ECDH_CURVE25519_ComputeShared function body)
+		// This is satisfied when Z is set to 1 (see ECDH_Curve25519_ComputeSharedSecret function body)
 
 		/* 
 			Both parties now have a shared value for KEY_SEED.  They expand this

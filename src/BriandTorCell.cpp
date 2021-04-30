@@ -593,7 +593,7 @@ namespace Briand {
 		*/
 
 		// Generate Curve25519 keys
-		if (!BriandTorCryptoUtils::Curve25519_GenKeys(relay)) {
+		if (!BriandTorCryptoUtils::ECDH_Curve25519_GenKeys(relay)) {
 			if (DEBUG) Serial.println("[DEBUG] CREATE2 construction failed because Curve25519 key generation failed.");
 			return false;
 		}

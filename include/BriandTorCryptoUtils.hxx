@@ -94,11 +94,19 @@ namespace Briand {
 		static unique_ptr<vector<unsigned char>> Base64Decode(const string& input);
 
 		/**
-		 * Method generates public/private keypair from Curve25519 as Tor specifications, saves to relay
+		 * Method generates public/private ECDH keypair from Curve25519 as Tor specifications, saves to relay
 		 * @param relay The relay where to save generated keys
 		 * @return true on success, false otherwise.
 		*/
-		static bool Curve25519_GenKeys(BriandTorRelay& relay);
+		static bool ECDH_Curve25519_GenKeys(BriandTorRelay& relay);
+
+		/**
+		 * Method calculates the shared secret, given the private key and the server's public key. In Tor's equals to EXP(Y,x)
+		 * @param serverPublic The server public key response (Y)
+		 * @param privateKey The private key generated (x)
+		 * @return Pointer to the shared secret (empty if fails!)
+		*/
+		static unique_ptr<vector<unsigned char>> ECDH_Curve25519_ComputeSharedSecret(const unique_ptr<vector<unsigned char>>& serverPublic, const unique_ptr<vector<unsigned char>>& privateKey);
 
 		/**
 		 * Method generates keypair and saves informations (keys and client to server vector) on given relay

@@ -1,6 +1,7 @@
 # Development status
 
 ## Next steps
+* Add last_working_directory auth as static
 * Find a way to get a small-size official consensus from directories (and remove ArduinoJson library)
 * Simplify code in TorCircuit class
 * Authenticate cell? => Prepare stub method to authenticate client
