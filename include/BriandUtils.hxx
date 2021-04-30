@@ -87,18 +87,18 @@ namespace Briand
 		 * DEBUG Method to print raw bytes to serial output (hex format)
 		 * @param buffer the buffer to be printed (vector)
 		 * @param bytesToPrint number of buffer bytes to print (0 to print all)
-		 * @param newLineAfterBytes print a new line after N bytes
+		 * @param newLineAfterBytes print a new line after N bytes (0 to print all, default)
 		*/
-		static void PrintByteBuffer(const vector<unsigned char>& buffer, const short& newLineAfterBytes = 8, const unsigned int& bytesToPrint = 0);
+		static void PrintByteBuffer(const vector<unsigned char>& buffer, const short& newLineAfterBytes = 0, const unsigned int& bytesToPrint = 0);
 
 		/**
 		 * DEBUG Method to print raw bytes to serial output (hex format)
 		 * @param buffer the buffer to be printed (unsigned char[])
 		 * @param size the buffer size
-		 * @param bytesToPrint number of buffer bytes to print (0 to print all)
-		 * @param newLineAfterBytes print a new line after N bytes
+		 * @param bytesToPrint number of buffer bytes to print (0 to print all, default)
+		 * @param newLineAfterBytes print a new line after N bytes (0 to print all, default)
 		*/
-		static void PrintOldStyleByteBuffer(unsigned char buffer[], const unsigned int& size, const short& newLineAfterBytes = 8, const unsigned int& bytesToPrint = 0);
+		static void PrintOldStyleByteBuffer(unsigned char buffer[], const unsigned int& size, const short& newLineAfterBytes = 0, const unsigned int& bytesToPrint = 0);
 
 		/**
 		 * Convert a command to a readable string

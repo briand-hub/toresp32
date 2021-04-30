@@ -592,9 +592,9 @@ namespace Briand {
 			x,X = KEYGEN()
 		*/
 
-		// Generate DH Curve25519 keys
-		if (!BriandTorCryptoUtils::ECDH_CURVE25519_GenKeys(relay)) {
-			if (DEBUG) Serial.println("[DEBUG] CREATE2 construction failed because ECDH key generation fails.");
+		// Generate Curve25519 keys
+		if (!BriandTorCryptoUtils::Curve25519_GenKeys(relay)) {
+			if (DEBUG) Serial.println("[DEBUG] CREATE2 construction failed because Curve25519 key generation failed.");
 			return false;
 		}
 
@@ -641,11 +641,11 @@ namespace Briand {
 
 		// Append the CLIENT_PK
 		// Check
-		if (relay.ECDH_CURVE25519_CLIENT_TO_SERVER->size() != G_LENGTH) {
-			if (DEBUG) Serial.printf("[DEBUG] CREATE2 construction failed because ECDH size was expected to be %u bytes but has %u\n", G_LENGTH, relay.ECDH_CURVE25519_CLIENT_TO_SERVER->size());
+		if (relay.CURVE25519_PUBLIC_KEY->size() != G_LENGTH) {
+			if (DEBUG) Serial.printf("[DEBUG] CREATE2 construction failed because Curve25519 size was expected to be %u bytes but has %u\n", G_LENGTH, relay.CURVE25519_PUBLIC_KEY->size());
 			return false;
 		}
-		this->AppendBytesToPayload(*relay.ECDH_CURVE25519_CLIENT_TO_SERVER.get());
+		this->AppendBytesToPayload(*relay.CURVE25519_PUBLIC_KEY.get());
 
 		if (DEBUG) Serial.println("[DEBUG] CREATE2 cell built with success.");
 

@@ -266,7 +266,7 @@ namespace Briand
 		return output;
 	}
 
-	void BriandUtils::PrintByteBuffer(const vector<unsigned char>& buffer, const short& newLineAfterBytes /* = 8 */, const unsigned int& bytesToPrint /* = 0 */) {
+	void BriandUtils::PrintByteBuffer(const vector<unsigned char>& buffer, const short& newLineAfterBytes /* = 0 */, const unsigned int& bytesToPrint /* = 0 */) {
 		unsigned int limit;
 
 		if (bytesToPrint > 0 && bytesToPrint < buffer.size()) limit = bytesToPrint;
@@ -274,12 +274,12 @@ namespace Briand
 
 		for (unsigned int i=0; i < limit; i++) {
 			Serial.printf("%02X", buffer.at(i));
-			if (i > 0 && i % newLineAfterBytes == 0) Serial.print("\n");
+			if (newLineAfterBytes > 0 && i > 0 && i % newLineAfterBytes == 0) Serial.print("\n");
 		}
 		Serial.print("\n");
 	}
 
-	void BriandUtils::PrintOldStyleByteBuffer(unsigned char buffer[], const unsigned int& size, const short& newLineAfterBytes /* = 8 */, const unsigned int& bytesToPrint /* = 0 */) {
+	void BriandUtils::PrintOldStyleByteBuffer(unsigned char buffer[], const unsigned int& size, const short& newLineAfterBytes /* = 0 */, const unsigned int& bytesToPrint /* = 0 */) {
 		unsigned int limit;
 
 		if (bytesToPrint > 0 && bytesToPrint < size) limit = bytesToPrint;
@@ -287,7 +287,7 @@ namespace Briand
 
 		for (unsigned int i=0; i < limit; i++) {
 			Serial.printf("%02X", buffer[i]);
-			if (i > 0 && i % newLineAfterBytes == 0) Serial.print("\n");
+			if (newLineAfterBytes > 0 && i > 0 && i % newLineAfterBytes == 0) Serial.print("\n");
 		}
 		Serial.print("\n");
 	}

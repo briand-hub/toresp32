@@ -6,6 +6,7 @@
 * Authenticate cell? => Prepare stub method to authenticate client
 
 ## 
+* Key exchange was wrong, doing corrections
 * Rename CertificateUtils class to CryptoUtils class
 
 ## 2021-04-25

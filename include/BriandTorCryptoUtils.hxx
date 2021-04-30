@@ -94,19 +94,11 @@ namespace Briand {
 		static unique_ptr<vector<unsigned char>> Base64Decode(const string& input);
 
 		/**
-		 * Method generates keypair and saves informations (keys and client to server vector) on given relay
-		 * @param relay The destination relay for handshake
-		 * @return true if success, false instead
+		 * Method generates public/private keypair from Curve25519 as Tor specifications, saves to relay
+		 * @param relay The relay where to save generated keys
+		 * @return true on success, false otherwise.
 		*/
-		static bool ECDH_CURVE25519_GenKeys(BriandTorRelay& relay);
-
-		/**
-		 * Method computes the shared secret after an ECDH operation 
-		 * @param serverToClient The ECDH server's response
-		 * @param relay The relay that answered for handshake
-		 * @return Pointer to the shared secret vector (bytes), empty if fails.
-		*/
-		static unique_ptr<vector<unsigned char>> ECDH_CURVE25519_ComputeShared(const unique_ptr<vector<unsigned char>>& serverToClient, const BriandTorRelay& relay);
+		static bool Curve25519_GenKeys(BriandTorRelay& relay);
 
 		/**
 		 * Method generates keypair and saves informations (keys and client to server vector) on given relay
@@ -115,6 +107,21 @@ namespace Briand {
 		 * @return true if success, false instead. If everything is ok, fields KEY_***** are populated.
 		*/
 		static bool NtorHandshakeComplete(BriandTorRelay& relay);
+
+		/** WRONG METHOD
+		 * Method generates keypair and saves informations (keys and client to server vector) on given relay
+		 * @param relay The destination relay for handshake
+		 * @return true if success, false instead
+		*/
+		/* WRONG METHOD static bool ECDH_CURVE25519_GenKeys(BriandTorRelay& relay); */
+
+		/** WRONG METHOD
+		 * Method computes the shared secret after an ECDH operation 
+		 * @param serverToClient The ECDH server's response
+		 * @param relay The relay that answered for handshake
+		 * @return Pointer to the shared secret vector (bytes), empty if fails.
+		*/
+		/* WRONG METHOD  static unique_ptr<vector<unsigned char>> ECDH_CURVE25519_ComputeShared(const unique_ptr<vector<unsigned char>>& serverToClient, const BriandTorRelay& relay); */
 
 	};
 }

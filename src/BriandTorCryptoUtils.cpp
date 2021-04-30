@@ -37,6 +37,7 @@
 #include <mbedtls/md_internal.h>
 #include <mbedtls/pk.h>
 #include <mbedtls/base64.h>
+#include <mbedtls/ecp.h>
 
 /* LibSodium found for Ed25519 signatures! It's on framwork :-D */
 #include <sodium.h>
@@ -404,6 +405,356 @@ namespace Briand {
 		return output;
 	}
 
+	bool BriandTorCryptoUtils::Curve25519_GenKeys(BriandTorRelay& relay) {
+		// using mbedtls
+
+		// If output had a previous initialization, clear it!
+		if (relay.CURVE25519_PRIVATE_KEY != nullptr) relay.CURVE25519_PRIVATE_KEY.reset();
+		if (relay.CURVE25519_PUBLIC_KEY != nullptr) relay.CURVE25519_PUBLIC_KEY.reset();
+
+		// Structures needed
+		mbedtls_entropy_context entropy;
+		mbedtls_ctr_drbg_context ctr_drbg;
+
+		string pers = "BriandTorCryptoUtils::Curve25519_GenKeys";
+		int ret;
+
+		// Initialize structures
+		mbedtls_ctr_drbg_init( &ctr_drbg );
+
+		// Initialize random number generation
+		mbedtls_entropy_init( &entropy );
+		ret = mbedtls_ctr_drbg_seed( &ctr_drbg, mbedtls_entropy_func, &entropy, reinterpret_cast<const unsigned char*>(pers.c_str()), pers.length() );
+		if (ret != 0) {
+			// Error description
+			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
+			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
+			if (DEBUG) Serial.printf("[DEBUG] Curve25519_GenKeys failed initialize RNG: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			// Free
+			mbedtls_ctr_drbg_free( &ctr_drbg );
+			mbedtls_entropy_free( &entropy );
+			return false;
+		}
+
+		// Key generation
+		auto keypair = make_unique<mbedtls_ecp_keypair>();
+		ret = mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_CURVE25519, keypair.get(), mbedtls_ctr_drbg_random, &ctr_drbg);
+		if (ret != 0) {
+			// Error description
+			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
+			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
+			if (DEBUG) Serial.printf("[DEBUG] Curve25519_GenKeys failed on generating keys: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			// Free
+			mbedtls_ctr_drbg_free( &ctr_drbg );
+			mbedtls_entropy_free( &entropy );
+			return false;
+		}
+
+
+		// d contains the PRIVATE key, Q contains the public key (Q.X is the required field).
+		unsigned int keyBufSize;
+		keyBufSize = mbedtls_mpi_size(&keypair->d);
+		auto keyBuf = make_unique<unsigned char[]>( keyBufSize );
+		mbedtls_mpi_write_binary(&keypair->d, keyBuf.get(), keyBufSize);
+		relay.CURVE25519_PRIVATE_KEY = BriandUtils::ArrayToVector(keyBuf, keyBufSize);
+
+		//unsigned long int oLen;
+		keyBufSize = mbedtls_mpi_size(&keypair->Q.X);
+		keyBuf = make_unique<unsigned char[]>( keyBufSize );
+		//keyBufSize = mbedtls_ecp_point_write_binary(&keypair->grp, &keypair->Q, MBEDTLS_ECP_PF_COMPRESSED, &oLen, keyBuf.get(), keyBufSize);
+		mbedtls_mpi_write_binary(&keypair->Q.X, keyBuf.get(), keyBufSize);
+		relay.CURVE25519_PUBLIC_KEY = BriandUtils::ArrayToVector(keyBuf, keyBufSize);
+
+		// Free
+
+		mbedtls_ctr_drbg_free( &ctr_drbg );
+		mbedtls_entropy_free( &entropy );
+
+		return true;
+	}
+
+
+	bool BriandTorCryptoUtils::NtorHandshakeComplete(BriandTorRelay& relay) {
+
+		// Check if fields are OK (should be but...)
+
+		if (relay.CURVE25519_PRIVATE_KEY == nullptr) {
+			Serial.println("[DEBUG] NtorHandshakeComplete: error! Relay CURVE25519_PRIVATE_KEY is null!");
+			return false;
+		}
+		if (relay.CURVE25519_PUBLIC_KEY == nullptr) {
+			Serial.println("[DEBUG] NtorHandshakeComplete: error! Relay CURVE25519_PUBLIC_KEY context is null!");
+			return false;
+		}
+		if (relay.CREATED_EXTENDED_RESPONSE_SERVER_PK == nullptr) {
+			Serial.println("[DEBUG] NtorHandshakeComplete: error! CREATED_EXTENDED_RESPONSE_SERVER_PK context is null!");
+			return false;
+		}
+		if (relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH == nullptr) {
+			Serial.println("[DEBUG] NtorHandshakeComplete: error! CREATED_EXTENDED_RESPONSE_SERVER_AUTH context is null!");
+			return false;
+		}
+
+		// Ok, let's go
+
+		/*
+			In this section, define:
+
+			H(x,t) as HMAC_SHA256 with message x and key t.
+			H_LENGTH  = 32.
+			ID_LENGTH = 20.
+			G_LENGTH  = 32
+			PROTOID   = "ntor-curve25519-sha256-1"
+			t_mac     = PROTOID | ":mac"
+			t_key     = PROTOID | ":key_extract"
+			t_verify  = PROTOID | ":verify"
+			MULT(a,b) = the multiplication of the curve25519 point 'a' by the
+						scalar 'b'.
+			G         = The preferred base point for curve25519 ([9])
+			KEYGEN()  = The curve25519 key generation algorithm, returning
+						a private/public keypair.
+			m_expand  = PROTOID | ":key_expand"
+			KEYID(A)  = A
+		*/
+
+		// The "|" operator is a simple concatenation of the bytes
+
+		constexpr unsigned int G_LENGTH = 32;
+		constexpr unsigned int H_LENGTH = 32;
+		string protoid_string = "ntor-curve25519-sha256-1";
+
+		// using mbedtls works better the old-buffer version ....
+		auto PROTOID = BriandUtils::HexStringToVector("", protoid_string);
+		auto t_mac = BriandUtils::HexStringToVector("", protoid_string + ":mac");
+		auto t_key = BriandUtils::HexStringToVector("", protoid_string + ":key_extract");
+		auto t_verify = BriandUtils::HexStringToVector("", protoid_string + ":verify");
+		auto m_expand = BriandUtils::HexStringToVector("", protoid_string + ":key_expand");
+		auto ID = BriandTorCryptoUtils::Base64Decode(*relay.descriptorNtorOnionKey.get());
+
+		/*
+			The server's handshake reply is:
+
+			SERVER_PK   Y                       [G_LENGTH bytes]
+			AUTH        H(auth_input, t_mac)    [H_LENGTH bytes]
+		
+			and computes:
+			secret_input = EXP(Y,x) | EXP(B,x) | ID | B | X | Y | PROTOID
+		*/
+
+		if (DEBUG) {
+			Serial.printf("[DEBUG] X = My Curve25519 public key: ");
+			BriandUtils::PrintByteBuffer(*relay.CURVE25519_PUBLIC_KEY.get());
+			Serial.printf("[DEBUG] x = My Curve25519 private key: ");
+			BriandUtils::PrintByteBuffer(*relay.CURVE25519_PRIVATE_KEY.get());
+			Serial.printf("[DEBUG] B = Relay's NTOR key: ");
+			BriandUtils::PrintByteBuffer(*ID.get());
+			Serial.printf("[DEBUG] Y = Relay's public key: ");
+			BriandUtils::PrintByteBuffer(*relay.CREATED_EXTENDED_RESPONSE_SERVER_PK.get());
+			Serial.printf("[DEBUG] ID = Relay's fingerprint: %s\n", relay.fingerprint->c_str());
+			Serial.printf("[DEBUG] Relay's AUTH: ");
+			BriandUtils::PrintByteBuffer(*relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH.get());
+			Serial.printf("[DEBUG] PROTOID: ");
+			BriandUtils::PrintByteBuffer(*PROTOID.get());
+		}
+
+		auto secret_input = make_unique<vector<unsigned char>>();
+
+
+		return false;
+
+		// // EXP(Y,x) ===> Compute the shared secret by giving Y as input and my private key (my context)
+		// auto ExpYx = ECDH_CURVE25519_ComputeShared(relay.CREATED_EXTENDED_RESPONSE_SERVER_PK, relay);
+		// if (ExpYx->size() == 0) {
+		// 	Serial.println("[DEBUG] NtorHandshakeComplete: failed to compute EXP(Y,x) !");
+		// 	return false;
+		// }
+		
+		// // Append EXP(Y,x) and free
+		// secret_input->insert(secret_input->end(), ExpYx->begin(), ExpYx->end());
+		// ExpYx.reset();
+
+		// // EXP(B,x) ===> Compute the shared secret by giving B (the onion key!) as input and my private key (my context)
+		// auto ntorKeyVec = Base64Decode(*relay.descriptorNtorOnionKey.get());
+		// auto ExpBx = ECDH_CURVE25519_ComputeShared(ntorKeyVec, relay);
+		// if (ExpBx->size() == 0) {
+		// 	Serial.println("[DEBUG] NtorHandshakeComplete: failed to compute EXP(B,x) !");
+		// 	return false;
+		// }
+
+		// // Append EXP(B,x) and free
+		// secret_input->insert(secret_input->end(), ExpBx->begin(), ExpBx->end());
+		// ExpBx.reset();
+
+		// // Append the fingerprint (ID)
+		// auto fingerprintVector = BriandUtils::HexStringToVector(*relay.fingerprint.get(), "");
+		// secret_input->insert(secret_input->end(), fingerprintVector->begin(), fingerprintVector->end());
+		// // Append the ntorKey (B)
+		// secret_input->insert(secret_input->end(), ntorKeyVec->begin(), ntorKeyVec->end());
+		// // Append X (my public key)
+		// secret_input->insert(secret_input->end(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->begin(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->end());
+		// // Append Y (relay's public key)
+		// secret_input->insert(secret_input->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->begin(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->end());
+		// // Append PROTOID
+		// secret_input->insert(secret_input->end(), PROTOID->begin(), PROTOID->end());
+
+		// if (DEBUG)  {
+		// 	Serial.printf("[DEBUG] secret_input: ");
+		// 	BriandUtils::PrintByteBuffer(*secret_input.get(), secret_input->size(), secret_input->size());
+		// }
+
+		// /*	KEY_SEED = H(secret_input, t_key) */
+
+		// relay.KEYSEED = GetDigest_HMAC_SHA256(secret_input, t_key);
+
+		// if (DEBUG)  {
+		// 	Serial.printf("[DEBUG] KEYSEED: ");
+		// 	BriandUtils::PrintByteBuffer(*relay.KEYSEED.get(), relay.KEYSEED->size(), relay.KEYSEED->size());
+		// }
+
+		// /* verify = H(secret_input, t_verify) */
+
+		// auto verify = GetDigest_HMAC_SHA256(secret_input, t_verify);
+
+		// /* auth_input = verify | ID | B | Y | X | PROTOID | "Server" */
+		
+		// auto auth_input = make_unique<vector<unsigned char>>();
+		// auth_input->insert(auth_input->begin(), verify->begin(), verify->end());
+		// auth_input->insert(auth_input->end(), fingerprintVector->begin(), fingerprintVector->end());
+		// auth_input->insert(auth_input->end(), ntorKeyVec->begin(), ntorKeyVec->end());
+		// auth_input->insert(auth_input->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->begin(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->end());
+		// auth_input->insert(auth_input->end(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->begin(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->end());
+		// auth_input->insert(auth_input->end(), PROTOID->begin(), PROTOID->end());
+		// auto serverStringVector = BriandUtils::HexStringToVector("", "Server");
+		// auth_input->insert(auth_input->end(), serverStringVector->begin(), serverStringVector->end());
+
+		// /* The client verifies that AUTH == H(auth_input, t_mac). */
+		// auto auth_verify = GetDigest_HMAC_SHA256(auth_input, t_mac);
+		// if (auth_verify->size() != relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size()) {
+		// 	Serial.println("[DEBUG] Error, AUTH size and H(auth_input, t_mac) size does not match!");
+		// 	return false;
+		// }
+		// if (!std::equal(auth_verify->begin(), auth_verify->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH->begin())) {
+		// 	Serial.println("[DEBUG] Error, AUTH and H(auth_input, t_mac) not matching!");
+		// 	return false;
+		// }
+
+		// if (DEBUG) Serial.println("[DEBUG] Relay response to CREATE2/EXTEND2 verified (success).");
+	
+		/*
+			The client then checks Y is in G^* =======>>>> Both parties check that none of the EXP() operations produced the 
+			point at infinity. [NOTE: This is an adequate replacement for checking Y for group membership, if the group is curve25519.]
+		*/
+
+		// This is satisfied when Z is set to 1 (see ECDH_CURVE25519_ComputeShared function body)
+
+		/* 
+			Both parties now have a shared value for KEY_SEED.  They expand this
+			into the keys needed for the Tor relay protocol, using the KDF
+			described in 5.2.2 and the tag m_expand. 
+
+			[...]
+
+			
+			For newer KDF needs, Tor uses the key derivation function HKDF from
+			RFC5869, instantiated with SHA256.  (This is due to a construction
+			from Krawczyk.)  The generated key material is:
+
+				K = K_1 | K_2 | K_3 | ...
+
+				Where H(x,t) is HMAC_SHA256 with value x and key t
+					and K_1     = H(m_expand | INT8(1) , KEY_SEED )
+					and K_(i+1) = H(K_i | m_expand | INT8(i+1) , KEY_SEED )
+					and m_expand is an arbitrarily chosen value,
+					and INT8(i) is a octet with the value "i".
+
+			In RFC5869's vocabulary, this is HKDF-SHA256 with info == m_expand,
+			salt == t_key, and IKM == secret_input.
+		*/
+
+		// Clear and simple:
+
+		// if (DEBUG) Serial.print("[DEBUG] Generating keys with HKDF...");
+
+		// unsigned short KEY_LEN = 16;
+	   	// unsigned short HASH_LEN = 20;
+		// unsigned short DIGEST_LEN = 32; // TODO : did not found any reference to DIGEST_LEN size, suppose 32 with sha256
+		// unsigned short EXTRACT_TOTAL_SIZE = HASH_LEN+HASH_LEN+KEY_LEN+KEY_LEN+DIGEST_LEN;
+
+		// // Unfortunately ESP32 mbedtls has HKDF disabled.
+		// // Could be enabled editing settings.h and esp_config.h but this is not
+		// // recommended. So I wrote the function.
+		
+		// // auto hkdfBuffer = BriandUtils::GetOneOldBuffer(EXTRACT_TOTAL_SIZE);
+		// // #ifndef MBEDTLS_HKDF_C
+		// // #define MBEDTLS_HKDF_C
+		// // #endif
+		// // #include <mbedtls/hkdf.h>
+		// // mbedtls_hkdf(
+		// // 	mbedtls_md_info_from_type(MBEDTLS_MD_SHA256),
+		// // 	BriandUtils::VectorToArray(t_key).get(), t_key->size(), 
+		// // 	BriandUtils::VectorToArray(secret_input).get(), secret_input->size(), 
+		// // 	m_expand.get(), m_expand_size, 
+		// // 	hkdfBuffer.get(), EXTRACT_TOTAL_SIZE
+		// // );
+		// // auto hkdfVector = BriandUtils::ArrayToVector(hkdfBuffer, EXTRACT_TOTAL_SIZE);		
+
+
+		// auto hkdf = BriandTorCryptoUtils::Get_HKDF(m_expand, relay.KEYSEED, EXTRACT_TOTAL_SIZE); 
+		
+		// /*
+		// 	When used in the ntor handshake, the first HASH_LEN bytes form the
+		// 	forward digest Df; the next HASH_LEN form the backward digest Db; the
+		// 	next KEY_LEN form Kf, the next KEY_LEN form Kb, and the final
+		// 	DIGEST_LEN bytes are taken as a nonce to use in the place of KH in the
+		// 	hidden service protocol.  Excess bytes from K are discarded.
+   		// */
+		
+		// // Release some unused memory
+		// PROTOID.reset();
+		// t_mac.reset();
+		// t_key.reset();
+		// t_verify.reset();
+		// m_expand.reset();
+		// ntorKeyVec.reset();
+		// fingerprintVector.reset();
+		// secret_input.reset();
+		// verify.reset();
+		// serverStringVector.reset();
+		// auth_input.reset();
+		// auth_verify.reset();
+
+	   	// auto tempVector = make_unique<vector<unsigned char>>();
+
+		// tempVector->insert(tempVector->begin(), hkdf->begin(), hkdf->begin() + HASH_LEN);
+		// hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
+		// relay.KEY_ForwardDigest_Df = GetDigest_SHA1(tempVector);
+		// tempVector->clear();
+
+		// tempVector->insert(tempVector->begin(), hkdf->begin(), hkdf->begin() + HASH_LEN);
+		// hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
+		// relay.KEY_BackwardDigest_Db = GetDigest_SHA1(tempVector);
+		// tempVector->clear();
+		// tempVector.reset();
+
+		// relay.KEY_Forward_Kf = make_unique<vector<unsigned char>>();
+		// relay.KEY_Forward_Kf->insert(relay.KEY_Forward_Kf->begin(), hkdf->begin(), hkdf->begin() + KEY_LEN);
+		// hkdf->erase(hkdf->begin(), hkdf->begin() + KEY_LEN);
+
+		// relay.KEY_Backward_Kb = make_unique<vector<unsigned char>>();
+		// relay.KEY_Backward_Kb->insert(relay.KEY_Backward_Kb->begin(), hkdf->begin(), hkdf->begin() + KEY_LEN);
+		// hkdf->erase(hkdf->begin(), hkdf->begin() + KEY_LEN);
+
+		// relay.KEY_HiddenService_Nonce = make_unique<vector<unsigned char>>();
+		// relay.KEY_HiddenService_Nonce->insert(relay.KEY_HiddenService_Nonce->begin(), hkdf->begin(), hkdf->begin() + DIGEST_LEN);
+
+		// hkdf.reset();
+		
+		// if (DEBUG) Serial.print("done!\n");
+
+		return true;
+	}
+
+/* WRONG METHODS
 	bool BriandTorCryptoUtils::ECDH_CURVE25519_GenKeys(BriandTorRelay& relay) {
 		// using mbedtls
 
@@ -610,265 +961,6 @@ namespace Briand {
 
 		return std::move(sharedSecret);
 	}
-
-	bool BriandTorCryptoUtils::NtorHandshakeComplete(BriandTorRelay& relay) {
-
-		// Check if fields are OK (should be but...)
-
-		if (relay.ECDH_CURVE25519_CONTEXT == nullptr) {
-			Serial.println("[DEBUG] NtorHandshakeComplete: error! ECDH_CURVE25519_CONTEXT context is null!");
-			return false;
-		}
-		if (relay.ECDH_CURVE25519_CLIENT_TO_SERVER == nullptr) {
-			Serial.println("[DEBUG] NtorHandshakeComplete: error! ECDH_CURVE25519_CLIENT_TO_SERVER context is null!");
-			return false;
-		}
-		if (relay.CREATED_EXTENDED_RESPONSE_SERVER_PK == nullptr) {
-			Serial.println("[DEBUG] NtorHandshakeComplete: error! CREATED_EXTENDED_RESPONSE_SERVER_PK context is null!");
-			return false;
-		}
-		if (relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH == nullptr) {
-			Serial.println("[DEBUG] NtorHandshakeComplete: error! CREATED_EXTENDED_RESPONSE_SERVER_AUTH context is null!");
-			return false;
-		}
-
-		// Ok, let's go
-
-		/*
-			In this section, define:
-
-			H(x,t) as HMAC_SHA256 with message x and key t.
-			H_LENGTH  = 32.
-			ID_LENGTH = 20.
-			G_LENGTH  = 32
-			PROTOID   = "ntor-curve25519-sha256-1"
-			t_mac     = PROTOID | ":mac"
-			t_key     = PROTOID | ":key_extract"
-			t_verify  = PROTOID | ":verify"
-			MULT(a,b) = the multiplication of the curve25519 point 'a' by the
-						scalar 'b'.
-			G         = The preferred base point for curve25519 ([9])
-			KEYGEN()  = The curve25519 key generation algorithm, returning
-						a private/public keypair.
-			m_expand  = PROTOID | ":key_expand"
-			KEYID(A)  = A
-		*/
-
-		// The "|" operator is a simple concatenation of the bytes
-
-		constexpr unsigned int G_LENGTH = 32;
-		constexpr unsigned int H_LENGTH = 32;
-		string protoid_string = "ntor-curve25519-sha256-1";
-
-		// using mbedtls works better the old-buffer version ....
-		auto PROTOID = BriandUtils::HexStringToVector("", protoid_string);
-		auto t_mac = BriandUtils::HexStringToVector("", protoid_string + ":mac");
-		auto t_key = BriandUtils::HexStringToVector("", protoid_string + ":key_extract");
-		auto t_verify = BriandUtils::HexStringToVector("", protoid_string + ":verify");
-		auto m_expand = BriandUtils::HexStringToVector("", protoid_string + ":key_expand");
-
-		/*
-			The server's handshake reply is:
-
-			SERVER_PK   Y                       [G_LENGTH bytes]
-			AUTH        H(auth_input, t_mac)    [H_LENGTH bytes]
-		
-			and computes:
-			secret_input = EXP(Y,x) | EXP(B,x) | ID | B | X | Y | PROTOID
-		*/
-
-		auto secret_input = make_unique<vector<unsigned char>>();
-
-		// EXP(Y,x) ===> Compute the shared secret by giving Y as input and my private key (my context)
-		auto ExpYx = ECDH_CURVE25519_ComputeShared(relay.CREATED_EXTENDED_RESPONSE_SERVER_PK, relay);
-		if (ExpYx->size() == 0) {
-			Serial.println("[DEBUG] NtorHandshakeComplete: failed to compute EXP(Y,x) !");
-			return false;
-		}
-		
-		// Append EXP(Y,x) and free
-		secret_input->insert(secret_input->end(), ExpYx->begin(), ExpYx->end());
-		ExpYx.reset();
-
-		// EXP(B,x) ===> Compute the shared secret by giving B (the onion key!) as input and my private key (my context)
-		auto ntorKeyVec = Base64Decode(*relay.descriptorNtorOnionKey.get());
-		auto ExpBx = ECDH_CURVE25519_ComputeShared(ntorKeyVec, relay);
-		if (ExpBx->size() == 0) {
-			Serial.println("[DEBUG] NtorHandshakeComplete: failed to compute EXP(B,x) !");
-			return false;
-		}
-
-		// Append EXP(B,x) and free
-		secret_input->insert(secret_input->end(), ExpBx->begin(), ExpBx->end());
-		ExpBx.reset();
-
-		// Append the fingerprint (ID)
-		auto fingerprintVector = BriandUtils::HexStringToVector(*relay.fingerprint.get(), "");
-		secret_input->insert(secret_input->end(), fingerprintVector->begin(), fingerprintVector->end());
-		// Append the ntorKey (B)
-		secret_input->insert(secret_input->end(), ntorKeyVec->begin(), ntorKeyVec->end());
-		// Append X (my public key)
-		secret_input->insert(secret_input->end(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->begin(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->end());
-		// Append Y (relay's public key)
-		secret_input->insert(secret_input->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->begin(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->end());
-		// Append PROTOID
-		secret_input->insert(secret_input->end(), PROTOID->begin(), PROTOID->end());
-
-		if (DEBUG)  {
-			Serial.printf("[DEBUG] secret_input: ");
-			BriandUtils::PrintByteBuffer(*secret_input.get(), secret_input->size(), secret_input->size());
-		}
-
-		/*	KEY_SEED = H(secret_input, t_key) */
-
-		relay.KEYSEED = GetDigest_HMAC_SHA256(secret_input, t_key);
-
-		if (DEBUG)  {
-			Serial.printf("[DEBUG] KEYSEED: ");
-			BriandUtils::PrintByteBuffer(*relay.KEYSEED.get(), relay.KEYSEED->size(), relay.KEYSEED->size());
-		}
-
-		/* verify = H(secret_input, t_verify) */
-
-		auto verify = GetDigest_HMAC_SHA256(secret_input, t_verify);
-
-		/* auth_input = verify | ID | B | Y | X | PROTOID | "Server" */
-		
-		auto auth_input = make_unique<vector<unsigned char>>();
-		auth_input->insert(auth_input->begin(), verify->begin(), verify->end());
-		auth_input->insert(auth_input->end(), fingerprintVector->begin(), fingerprintVector->end());
-		auth_input->insert(auth_input->end(), ntorKeyVec->begin(), ntorKeyVec->end());
-		auth_input->insert(auth_input->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->begin(), relay.CREATED_EXTENDED_RESPONSE_SERVER_PK->end());
-		auth_input->insert(auth_input->end(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->begin(), relay.ECDH_CURVE25519_CLIENT_TO_SERVER->end());
-		auth_input->insert(auth_input->end(), PROTOID->begin(), PROTOID->end());
-		auto serverStringVector = BriandUtils::HexStringToVector("", "Server");
-		auth_input->insert(auth_input->end(), serverStringVector->begin(), serverStringVector->end());
-
-		/* The client verifies that AUTH == H(auth_input, t_mac). */
-		auto auth_verify = GetDigest_HMAC_SHA256(auth_input, t_mac);
-		if (auth_verify->size() != relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size()) {
-			Serial.println("[DEBUG] Error, AUTH size and H(auth_input, t_mac) size does not match!");
-			return false;
-		}
-		if (!std::equal(auth_verify->begin(), auth_verify->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH->begin())) {
-			Serial.println("[DEBUG] Error, AUTH and H(auth_input, t_mac) not matching!");
-			return false;
-		}
-
-		if (DEBUG) Serial.println("[DEBUG] Relay response to CREATE2/EXTEND2 verified (success).");
-	
-		/*
-			The client then checks Y is in G^* =======>>>> Both parties check that none of the EXP() operations produced the 
-			point at infinity. [NOTE: This is an adequate replacement for checking Y for group membership, if the group is curve25519.]
-		*/
-
-		// This is satisfied when Z is set to 1 (see ECDH_CURVE25519_ComputeShared function body)
-
-		/* 
-			Both parties now have a shared value for KEY_SEED.  They expand this
-			into the keys needed for the Tor relay protocol, using the KDF
-			described in 5.2.2 and the tag m_expand. 
-
-			[...]
-
-			
-			For newer KDF needs, Tor uses the key derivation function HKDF from
-			RFC5869, instantiated with SHA256.  (This is due to a construction
-			from Krawczyk.)  The generated key material is:
-
-				K = K_1 | K_2 | K_3 | ...
-
-				Where H(x,t) is HMAC_SHA256 with value x and key t
-					and K_1     = H(m_expand | INT8(1) , KEY_SEED )
-					and K_(i+1) = H(K_i | m_expand | INT8(i+1) , KEY_SEED )
-					and m_expand is an arbitrarily chosen value,
-					and INT8(i) is a octet with the value "i".
-
-			In RFC5869's vocabulary, this is HKDF-SHA256 with info == m_expand,
-			salt == t_key, and IKM == secret_input.
-		*/
-
-		// Clear and simple:
-
-		if (DEBUG) Serial.print("[DEBUG] Generating keys with HKDF...");
-
-		unsigned short KEY_LEN = 16;
-	   	unsigned short HASH_LEN = 20;
-		unsigned short DIGEST_LEN = 32; // TODO : did not found any reference to DIGEST_LEN size, suppose 32 with sha256
-		unsigned short EXTRACT_TOTAL_SIZE = HASH_LEN+HASH_LEN+KEY_LEN+KEY_LEN+DIGEST_LEN;
-
-		// Unfortunately ESP32 mbedtls has HKDF disabled.
-		// Could be enabled editing settings.h and esp_config.h but this is not
-		// recommended. So I wrote the function.
-		
-		// auto hkdfBuffer = BriandUtils::GetOneOldBuffer(EXTRACT_TOTAL_SIZE);
-		// #ifndef MBEDTLS_HKDF_C
-		// #define MBEDTLS_HKDF_C
-		// #endif
-		// #include <mbedtls/hkdf.h>
-		// mbedtls_hkdf(
-		// 	mbedtls_md_info_from_type(MBEDTLS_MD_SHA256),
-		// 	BriandUtils::VectorToArray(t_key).get(), t_key->size(), 
-		// 	BriandUtils::VectorToArray(secret_input).get(), secret_input->size(), 
-		// 	m_expand.get(), m_expand_size, 
-		// 	hkdfBuffer.get(), EXTRACT_TOTAL_SIZE
-		// );
-		// auto hkdfVector = BriandUtils::ArrayToVector(hkdfBuffer, EXTRACT_TOTAL_SIZE);		
-
-
-		auto hkdf = BriandTorCryptoUtils::Get_HKDF(m_expand, relay.KEYSEED, EXTRACT_TOTAL_SIZE); 
-		
-		/*
-			When used in the ntor handshake, the first HASH_LEN bytes form the
-			forward digest Df; the next HASH_LEN form the backward digest Db; the
-			next KEY_LEN form Kf, the next KEY_LEN form Kb, and the final
-			DIGEST_LEN bytes are taken as a nonce to use in the place of KH in the
-			hidden service protocol.  Excess bytes from K are discarded.
-   		*/
-		
-		// Release some unused memory
-		PROTOID.reset();
-		t_mac.reset();
-		t_key.reset();
-		t_verify.reset();
-		m_expand.reset();
-		ntorKeyVec.reset();
-		fingerprintVector.reset();
-		secret_input.reset();
-		verify.reset();
-		serverStringVector.reset();
-		auth_input.reset();
-		auth_verify.reset();
-
-	   	auto tempVector = make_unique<vector<unsigned char>>();
-
-		tempVector->insert(tempVector->begin(), hkdf->begin(), hkdf->begin() + HASH_LEN);
-		hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
-		relay.KEY_ForwardDigest_Df = GetDigest_SHA1(tempVector);
-		tempVector->clear();
-
-		tempVector->insert(tempVector->begin(), hkdf->begin(), hkdf->begin() + HASH_LEN);
-		hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
-		relay.KEY_BackwardDigest_Db = GetDigest_SHA1(tempVector);
-		tempVector->clear();
-		tempVector.reset();
-
-		relay.KEY_Forward_Kf = make_unique<vector<unsigned char>>();
-		relay.KEY_Forward_Kf->insert(relay.KEY_Forward_Kf->begin(), hkdf->begin(), hkdf->begin() + KEY_LEN);
-		hkdf->erase(hkdf->begin(), hkdf->begin() + KEY_LEN);
-
-		relay.KEY_Backward_Kb = make_unique<vector<unsigned char>>();
-		relay.KEY_Backward_Kb->insert(relay.KEY_Backward_Kb->begin(), hkdf->begin(), hkdf->begin() + KEY_LEN);
-		hkdf->erase(hkdf->begin(), hkdf->begin() + KEY_LEN);
-
-		relay.KEY_HiddenService_Nonce = make_unique<vector<unsigned char>>();
-		relay.KEY_HiddenService_Nonce->insert(relay.KEY_HiddenService_Nonce->begin(), hkdf->begin(), hkdf->begin() + DIGEST_LEN);
-
-		hkdf.reset();
-		
-		if (DEBUG) Serial.print("done!\n");
-
-		return true;
-	}
+*/
 
 }

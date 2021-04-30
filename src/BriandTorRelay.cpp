@@ -58,8 +58,8 @@ namespace Briand {
 		this->certTLSLink = nullptr;
 		this->certEd25519AuthenticateCellLink = nullptr;
 		this->certRSAEd25519CrossCertificate = nullptr;
-		this->ECDH_CURVE25519_CLIENT_TO_SERVER = nullptr;
-		this->ECDH_CURVE25519_CONTEXT = nullptr;
+		this->CURVE25519_PRIVATE_KEY = nullptr;
+		this->CURVE25519_PUBLIC_KEY = nullptr;
 		this->CREATED_EXTENDED_RESPONSE_SERVER_PK = nullptr;
 		this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH = nullptr;
 		this->KEYSEED = nullptr;
@@ -83,8 +83,8 @@ namespace Briand {
 		if(this->certTLSLink != nullptr) this->certTLSLink.reset();
 		if(this->certEd25519AuthenticateCellLink != nullptr) this->certEd25519AuthenticateCellLink.reset();
 		if(this->certRSAEd25519CrossCertificate != nullptr) this->certRSAEd25519CrossCertificate.reset();
-		if(this->ECDH_CURVE25519_CLIENT_TO_SERVER != nullptr) this->ECDH_CURVE25519_CLIENT_TO_SERVER.reset();
-		if(this->ECDH_CURVE25519_CONTEXT != nullptr) this->ECDH_CURVE25519_CONTEXT.reset();
+		if(this->CURVE25519_PRIVATE_KEY != nullptr) this->CURVE25519_PRIVATE_KEY.reset();
+		if(this->CURVE25519_PUBLIC_KEY != nullptr) this->CURVE25519_PUBLIC_KEY.reset();
 		if(this->CREATED_EXTENDED_RESPONSE_SERVER_PK != nullptr) this->CREATED_EXTENDED_RESPONSE_SERVER_PK.reset();
 		if(this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH != nullptr) this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH.reset();
 		if(this->KEYSEED != nullptr) this->KEYSEED.reset();
@@ -446,9 +446,8 @@ namespace Briand {
 		this->KEYSEED.reset();
 
 		// Also client-side context should be cleared and free (it was temporary)
-		this->ECDH_CURVE25519_CLIENT_TO_SERVER.reset();
-		mbedtls_ecdh_free(this->ECDH_CURVE25519_CONTEXT.get());
-		if (this->ECDH_CURVE25519_CONTEXT != nullptr) this->ECDH_CURVE25519_CONTEXT.reset();
+		this->CURVE25519_PRIVATE_KEY.reset();
+		this->CURVE25519_PUBLIC_KEY.reset();
 
 		return keysReady;
 	}
