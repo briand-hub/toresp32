@@ -1,3 +1,7 @@
+## BRANCH CONCLUSION
+This branch contains the first approach using Arduino framework. Unfortunately it was a bad idea and the project has been switched to IDF Framework.
+Reasons can be found in the [NEWS FILE](NEWS.md).
+
 # toresp32
 Briand's project to turn an ESP32 into a Tor client "plug&amp;play"
 
