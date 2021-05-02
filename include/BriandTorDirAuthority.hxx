@@ -45,3 +45,6 @@ constexpr Briand::BriandTorDirAuthority TOR_DIR_AUTHORITIES[TOR_DIR_AUTHORITIES_
 	, { "Serge", "BA44A889E64B93FAA2B114E02C2A279A8555C533", "66.111.2.131", 9030 }
 	//, { "dannenberg", "", "193.23.244.244", 80}
 };
+
+// Static member for the last responding authority
+unsigned short TOR_DIR_LAST_USED = 0x0000;

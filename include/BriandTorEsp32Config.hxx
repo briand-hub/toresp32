@@ -216,8 +216,6 @@ namespace Briand
 
 			f.flush();
 			f.close();
-
-			delay(500);
 		}
 
 		/**

@@ -94,7 +94,7 @@ namespace Briand {
 		static unique_ptr<vector<unsigned char>> Base64Decode(const string& input);
 
 		/**
-		 * Method generates public/private ECDH keypair from Curve25519 as Tor specifications, saves to relay
+		 * Method generates public/private ECDH keypair from Curve25519 as Tor specifications, saves to relay. Uses G=9
 		 * @param relay The relay where to save generated keys
 		 * @return true on success, false otherwise.
 		*/

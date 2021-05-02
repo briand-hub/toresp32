@@ -326,11 +326,17 @@ namespace Briand {
 		if (DEBUG) Serial.println("[DEBUG] CREATE2 sent. Waiting for CREATED2.");
 		auto tempCellResponse = tempCell->SendCell(this->sClient, false);
 		tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
-		tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION);
+		if (!tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION)) {
+			if (VERBOSE) Serial.printf("[ERR] Error, response cell had invalid bytes (failed to build from buffer).\n");
+			this->Cleanup();
+			return false;
+		}
 		
 		// If a DESTROY given, tell me why
 		if (tempCell->GetCommand() == BriandTorCellCommand::DESTROY) {
 			if (VERBOSE) Serial.printf("[ERR] Error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
+			this->Cleanup();
+			return false;
 		}
 
 		if (tempCell->GetCommand() != BriandTorCellCommand::CREATED2) {

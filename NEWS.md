@@ -1,14 +1,23 @@
 # Development status
 
 ## Next steps
+* Switch to IDF framework for better performance, memory and libraries.
 * Add last_working_directory auth as static
 * Find a way to get a small-size official consensus from directories (and remove ArduinoJson library)
 * Simplify code in TorCircuit class
 * Authenticate cell? => Prepare stub method to authenticate client
 
-## 
+## 2021-05-02
+### SWITCHING TO IDF Framework
+
+## 2021-05-01
+* Base64 fix for the omitted '='/'==' ending in ntor key, causing handshake failures
 * Key exchange was wrong, doing corrections
 * Rename CertificateUtils class to CryptoUtils class
+### The big problem
+Found that Arduino framework with the latest IDF and C++17 has too much size on RAM limited to 320KB. When generating curve25519 keys an error about BIGNUM trying to allocate too much memory has been thrown and there is no way to avoid. 
+However seems that IDF framework (from Espressif) is a much better and flexible solution. With some tests I got the proof. IDF has builtin, fully configurable libraries also to manage JSON if needed. So switching the project to IDF it's a must. Found how to use C++17, easy.
+For educational purposes, the **current, unusable** project sources will be placed in a different branch called "main-arduino-not-working".
 
 ## 2021-04-25
 * Added authoritiy directory list for descriptors query after reading dir-spec.txt

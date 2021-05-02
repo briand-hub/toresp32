@@ -291,13 +291,15 @@ namespace Briand {
 		short httpCode;
 
 		// Auth dir enquiry : choose a random one then enquiry another if one fails
+		if (TOR_DIR_LAST_USED == 0x0000) {
+			TOR_DIR_LAST_USED = BriandUtils::GetRandomByte() % TOR_DIR_AUTHORITIES_NUMBER;
+		}
 
-		unsigned short firstDir = BriandUtils::GetRandomByte() % TOR_DIR_AUTHORITIES_NUMBER;
-		unsigned short curDir = (firstDir + 1) % TOR_DIR_AUTHORITIES_NUMBER;
+		unsigned short curDir = 0;
 
-		while(httpCode != 200 && curDir != firstDir) {
-			auto randomDirectory = TOR_DIR_AUTHORITIES[curDir];
-			if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromAuthority Query to dir #%u (%s).\n", curDir, randomDirectory.nickname);
+		while(httpCode != 200 && curDir < TOR_DIR_AUTHORITIES_NUMBER) {
+			auto randomDirectory = TOR_DIR_AUTHORITIES[TOR_DIR_LAST_USED];
+			if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromAuthority Query to dir #%u (%s).\n", TOR_DIR_LAST_USED, randomDirectory.nickname);
 
 			string path = "/tor/server/fp/" + *this->fingerprint.get();	// also /tor/server/d/<F> working
 			bool secureRequest = false;
@@ -308,9 +310,10 @@ namespace Briand {
 				response = BriandNet::HttpInsecureGet(randomDirectory.host, randomDirectory.port, path, httpCode, agent, false);
 
 			if (httpCode != 200) {
-				curDir = (curDir + 1) % TOR_DIR_AUTHORITIES_NUMBER;
-				if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromAuthority missed valid response, retry with dir #%u.\n", curDir);
-			} 
+				curDir++;
+				TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED + 1) % TOR_DIR_AUTHORITIES_NUMBER;
+				if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromAuthority missed valid response, retry with dir #%u.\n", TOR_DIR_LAST_USED);
+			}
 		}
 
 		if (httpCode == 200) {
@@ -340,6 +343,15 @@ namespace Briand {
 					this->descriptorNtorOnionKey->erase(this->descriptorNtorOnionKey->begin()+starts, this->descriptorNtorOnionKey->end());
 					starts = this->descriptorNtorOnionKey->find("\r");
 				}
+			}
+
+			// WARNING: base64 fields could be without the ending '=' but this could be not
+			// recognized by a decoding library. So, add the ending '='/'==' to fit
+			// the base64 multiples of 4 as required. (occours in ntor-onion-key)
+
+			if (this->descriptorNtorOnionKey->length() > 0) {
+				while (this->descriptorNtorOnionKey->length() % 4 != 0)
+					this->descriptorNtorOnionKey->push_back('=');
 			}
 
 			// TODO : other descriptors needed??
@@ -477,6 +489,5 @@ namespace Briand {
 			BriandUtils::PrintByteBuffer(*dec.get(), dec->size(), dec->size());
 		}
 	}
-
 
 }

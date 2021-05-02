@@ -140,7 +140,6 @@ namespace Briand
 		auto output = make_unique<vector<unsigned char>>();
 
 		// Write request
-
 		if (emptyContents) {
 			while (content->size() > 0) {
 				client->write( content->at(0) );

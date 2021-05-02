@@ -419,10 +419,8 @@ namespace Briand {
 		string pers = "BriandTorCryptoUtils::ECDH_Curve25519_GenKeys";
 		int ret;
 
-		// Initialize structures
-		mbedtls_ctr_drbg_init( &ctr_drbg );
-
 		// Initialize random number generation
+		mbedtls_ctr_drbg_init( &ctr_drbg );
 		mbedtls_entropy_init( &entropy );
 		ret = mbedtls_ctr_drbg_seed( &ctr_drbg, mbedtls_entropy_func, &entropy, reinterpret_cast<const unsigned char*>(pers.c_str()), pers.length() );
 		if (ret != 0) {
@@ -436,20 +434,34 @@ namespace Briand {
 			return false;
 		}
 
+		// Prepare Curve25519 parameters
+		mbedtls_ecp_group ecpGroup;
+		mbedtls_ecp_group_init(&ecpGroup);
+		mbedtls_ecp_group_load(&ecpGroup, MBEDTLS_ECP_DP_CURVE25519);
+
+		// Use G = 9
+		auto Gx = make_unique<unsigned char[]>(32); 
+		Gx[0] = 0x09;// 9 followed by all 0 (WARNING! LITTLE ENDIAN FORMAT!)
+		mbedtls_ecp_point G;
+		mbedtls_ecp_point_init(&G);
+		mbedtls_mpi_write_binary(&G.X, Gx.get(), 32);
+		mbedtls_mpi_lset(&G.Z, 1); // not infinity
+
 		// Key generation
 		auto keypair = make_unique<mbedtls_ecp_keypair>();
-		ret = mbedtls_ecp_gen_key(MBEDTLS_ECP_DP_CURVE25519, keypair.get(), mbedtls_ctr_drbg_random, &ctr_drbg);
+		ret = mbedtls_ecp_gen_keypair_base(&ecpGroup, &G, &keypair->d, &keypair->Q, mbedtls_ctr_drbg_random, &ctr_drbg);
 		if (ret != 0) {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
 			if (DEBUG) Serial.printf("[DEBUG] ECDH_Curve25519_GenKeys failed on generating keys: %s\n", reinterpret_cast<char*>(errBuf.get()));
 			// Free
+			mbedtls_ecp_point_free(&G);
+			mbedtls_ecp_group_free(&ecpGroup);
 			mbedtls_ctr_drbg_free( &ctr_drbg );
 			mbedtls_entropy_free( &entropy );
 			return false;
 		}
-
 
 		// d contains the PRIVATE key, Q contains the public key (Q.X is the required field).
 		unsigned int keyBufSize;
@@ -466,7 +478,9 @@ namespace Briand {
 		relay.CURVE25519_PUBLIC_KEY = BriandUtils::ArrayToVector(keyBuf, keyBufSize);
 
 		// Free
-
+		mbedtls_ecp_keypair_free(keypair.get());
+		mbedtls_ecp_point_free(&G);
+		mbedtls_ecp_group_free(&ecpGroup);
 		mbedtls_ctr_drbg_free( &ctr_drbg );
 		mbedtls_entropy_free( &entropy );
 
@@ -576,7 +590,6 @@ namespace Briand {
 		return std::move(sharedSecret);
 	}
 
-
 	bool BriandTorCryptoUtils::NtorHandshakeComplete(BriandTorRelay& relay) {
 
 		// Check if fields are OK (should be but...)
@@ -632,7 +645,8 @@ namespace Briand {
 		auto t_key = BriandUtils::HexStringToVector("", protoid_string + ":key_extract");
 		auto t_verify = BriandUtils::HexStringToVector("", protoid_string + ":verify");
 		auto m_expand = BriandUtils::HexStringToVector("", protoid_string + ":key_expand");
-		auto ID = BriandTorCryptoUtils::Base64Decode(*relay.descriptorNtorOnionKey.get());
+		auto ntorKeyVec = BriandTorCryptoUtils::Base64Decode(*relay.descriptorNtorOnionKey.get());
+		auto fingerprintVector = BriandUtils::HexStringToVector(*relay.fingerprint.get(), "");
 
 		/*
 			The server's handshake reply is:
@@ -650,7 +664,7 @@ namespace Briand {
 			Serial.printf("[DEBUG] x = My Curve25519 private key: ");
 			BriandUtils::PrintByteBuffer(*relay.CURVE25519_PRIVATE_KEY.get());
 			Serial.printf("[DEBUG] B = Relay's NTOR key: ");
-			BriandUtils::PrintByteBuffer(*ID.get());
+			BriandUtils::PrintByteBuffer(*ntorKeyVec.get());
 			Serial.printf("[DEBUG] Y = Relay's public key: ");
 			BriandUtils::PrintByteBuffer(*relay.CREATED_EXTENDED_RESPONSE_SERVER_PK.get());
 			Serial.printf("[DEBUG] ID = Relay's fingerprint: %s\n", relay.fingerprint->c_str());
@@ -662,6 +676,7 @@ namespace Briand {
 
 		auto secret_input = make_unique<vector<unsigned char>>();
 
+		// EXP(Y,x)
 		auto tempVector = BriandTorCryptoUtils::ECDH_Curve25519_ComputeSharedSecret(relay.CREATED_EXTENDED_RESPONSE_SERVER_PK, relay.CURVE25519_PRIVATE_KEY);
 		if (tempVector->size() == 0) {
 			if (DEBUG) Serial.println("[DEBUG] NtorHandshakeComplete: shared secret failed to compute: EXP(Y,x)!");
@@ -677,7 +692,7 @@ namespace Briand {
 		secret_input->insert(secret_input->end(), tempVector->begin(), tempVector->end());
 		tempVector.reset();
 
-		auto ntorKeyVec = BriandTorCryptoUtils::Base64Decode(*relay.descriptorNtorOnionKey.get());
+		// EXP(B,x)
 		tempVector = BriandTorCryptoUtils::ECDH_Curve25519_ComputeSharedSecret(ntorKeyVec, relay.CURVE25519_PRIVATE_KEY);
 		if (tempVector->size() == 0) {
 			if (DEBUG) Serial.println("[DEBUG] NtorHandshakeComplete: shared secret failed to compute: EXP(B,x)!");
@@ -694,7 +709,6 @@ namespace Briand {
 		tempVector.reset();
 
 		// Append the fingerprint (ID)
-		auto fingerprintVector = BriandUtils::HexStringToVector(*relay.fingerprint.get(), "");
 		secret_input->insert(secret_input->end(), fingerprintVector->begin(), fingerprintVector->end());
 		// Append the ntorKey (B)
 		secret_input->insert(secret_input->end(), ntorKeyVec->begin(), ntorKeyVec->end());
@@ -783,294 +797,83 @@ namespace Briand {
 
 		// Clear and simple:
 
-		// if (DEBUG) Serial.print("[DEBUG] Generating keys with HKDF...");
+		if (DEBUG) Serial.print("[DEBUG] Generating keys with HKDF...");
 
-		// unsigned short KEY_LEN = 16;
-	   	// unsigned short HASH_LEN = 20;
-		// unsigned short DIGEST_LEN = 32; // TODO : did not found any reference to DIGEST_LEN size, suppose 32 with sha256
-		// unsigned short EXTRACT_TOTAL_SIZE = HASH_LEN+HASH_LEN+KEY_LEN+KEY_LEN+DIGEST_LEN;
+		unsigned short KEY_LEN = 16;
+	   	unsigned short HASH_LEN = 20;
+		unsigned short DIGEST_LEN = 32; // TODO : did not found any reference to DIGEST_LEN size, suppose 32 with sha256
+		unsigned short EXTRACT_TOTAL_SIZE = HASH_LEN+HASH_LEN+KEY_LEN+KEY_LEN+DIGEST_LEN;
 
-		// // Unfortunately ESP32 mbedtls has HKDF disabled.
-		// // Could be enabled editing settings.h and esp_config.h but this is not
-		// // recommended. So I wrote the function.
+		// Unfortunately ESP32 mbedtls has HKDF disabled.
+		// Could be enabled editing settings.h and esp_config.h but this is not
+		// recommended. So I wrote the function.
 		
-		// // auto hkdfBuffer = BriandUtils::GetOneOldBuffer(EXTRACT_TOTAL_SIZE);
-		// // #ifndef MBEDTLS_HKDF_C
-		// // #define MBEDTLS_HKDF_C
-		// // #endif
-		// // #include <mbedtls/hkdf.h>
-		// // mbedtls_hkdf(
-		// // 	mbedtls_md_info_from_type(MBEDTLS_MD_SHA256),
-		// // 	BriandUtils::VectorToArray(t_key).get(), t_key->size(), 
-		// // 	BriandUtils::VectorToArray(secret_input).get(), secret_input->size(), 
-		// // 	m_expand.get(), m_expand_size, 
-		// // 	hkdfBuffer.get(), EXTRACT_TOTAL_SIZE
-		// // );
-		// // auto hkdfVector = BriandUtils::ArrayToVector(hkdfBuffer, EXTRACT_TOTAL_SIZE);		
+		// auto hkdfBuffer = BriandUtils::GetOneOldBuffer(EXTRACT_TOTAL_SIZE);
+		// #ifndef MBEDTLS_HKDF_C
+		// #define MBEDTLS_HKDF_C
+		// #endif
+		// #include <mbedtls/hkdf.h>
+		// mbedtls_hkdf(
+		// 	mbedtls_md_info_from_type(MBEDTLS_MD_SHA256),
+		// 	BriandUtils::VectorToArray(t_key).get(), t_key->size(), 
+		// 	BriandUtils::VectorToArray(secret_input).get(), secret_input->size(), 
+		// 	m_expand.get(), m_expand_size, 
+		// 	hkdfBuffer.get(), EXTRACT_TOTAL_SIZE
+		// );
+		// auto hkdfVector = BriandUtils::ArrayToVector(hkdfBuffer, EXTRACT_TOTAL_SIZE);		
 
-
-		// auto hkdf = BriandTorCryptoUtils::Get_HKDF(m_expand, relay.KEYSEED, EXTRACT_TOTAL_SIZE); 
+		auto hkdf = BriandTorCryptoUtils::Get_HKDF(m_expand, relay.KEYSEED, EXTRACT_TOTAL_SIZE); 
 		
-		// /*
-		// 	When used in the ntor handshake, the first HASH_LEN bytes form the
-		// 	forward digest Df; the next HASH_LEN form the backward digest Db; the
-		// 	next KEY_LEN form Kf, the next KEY_LEN form Kb, and the final
-		// 	DIGEST_LEN bytes are taken as a nonce to use in the place of KH in the
-		// 	hidden service protocol.  Excess bytes from K are discarded.
-   		// */
+		/*
+			When used in the ntor handshake, the first HASH_LEN bytes form the
+			forward digest Df; the next HASH_LEN form the backward digest Db; the
+			next KEY_LEN form Kf, the next KEY_LEN form Kb, and the final
+			DIGEST_LEN bytes are taken as a nonce to use in the place of KH in the
+			hidden service protocol.  Excess bytes from K are discarded.
+   		*/
 		
-		// // Release some unused memory
-		// PROTOID.reset();
-		// t_mac.reset();
-		// t_key.reset();
-		// t_verify.reset();
-		// m_expand.reset();
-		// ntorKeyVec.reset();
-		// fingerprintVector.reset();
-		// secret_input.reset();
-		// verify.reset();
-		// serverStringVector.reset();
-		// auth_input.reset();
-		// auth_verify.reset();
+		// Release some unused memory
+		PROTOID.reset();
+		t_mac.reset();
+		t_key.reset();
+		t_verify.reset();
+		m_expand.reset();
+		ntorKeyVec.reset();
+		fingerprintVector.reset();
+		secret_input.reset();
+		verify.reset();
+		serverStringVector.reset();
+		auth_input.reset();
+		auth_verify.reset();
 
-	   	// auto tempVector = make_unique<vector<unsigned char>>();
+	   	tempVector = make_unique<vector<unsigned char>>();
 
-		// tempVector->insert(tempVector->begin(), hkdf->begin(), hkdf->begin() + HASH_LEN);
-		// hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
-		// relay.KEY_ForwardDigest_Df = GetDigest_SHA1(tempVector);
-		// tempVector->clear();
+		tempVector->insert(tempVector->begin(), hkdf->begin(), hkdf->begin() + HASH_LEN);
+		hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
+		relay.KEY_ForwardDigest_Df = GetDigest_SHA1(tempVector);
+		tempVector->clear();
 
-		// tempVector->insert(tempVector->begin(), hkdf->begin(), hkdf->begin() + HASH_LEN);
-		// hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
-		// relay.KEY_BackwardDigest_Db = GetDigest_SHA1(tempVector);
-		// tempVector->clear();
-		// tempVector.reset();
+		tempVector->insert(tempVector->begin(), hkdf->begin(), hkdf->begin() + HASH_LEN);
+		hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
+		relay.KEY_BackwardDigest_Db = GetDigest_SHA1(tempVector);
+		tempVector->clear();
+		tempVector.reset();
 
-		// relay.KEY_Forward_Kf = make_unique<vector<unsigned char>>();
-		// relay.KEY_Forward_Kf->insert(relay.KEY_Forward_Kf->begin(), hkdf->begin(), hkdf->begin() + KEY_LEN);
-		// hkdf->erase(hkdf->begin(), hkdf->begin() + KEY_LEN);
+		relay.KEY_Forward_Kf = make_unique<vector<unsigned char>>();
+		relay.KEY_Forward_Kf->insert(relay.KEY_Forward_Kf->begin(), hkdf->begin(), hkdf->begin() + KEY_LEN);
+		hkdf->erase(hkdf->begin(), hkdf->begin() + KEY_LEN);
 
-		// relay.KEY_Backward_Kb = make_unique<vector<unsigned char>>();
-		// relay.KEY_Backward_Kb->insert(relay.KEY_Backward_Kb->begin(), hkdf->begin(), hkdf->begin() + KEY_LEN);
-		// hkdf->erase(hkdf->begin(), hkdf->begin() + KEY_LEN);
+		relay.KEY_Backward_Kb = make_unique<vector<unsigned char>>();
+		relay.KEY_Backward_Kb->insert(relay.KEY_Backward_Kb->begin(), hkdf->begin(), hkdf->begin() + KEY_LEN);
+		hkdf->erase(hkdf->begin(), hkdf->begin() + KEY_LEN);
 
-		// relay.KEY_HiddenService_Nonce = make_unique<vector<unsigned char>>();
-		// relay.KEY_HiddenService_Nonce->insert(relay.KEY_HiddenService_Nonce->begin(), hkdf->begin(), hkdf->begin() + DIGEST_LEN);
+		relay.KEY_HiddenService_Nonce = make_unique<vector<unsigned char>>();
+		relay.KEY_HiddenService_Nonce->insert(relay.KEY_HiddenService_Nonce->begin(), hkdf->begin(), hkdf->begin() + DIGEST_LEN);
 
-		// hkdf.reset();
+		hkdf.reset();
 		
-		// if (DEBUG) Serial.print("done!\n");
+		if (DEBUG) Serial.print("done!\n");
 
 		return true;
 	}
-
-/* WRONG METHODS
-	bool BriandTorCryptoUtils::ECDH_CURVE25519_GenKeys(BriandTorRelay& relay) {
-		// using mbedtls
-
-		// Prepare relay
-		if (relay.ECDH_CURVE25519_CLIENT_TO_SERVER != nullptr)
-			relay.ECDH_CURVE25519_CLIENT_TO_SERVER.reset();
-		if (relay.ECDH_CURVE25519_CONTEXT != nullptr)
-			relay.ECDH_CURVE25519_CONTEXT.reset();
-
-		relay.ECDH_CURVE25519_CLIENT_TO_SERVER = make_unique<vector<unsigned char>>();
-		relay.ECDH_CURVE25519_CONTEXT = make_unique<mbedtls_ecdh_context>();
-
-		// Structures needed
-		mbedtls_entropy_context entropy;
-		mbedtls_ctr_drbg_context ctr_drbg;
-
-		string pers = "BriandTorECDHGenKeys";
-		unsigned int ret;
-
-		constexpr unsigned short CLIENT_TO_SERVER_SIZE = 32;
-		auto clientToServer = make_unique<unsigned char[]>(CLIENT_TO_SERVER_SIZE);
-
-		// Initialize structures
-		mbedtls_ecdh_init( relay.ECDH_CURVE25519_CONTEXT.get() );
-		mbedtls_ctr_drbg_init( &ctr_drbg );
-
-		// Initialize random number generation
-
-		mbedtls_entropy_init( &entropy );
-		ret = mbedtls_ctr_drbg_seed( &ctr_drbg, mbedtls_entropy_func, &entropy, reinterpret_cast<const unsigned char*>(pers.c_str()), pers.length() );
-		if (ret != 0) {
-			// Error description
-			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
-			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] ECDH_GenKeys failed initialize RNG: %s\n", reinterpret_cast<char*>(errBuf.get()));
-			// Free
-			mbedtls_ctr_drbg_free( &ctr_drbg );
-			mbedtls_entropy_free( &entropy );
-			return false;
-		}
-
-		// Initialize context and generate keypair with CURVE25519
-
-		ret = mbedtls_ecp_group_load( &relay.ECDH_CURVE25519_CONTEXT->grp, MBEDTLS_ECP_DP_CURVE25519 );
-		if (ret != 0) {
-			// Error description
-			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
-			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] ECDH_GenKeys failed ECP group loading: %s\n", reinterpret_cast<char*>(errBuf.get()));
-			// Free
-			mbedtls_ctr_drbg_free( &ctr_drbg );
-			mbedtls_entropy_free( &entropy );
-			return false;
-		}
-		
-		// Gen public key
-		ret = mbedtls_ecdh_gen_public( 
-			&relay.ECDH_CURVE25519_CONTEXT->grp, 
-			&relay.ECDH_CURVE25519_CONTEXT->d, 
-			&relay.ECDH_CURVE25519_CONTEXT->Q, 
-			mbedtls_ctr_drbg_random, &ctr_drbg 
-		);
-		if (ret != 0) {
-			// Error description
-			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
-			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] ECDH_GenKeys failed public key generation: %s\n", reinterpret_cast<char*>(errBuf.get()));
-			// Free
-			mbedtls_ctr_drbg_free( &ctr_drbg );
-			mbedtls_entropy_free( &entropy );
-			return false;
-		}
-
-		// Write to string
-		ret = mbedtls_mpi_write_binary( &relay.ECDH_CURVE25519_CONTEXT->Q.X, clientToServer.get(), CLIENT_TO_SERVER_SIZE );
-		if( ret != 0 ) {
-			// Error description
-			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
-			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] ECDH_GenKeys failed public key generation: %s\n", reinterpret_cast<char*>(errBuf.get()));
-			// Free
-			mbedtls_ctr_drbg_free( &ctr_drbg );
-			mbedtls_entropy_free( &entropy );
-			return false;
-		}
-
-		relay.ECDH_CURVE25519_CLIENT_TO_SERVER = BriandUtils::ArrayToVector(clientToServer, CLIENT_TO_SERVER_SIZE);
-
-		if (DEBUG) {
-			Serial.printf("[DEBUG] ECDH_GenKeys success, computed: ");
-			BriandUtils::PrintByteBuffer(*relay.ECDH_CURVE25519_CLIENT_TO_SERVER.get(), CLIENT_TO_SERVER_SIZE, CLIENT_TO_SERVER_SIZE);
-		} 
-
-		// Free
-		mbedtls_ctr_drbg_free( &ctr_drbg );
-		mbedtls_entropy_free( &entropy );
-
-		return true;
-	}
-
-	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::ECDH_CURVE25519_ComputeShared(const unique_ptr<vector<unsigned char>>& serverToClient, const BriandTorRelay& relay) {
-		// using mbedtls
-
-		auto sharedSecret = make_unique<vector<unsigned char>>();
-
-		// Structures needed
-		mbedtls_entropy_context entropy;
-		mbedtls_ctr_drbg_context ctr_drbg;
-
-		string pers = "BriandTorECDHGenKeys";
-		unsigned int ret;
-
-		// Initialize structures
-		mbedtls_ctr_drbg_init( &ctr_drbg );
-
-		// Initialize random number generation
-		mbedtls_entropy_init( &entropy );
-		ret = mbedtls_ctr_drbg_seed( &ctr_drbg, mbedtls_entropy_func, &entropy, reinterpret_cast<const unsigned char*>(pers.c_str()), pers.length() );
-		if (ret != 0) {
-			// Error description
-			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
-			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] ECDH_ComputeShared failed initialize RNG: %s\n", reinterpret_cast<char*>(errBuf.get()));
-			// Free
-			mbedtls_ctr_drbg_free( &ctr_drbg );
-			mbedtls_entropy_free( &entropy );
-			return std::move(sharedSecret);
-		}
-
-		// Set Z = 1 , this also satisfies avoids:
-		ret = mbedtls_mpi_lset( &relay.ECDH_CURVE25519_CONTEXT->Qp.Z, 1 );
-		if (ret != 0) {
-			// Error description
-			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
-			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] ECDH_ComputeShared failed to set Z=1: %s\n", reinterpret_cast<char*>(errBuf.get()));
-			// Free
-			mbedtls_ctr_drbg_free( &ctr_drbg );
-			mbedtls_entropy_free( &entropy );
-			return std::move(sharedSecret);
-		}
-
-		// Set Qp.X to the serverToClient
-		auto serverToClientBuffer = BriandUtils::VectorToArray(serverToClient);
-		ret = mbedtls_mpi_read_binary(&relay.ECDH_CURVE25519_CONTEXT->Qp.X, serverToClientBuffer.get(), serverToClient->size()); // serverToClient size should be 32
-		serverToClientBuffer.reset();
-		if (ret != 0) {
-			// Error description
-			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
-			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] ECDH_ComputeShared failed to read serverToClient: %s\n", reinterpret_cast<char*>(errBuf.get()));
-			// Free
-			mbedtls_ctr_drbg_free( &ctr_drbg );
-			mbedtls_entropy_free( &entropy );
-			return std::move(sharedSecret);
-		}
-
-		// Compute the shared secret
-		ret = mbedtls_ecdh_compute_shared( 
-			&relay.ECDH_CURVE25519_CONTEXT->grp,
-			&relay.ECDH_CURVE25519_CONTEXT->z,
-			&relay.ECDH_CURVE25519_CONTEXT->Qp,
-			&relay.ECDH_CURVE25519_CONTEXT->d,
-            mbedtls_ctr_drbg_random, &ctr_drbg 
-		);
-
-		if (ret != 0) {
-			// Error description
-			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
-			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] ECDH_ComputeShared failed to compute the shared secret: %s\n", reinterpret_cast<char*>(errBuf.get()));
-			// Free
-			mbedtls_ctr_drbg_free( &ctr_drbg );
-			mbedtls_entropy_free( &entropy );
-			return std::move(sharedSecret);
-		}
-
-		// z now contains the shared secret
-		// Write to string
-		unsigned int sharedSecretBufferSize = mbedtls_mpi_size(&relay.ECDH_CURVE25519_CONTEXT->z);
-		auto sharedSecretBuffer = BriandUtils::GetOneOldBuffer( sharedSecretBufferSize );
-		ret = mbedtls_mpi_write_binary( &relay.ECDH_CURVE25519_CONTEXT->z, sharedSecretBuffer.get(), sharedSecretBufferSize );
-		if( ret != 0 ) {
-			// Error description
-			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
-			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] ECDH_ComputeShared failed to write shared secret: %s\n", reinterpret_cast<char*>(errBuf.get()));
-			// Free
-			mbedtls_ctr_drbg_free( &ctr_drbg );
-			mbedtls_entropy_free( &entropy );
-			return std::move(sharedSecret);
-		}
-
-		// Free
-		mbedtls_ctr_drbg_free( &ctr_drbg );
-		mbedtls_entropy_free( &entropy );
-
-		sharedSecret = BriandUtils::ArrayToVector(sharedSecretBuffer, sharedSecretBufferSize);
-
-		if (DEBUG) {
-			Serial.printf("[DEBUG] ECDH_ComputeShared success, shared secret:");
-			BriandUtils::PrintByteBuffer(*sharedSecret.get(), sharedSecret->size(), sharedSecret->size());
-		}
-
-		return std::move(sharedSecret);
-	}
-*/
-
 }
