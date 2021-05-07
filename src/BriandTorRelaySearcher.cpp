@@ -16,20 +16,17 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <Arduino.h> /* MUST BE THE FIRST HEADER IN CPP FILES! */
-
 #include "BriandTorRelaySearcher.hxx"
+
+
+
+
 
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <vector>
 #include <algorithm>
-
-#include <ArduinoJson.h>
-#include <FS.h>
-#include <SPIFFS.h>
-#include <WiFiClientSecure.h>
 
 // Crypto library chosen
 #include <mbedtls/ecdh.h>
@@ -40,6 +37,7 @@
 #include "BriandNet.hxx"
 #include "BriandTorCertificates.hxx"
 #include "BriandTorRelay.hxx"
+
 
 namespace Briand {
 
@@ -115,10 +113,10 @@ namespace Briand {
 		);
 
 		if (httpCode != 200) {
-			if (VERBOSE) Serial.printf("[ERR] Error on downloading Onionoo relay. Http code: %d\n", httpCode);
+			if (VERBOSE) printf("[ERR] Error on downloading Onionoo relay. Http code: %d\n", httpCode);
 		}
 		else {
-			if (DEBUG) Serial.printf("[DEBUG] Response before trimming has size %d bytes\n", response->length());
+			if (DEBUG) printf("[DEBUG] Response before trimming has size %d bytes\n", response->length());
 
 			// Seems that sometimes additional bytes are included in response when body only is requested. 
 			// So remove before the first { and after the last }
@@ -133,7 +131,7 @@ namespace Briand {
 			BriandUtils::StringTrimAll(*response.get(), '\r');
 			BriandUtils::StringTrimAll(*response.get(), '\n');
 
-			if (DEBUG) Serial.printf("[DEBUG] After trimming has size %d bytes\n", response->length());
+			if (DEBUG) printf("[DEBUG] After trimming has size %d bytes\n", response->length());
 
 			success = true;
 		}
@@ -159,15 +157,15 @@ namespace Briand {
 		success = false;
 		tentative = 0;
 		while (!success && tentative < maxTentatives) {
-			if (DEBUG) Serial.printf("[DEBUG] Downloading guard cache from Oniooo, tentative %d of %d.\n", tentative+1, maxTentatives);
+			if (DEBUG) printf("[DEBUG] Downloading guard cache from Oniooo, tentative %d of %d.\n", tentative+1, maxTentatives);
 			// effective_family and exit_policy_summary removed due to too much bytes...
 			auto json = this->GetOnionooJson("relay", "nickname,or_addresses,fingerprint", TOR_FLAGS_GUARD_MUST_HAVE, success, TOR_NODES_CACHE_SIZE);
 			if (success) {
-				if (DEBUG) Serial.printf("[DEBUG] Downloading guard cache from Oniooo success, saving cache.\n");
+				if (DEBUG) printf("[DEBUG] Downloading guard cache from Oniooo success, saving cache.\n");
 				// Prepend the time to object (the first byte is the "{" initialization)
 				string addTimestamp = "\"cachecreatedon\":" + std::to_string(BriandUtils::GetUnixTime()) + ",";
 				json->insert(json->begin()+1, addTimestamp.begin(), addTimestamp.end());
-				if (DEBUG) Serial.printf("[DEBUG] Guard cache from Oniooo will have a size of %u bytes.\n", json->size());
+				if (DEBUG) printf("[DEBUG] Guard cache from Oniooo will have a size of %u bytes.\n", json->size());
 				File f = SPIFFS.open(NODES_FILE_GUARD, "w");
 				// Buffer has important size, so is better write with buffers of 1K bytes
 				while(json->length() > 0) {
@@ -182,14 +180,14 @@ namespace Briand {
 				}
 				f.close();
 				json.reset(); // save ram
-				if (DEBUG) Serial.printf("[DEBUG] Guard cache from Oniooo saved to %s\n", this->NODES_FILE_GUARD);
+				if (DEBUG) printf("[DEBUG] Guard cache from Oniooo saved to %s\n", this->NODES_FILE_GUARD);
 			}
 
 			tentative++;
 		}
 
 		if (tentative == maxTentatives) {
-			if (DEBUG) Serial.println("[DEBUG] RefreshOnionooCache permanent failure. exiting.");
+			if (DEBUG) printf("[DEBUG] RefreshOnionooCache permanent failure. exiting.\n");
 			return;
 		}
 
@@ -197,15 +195,15 @@ namespace Briand {
 		success = false;
 		tentative = 0;
 		while (!success && tentative < maxTentatives) {
-			if (DEBUG) Serial.printf("[DEBUG] Downloading middle cache from Oniooo, tentative %d of %d.\n", tentative+1, maxTentatives);
+			if (DEBUG) printf("[DEBUG] Downloading middle cache from Oniooo, tentative %d of %d.\n", tentative+1, maxTentatives);
 			// effective_family and exit_policy_summary removed due to too much bytes...			
 			auto json = this->GetOnionooJson("relay", "nickname,or_addresses,fingerprint", TOR_FLAGS_MIDDLE_MUST_HAVE, success, TOR_NODES_CACHE_SIZE);
 			if (success) {
-				if (DEBUG) Serial.printf("[DEBUG] Downloading middle cache from Oniooo success, saving cache.\n");
+				if (DEBUG) printf("[DEBUG] Downloading middle cache from Oniooo success, saving cache.\n");
 				// Prepend the time to object (the first byte is the "{" initialization)
 				string addTimestamp = "\"cachecreatedon\":" + std::to_string(BriandUtils::GetUnixTime()) + ",";
 				json->insert(json->begin()+1, addTimestamp.begin(), addTimestamp.end());
-				if (DEBUG) Serial.printf("[DEBUG] Middle cache from Oniooo will have a size of %u bytes.\n", json->size());
+				if (DEBUG) printf("[DEBUG] Middle cache from Oniooo will have a size of %u bytes.\n", json->size());
 				File f = SPIFFS.open(NODES_FILE_MIDDLE, "w");
 				// Buffer has important size, so is better write with buffers of 1K bytes
 				while(json->length() > 0) {
@@ -220,14 +218,14 @@ namespace Briand {
 				}
 				f.close();
 				json.reset(); // save ram
-				if (DEBUG) Serial.printf("[DEBUG] Middle cache from Oniooo saved to %s\n", this->NODES_FILE_MIDDLE);
+				if (DEBUG) printf("[DEBUG] Middle cache from Oniooo saved to %s\n", this->NODES_FILE_MIDDLE);
 			}
 
 			tentative++;
 		}
 
 		if (tentative == maxTentatives) {
-			if (DEBUG) Serial.println("[DEBUG] RefreshOnionooCache permanent failure. exiting.");
+			if (DEBUG) printf("[DEBUG] RefreshOnionooCache permanent failure. exiting.\n");
 			return;
 		}
 
@@ -235,16 +233,16 @@ namespace Briand {
 		success = false;
 		tentative = 0;
 		while (!success && tentative < maxTentatives) {
-			if (DEBUG) Serial.printf("[DEBUG] Downloading exit cache from Oniooo, tentative %d of %d.\n", tentative+1, maxTentatives);
+			if (DEBUG) printf("[DEBUG] Downloading exit cache from Oniooo, tentative %d of %d.\n", tentative+1, maxTentatives);
 			// Exit nodes => require exit_summary!
 			// effective_family and exit_policy_summary removed due to too much bytes...
 			auto json = this->GetOnionooJson("relay", "nickname,or_addresses,fingerprint", TOR_FLAGS_EXIT_MUST_HAVE, success, TOR_NODES_CACHE_SIZE);
 			if (success) {
-				if (DEBUG) Serial.printf("[DEBUG] Downloading exit cache from Oniooo success, saving cache.\n");
+				if (DEBUG) printf("[DEBUG] Downloading exit cache from Oniooo success, saving cache.\n");
 				// Prepend the time to object (the first byte is the "{" initialization)
 				string addTimestamp = "\"cachecreatedon\":" + std::to_string(BriandUtils::GetUnixTime()) + ",";
 				json->insert(json->begin()+1, addTimestamp.begin(), addTimestamp.end());
-				if (DEBUG) Serial.printf("[DEBUG] Middle exit from Oniooo will have a size of %u bytes.\n", json->size());
+				if (DEBUG) printf("[DEBUG] Middle exit from Oniooo will have a size of %u bytes.\n", json->size());
 				File f = SPIFFS.open(NODES_FILE_EXIT, "w");
 				// Buffer has important size, so is better write with buffers of 1K bytes
 				while(json->length() > 0) {
@@ -259,14 +257,14 @@ namespace Briand {
 				}
 				f.close();
 				json.reset(); // save ram
-				if (DEBUG) Serial.printf("[DEBUG] Exit cache from Oniooo saved to %s\n", this->NODES_FILE_EXIT);
+				if (DEBUG) printf("[DEBUG] Exit cache from Oniooo saved to %s\n", this->NODES_FILE_EXIT);
 			}
 
 			tentative++;
 		}
 
 		if (tentative == maxTentatives) {
-			if (DEBUG) Serial.println("[DEBUG] RefreshOnionooCache permanent failure. exiting.");
+			if (DEBUG) printf("[DEBUG] RefreshOnionooCache permanent failure. exiting.\n");
 			return;
 		}
 
@@ -284,19 +282,19 @@ namespace Briand {
 			DeserializationError err = deserializeJson(doc, file);
 			if (!err) {
 				unsigned long int cacheAge = doc["cachecreatedon"];//.as<unsigned long int>();
-				if (DEBUG) Serial.printf("[DEBUG] %s cache created on %lu.\n", filename, cacheAge);
+				if (DEBUG) printf("[DEBUG] %s cache created on %lu.\n", filename, cacheAge);
 				if ( (cacheAge + (TOR_NODES_CACHE_VAL_H*3600)) >= BriandUtils::GetUnixTime() ) {
 					valid = true;
 				}
 			}
 			else {
-				if (DEBUG) Serial.printf("[DEBUG] %s cache deserialization error: %s\n", filename, err.c_str());
+				if (DEBUG) printf("[DEBUG] %s cache deserialization error: %s\n", filename, err.c_str());
 			}
 
 			file.close();
 		}
 		else {
-			if (DEBUG) Serial.printf("[DEBUG] %s cache file does not exist.\n", filename);
+			if (DEBUG) printf("[DEBUG] %s cache file does not exist.\n", filename);
 		}
 
 		return valid;
@@ -328,14 +326,14 @@ namespace Briand {
 		unique_ptr<BriandTorRelay> relay = nullptr;
 
 		if (!this->cacheValid) {
-			if (DEBUG) Serial.println("[DEBUG] Nodes cache invalid, download and rebuilding.");
+			if (DEBUG) printf("[DEBUG] Nodes cache invalid, download and rebuilding.\n");
 			RefreshOnionooCache();
 		}
 		if (this->cacheValid) {
 			// randomize for random picking
 			this->randomize();
 			
-			if (DEBUG) Serial.printf("[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
+			if (DEBUG) printf("[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
 
 			DynamicJsonDocument json(this->EXPECTED_SIZE);
 
@@ -358,14 +356,14 @@ namespace Briand {
 				json.clear();
 			}
 			else {
-				if (DEBUG) Serial.printf("[DEBUG] %s cache deserialization error: %s. Cache has been invalidated.\n", this->NODES_FILE_GUARD, err.c_str());
+				if (DEBUG) printf("[DEBUG] %s cache deserialization error: %s. Cache has been invalidated.\n", this->NODES_FILE_GUARD, err.c_str());
 				this->cacheValid = false;
 			}
 
 			file.close();
 		}
 		else {
-			if (VERBOSE) Serial.println("[DEBUG] Invalid cache at second tentative. Skipping with failure.");
+			if (VERBOSE) printf("[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
 		}
 
 		return relay;
@@ -375,14 +373,14 @@ namespace Briand {
 		unique_ptr<BriandTorRelay> relay = nullptr;
 
 		if (!this->cacheValid) {
-			if (DEBUG) Serial.println("[DEBUG] Nodes cache invalid, download and rebuilding.");
+			if (DEBUG) printf("[DEBUG] Nodes cache invalid, download and rebuilding.\n");
 			RefreshOnionooCache();
 		}
 		if (this->cacheValid) {
 			// randomize for random picking
 			this->randomize();
 			
-			if (DEBUG) Serial.printf("[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
+			if (DEBUG) printf("[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
 
 			DynamicJsonDocument json(this->EXPECTED_SIZE);
 
@@ -413,11 +411,11 @@ namespace Briand {
 					} while (sameFamily || allViewedCheck->size() == TOR_NODES_CACHE_SIZE);
 
 					if (sameFamily && allViewedCheck->size() == TOR_NODES_CACHE_SIZE) {
-						if (VERBOSE) Serial.println("[ERR] The middle tor cache has nodes that always matches the selected guard... FAILURE!");
+						if (VERBOSE) printf("[ERR] The middle tor cache has nodes that always matches the selected guard... FAILURE!\n");
 						return relay;
 					}
 					else {
-						if (DEBUG) Serial.printf("[DEBUG] Found that middle IP %s is different than guard %s and it is OK.\n", json["relays"][this->randomPick]["or_addresses"][0].as<const char*>(), avoidGuardIp.c_str());
+						if (DEBUG) printf("[DEBUG] Found that middle IP %s is different than guard %s and it is OK.\n", json["relays"][this->randomPick]["or_addresses"][0].as<const char*>(), avoidGuardIp.c_str());
 					}
 				}
 
@@ -431,14 +429,14 @@ namespace Briand {
 				json.clear();
 			}
 			else {
-				if (DEBUG) Serial.printf("[DEBUG] %s cache deserialization error: %s. Cache has been invalidated.\n", this->NODES_FILE_MIDDLE, err.c_str());
+				if (DEBUG) printf("[DEBUG] %s cache deserialization error: %s. Cache has been invalidated.\n", this->NODES_FILE_MIDDLE, err.c_str());
 				this->cacheValid = false;
 			}
 
 			file.close();
 		}
 		else {
-			if (VERBOSE) Serial.println("[DEBUG] Invalid cache at second tentative. Skipping with failure.");
+			if (VERBOSE) printf("[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
 		}
 
 		return relay;
@@ -448,14 +446,14 @@ namespace Briand {
 		unique_ptr<BriandTorRelay> relay = nullptr;
 
 		if (!this->cacheValid) {
-			if (DEBUG) Serial.println("[DEBUG] Nodes cache invalid, download and rebuilding.");
+			if (DEBUG) printf("[DEBUG] Nodes cache invalid, download and rebuilding.\n");
 			RefreshOnionooCache();
 		}
 		if (this->cacheValid) {
 			// randomize for random picking
 			this->randomize();
 			
-			if (DEBUG) Serial.printf("[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
+			if (DEBUG) printf("[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
 
 			DynamicJsonDocument json(this->EXPECTED_SIZE);
 
@@ -487,15 +485,15 @@ namespace Briand {
 					} while (sameFamily && allViewedCheck->size() < TOR_NODES_CACHE_SIZE);
 
 					if (sameFamily && allViewedCheck->size() == TOR_NODES_CACHE_SIZE) {
-						if (VERBOSE) Serial.println("[ERR] The exit tor cache has nodes that always matches the selected guard/middle... FAILURE!");
+						if (VERBOSE) printf("[ERR] The exit tor cache has nodes that always matches the selected guard/middle... FAILURE!\n");
 						return relay;
 					}
 					else {
-						if (DEBUG) Serial.printf("[DEBUG] Found that exit IP %s is different than guard %s and middle %s and it is OK.\n", json["relays"][this->randomPick]["or_addresses"][0].as<const char*>(), avoidGuardIp.c_str(), avoidMiddleIp.c_str());
+						if (DEBUG) printf("[DEBUG] Found that exit IP %s is different than guard %s and middle %s and it is OK.\n", json["relays"][this->randomPick]["or_addresses"][0].as<const char*>(), avoidGuardIp.c_str(), avoidMiddleIp.c_str());
 					}
 				}
 				else if ((avoidGuardIp.length() + avoidMiddleIp.length()) > 0) {
-					if (VERBOSE) Serial.println("[WARNING] In GetExitRelay received only one (guard or middle) to avoid. CHECK WILL NOT BE DONE!");
+					if (VERBOSE) printf("[WARNING] In GetExitRelay received only one (guard or middle) to avoid. CHECK WILL NOT BE DONE!\n");
 				}
 
 				relay->nickname->assign( json["relays"][this->randomPick]["nickname"].as<const char*>() );
@@ -508,14 +506,14 @@ namespace Briand {
 				json.clear();
 			}
 			else {
-				if (DEBUG) Serial.printf("[DEBUG] %s cache deserialization error: %s. Cache has been invalidated.\n", this->NODES_FILE_EXIT, err.c_str());
+				if (DEBUG) printf("[DEBUG] %s cache deserialization error: %s. Cache has been invalidated.\n", this->NODES_FILE_EXIT, err.c_str());
 				this->cacheValid = false;
 			}
 
 			file.close();
 		}
 		else {
-			if (VERBOSE) Serial.println("[DEBUG] Invalid cache at second tentative. Skipping with failure.");
+			if (VERBOSE) printf("[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
 		}
 
 		return relay;
@@ -530,16 +528,16 @@ namespace Briand {
 
 	void BriandTorRelaySearcher::PrintCacheContents() {
 		if (DEBUG) {
-			Serial.println("[DEBUG] GUARDS CACHE:");
+			printf("[DEBUG] GUARDS CACHE:\n");
 			BriandUtils::PrintFileContent(this->NODES_FILE_GUARD);
-			Serial.println("");
-			Serial.println("[DEBUG] MIDDLE CACHE:");
+			printf("\n");
+			printf("[DEBUG] MIDDLE CACHE:\n");
 			BriandUtils::PrintFileContent(this->NODES_FILE_MIDDLE);
-			Serial.println("");
-			Serial.println("[DEBUG] EXIT CACHE:");
+			printf("\n");
+			printf("[DEBUG] EXIT CACHE:\n");
 			BriandUtils::PrintFileContent(this->NODES_FILE_EXIT);
-			Serial.println("");
-			Serial.printf("[DEBUG] Cache status is: %s\n", (this->cacheValid ? "Valid" : "Invalid"));
+			printf("\n");
+			printf("[DEBUG] Cache status is: %s\n", (this->cacheValid ? "Valid" : "Invalid"));
 		}
 	}
 }

@@ -16,9 +16,10 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <Arduino.h> /* MUST BE THE FIRST HEADER IN CPP FILES! */
-
 #include "BriandTorCell.hxx"
+
+
+
 
 #include <iostream>
 #include <memory>
@@ -211,7 +212,7 @@ namespace Briand {
 
 		this->cellTotalSizeBytes = cellBuffer->size();
 
-		if (DEBUG) Serial.printf("[DEBUG] %s Cell of %d bytes is going to be sent. Contents: ", Briand::BriandUtils::BriandTorCellCommandToString(this->Command).c_str(), cellBuffer->size());
+		if (DEBUG) printf("[DEBUG] %s Cell of %d bytes is going to be sent. Contents: ", Briand::BriandUtils::BriandTorCellCommandToString(this->Command).c_str(), cellBuffer->size());
 		if (DEBUG) Briand::BriandUtils::PrintByteBuffer( *(cellBuffer.get()), this->cellTotalSizeBytes, this->cellTotalSizeBytes );
 
 		// That's all, send cell through network!
@@ -236,7 +237,7 @@ namespace Briand {
 		
 		// check length
 		if (buffer->size() < 5) {
-			if (DEBUG) Serial.println("[DEBUG] Insufficient length (less than 5 bytes).");
+			if (DEBUG) printf("[DEBUG] Insufficient length (less than 5 bytes).\n");
 			return false;
 		}
 
@@ -245,7 +246,7 @@ namespace Briand {
 		// CircID
 		if (this->linkProtocolVersion < 4) {
 			// CircID is 2 bytes, VERSION cells are always 2 bytes
-			if (DEBUG) Serial.printf("[DEBUG] Link protocol <4 (Ver.%u)\n", this->linkProtocolVersion);
+			if (DEBUG) printf("[DEBUG] Link protocol <4 (Ver.%u)\n", this->linkProtocolVersion);
 			this->CircID += static_cast<unsigned int>(buffer->at(0) << 8);
 			this->CircID += static_cast<unsigned int>(buffer->at(1));
 			nextFrom = 2;
@@ -253,7 +254,7 @@ namespace Briand {
 		}
 		else {
 			// CircID is 4 bytes
-			if (DEBUG) Serial.printf("[DEBUG] Link protocol >=4. (Ver. %u)\n", this->linkProtocolVersion);
+			if (DEBUG) printf("[DEBUG] Link protocol >=4. (Ver. %u)\n", this->linkProtocolVersion);
 			this->CircID += static_cast<unsigned int>(buffer->at(0) << 24);
 			this->CircID += static_cast<unsigned int>(buffer->at(1) << 16);
 			this->CircID += static_cast<unsigned int>(buffer->at(2) << 8);
@@ -267,7 +268,7 @@ namespace Briand {
 		nextFrom += 1;
 		cellTotalSizeBytes += 1;
 
-		if (DEBUG) Serial.printf("[DEBUG] Cell command is %s\n", Briand::BriandUtils::BriandTorCellCommandToString(this->Command).c_str() );
+		if (DEBUG) printf("[DEBUG] Cell command is %s\n", Briand::BriandUtils::BriandTorCellCommandToString(this->Command).c_str() );
 
 		// Command => I know if is variable length cell
 		if (this->Command == Briand::BriandTorCellCommand::VERSIONS || static_cast<unsigned int>(this->Command) >= 128) 
@@ -275,7 +276,7 @@ namespace Briand {
 
 		// If variable length cell then I must have 2 bytes for Length and [Length] bytes more
 		if(this->isVariableLengthCell && (buffer->size() - nextFrom) < 2) {
-			if (DEBUG) Serial.println("[DEBUG] Variable-length cell has insufficient length.");
+			if (DEBUG) printf("[DEBUG] Variable-length cell has insufficient length.\n");
 			return false;
 		}
 		
@@ -288,7 +289,7 @@ namespace Briand {
 			cellTotalSizeBytes += 2;
 
 			if ((buffer->size() - nextFrom) < length) {
-				if (DEBUG) Serial.println("[DEBUG] Variable-length cell has insufficient payload length.");
+				if (DEBUG) printf("[DEBUG] Variable-length cell has insufficient payload length.\n");
 				return false;
 			}
 
@@ -296,14 +297,14 @@ namespace Briand {
 			this->Payload->insert(this->Payload->begin(), buffer->begin() + nextFrom, buffer->begin() + nextFrom + length);
 
 			if (DEBUG) {
-				Serial.print("[DEBUG] Variable-length cell payload: ");
+				printf("[DEBUG] Variable-length cell payload: ");
 				Briand::BriandUtils::PrintByteBuffer( *(this->Payload.get()), 128 );
 			} 
 		}
 		else {
 			// All the rest, for a maximum of PAYLOAD_LEN, is payload
 			this->Payload->insert(this->Payload->begin(), buffer->begin() + nextFrom, buffer->begin() + nextFrom + PAYLOAD_LEN);
-			if (DEBUG) Serial.printf("[DEBUG] Fixed cell payload of %d bytes.\n", this->Payload->size());
+			if (DEBUG) printf("[DEBUG] Fixed cell payload of %d bytes.\n", this->Payload->size());
 		}
 
 		cellTotalSizeBytes += this->Payload->size();
@@ -374,7 +375,7 @@ namespace Briand {
 
 			// check if ok
 			if ( certType <= 0 || certType > BriandTorCertificateBase::MAX_CERT_VALUE ) {
-				if (DEBUG) Serial.printf("[DEBUG] Invalid CERTS cell content (%d is not a valid range certType).\n", certType);
+				if (DEBUG) printf("[DEBUG] Invalid CERTS cell content (%d is not a valid range certType).\n", certType);
 				return false;
 			}
 
@@ -389,7 +390,7 @@ namespace Briand {
 				7: Ed25519 identity, signed with RSA identity.
 			*/
 
-			if (DEBUG) Serial.printf("[DEBUG] Certificate %u (of %u) is certType %u.\n", curCert+1, NCerts, certType);
+			if (DEBUG) printf("[DEBUG] Certificate %u (of %u) is certType %u.\n", curCert+1, NCerts, certType);
 
 			// 2 bytes for length
 			unsigned short certLen = 0;
@@ -397,11 +398,11 @@ namespace Briand {
 			certLen += static_cast<unsigned short>(this->Payload->at(startIndex+1));
 			startIndex += 2;
 
-			if (DEBUG) Serial.printf("[DEBUG] Certificate len is %u bytes.\n", certLen);
+			if (DEBUG) printf("[DEBUG] Certificate len is %u bytes.\n", certLen);
 
 			// Payload should contain at least this length
 			if (this->Payload->size() - startIndex < certLen) {
-				if (DEBUG) Serial.println("[DEBUG] Invalid CERTS cell content size.");
+				if (DEBUG) printf("[DEBUG] Invalid CERTS cell content size.\n");
 				return false;
 			}
 
@@ -594,7 +595,7 @@ namespace Briand {
 
 		// Generate Curve25519 keys
 		if (!BriandTorCryptoUtils::ECDH_Curve25519_GenKeys(relay)) {
-			if (DEBUG) Serial.println("[DEBUG] CREATE2 construction failed because Curve25519 key generation failed.");
+			if (DEBUG) printf("[DEBUG] CREATE2 construction failed because Curve25519 key generation failed.\n");
 			return false;
 		}
 
@@ -623,7 +624,7 @@ namespace Briand {
 		// Check
 		auto fingerprintBytes = BriandUtils::HexStringToVector(*relay.fingerprint.get(), "");
 		if (fingerprintBytes->size() != ID_LENGTH) {
-			if (DEBUG) Serial.printf("[DEBUG] CREATE2 construction failed because relay fingerprint was expected to have %u bytes but it has %u\n", ID_LENGTH, fingerprintBytes->size());
+			if (DEBUG) printf("[DEBUG] CREATE2 construction failed because relay fingerprint was expected to have %u bytes but it has %u\n", ID_LENGTH, fingerprintBytes->size());
 			return false;
 		}
 		this->AppendBytesToPayload(*fingerprintBytes.get());
@@ -632,7 +633,7 @@ namespace Briand {
 		auto KEYID = BriandTorCryptoUtils::Base64Decode(*relay.descriptorNtorOnionKey.get());
 		// Check
 		if (KEYID->size() != H_LENGTH) {
-			if (DEBUG) Serial.printf("[DEBUG] CREATE2 construction failed because relay ntor key was expected to have %u bytes but decoded has %u\n", H_LENGTH, KEYID->size());
+			if (DEBUG) printf("[DEBUG] CREATE2 construction failed because relay ntor key was expected to have %u bytes but decoded has %u\n", H_LENGTH, KEYID->size());
 			return false;
 		}
 		this->AppendBytesToPayload(*KEYID.get());
@@ -640,12 +641,12 @@ namespace Briand {
 		// Append the CLIENT_PK
 		// Check
 		if (relay.CURVE25519_PUBLIC_KEY->size() != G_LENGTH) {
-			if (DEBUG) Serial.printf("[DEBUG] CREATE2 construction failed because Curve25519 size was expected to be %u bytes but has %u\n", G_LENGTH, relay.CURVE25519_PUBLIC_KEY->size());
+			if (DEBUG) printf("[DEBUG] CREATE2 construction failed because Curve25519 size was expected to be %u bytes but has %u\n", G_LENGTH, relay.CURVE25519_PUBLIC_KEY->size());
 			return false;
 		}
 		this->AppendBytesToPayload(*relay.CURVE25519_PUBLIC_KEY.get());
 
-		if (DEBUG) Serial.println("[DEBUG] CREATE2 cell built with success.");
+		if (DEBUG) printf("[DEBUG] CREATE2 cell built with success.\n");
 
 		return true;
 	}

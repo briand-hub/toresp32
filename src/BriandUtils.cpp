@@ -16,20 +16,14 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <Arduino.h> /* MUST BE THE FIRST HEADER IN CPP FILES! */
-
 #include "BriandUtils.hxx"
+
+
+
+#include <esp_system.h>
 
 #include <iostream>
 #include <memory>
-#include <random>
-#include <esp_system.h>
-
-#include <FS.h>
-#include <SPIFFS.h>
-#include <WiFiClientSecure.h>
-
-#include <ArduinoJson.h>
 
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
@@ -260,7 +254,7 @@ namespace Briand
 			}
 		}
 		else {
-			Serial.printf("[ERR] Error on downloading from https://ifconfig.me/all.json Http code: %d Deserialization success: %d\n", httpCode, success);
+			printf("[ERR] Error on downloading from https://ifconfig.me/all.json Http code: %d Deserialization success: %d\n", httpCode, success);
 		}
 
 		return output;
@@ -273,10 +267,10 @@ namespace Briand
 		else limit = buffer.size();
 
 		for (unsigned int i=0; i < limit; i++) {
-			Serial.printf("%02X", buffer.at(i));
-			if (newLineAfterBytes > 0 && i > 0 && i % newLineAfterBytes == 0) Serial.print("\n");
+			printf("%02X", buffer.at(i));
+			if (newLineAfterBytes > 0 && i > 0 && i % newLineAfterBytes == 0) printf("\n");
 		}
-		Serial.print("\n");
+		printf("\n");
 	}
 
 	void BriandUtils::PrintOldStyleByteBuffer(unsigned char buffer[], const unsigned int& size, const short& newLineAfterBytes /* = 0 */, const unsigned int& bytesToPrint /* = 0 */) {
@@ -286,10 +280,10 @@ namespace Briand
 		else limit = size;
 
 		for (unsigned int i=0; i < limit; i++) {
-			Serial.printf("%02X", buffer[i]);
-			if (newLineAfterBytes > 0 && i > 0 && i % newLineAfterBytes == 0) Serial.print("\n");
+			printf("%02X", buffer[i]);
+			if (newLineAfterBytes > 0 && i > 0 && i % newLineAfterBytes == 0) printf("\n");
 		}
-		Serial.print("\n");
+		printf("\n");
 	}
 
 	string BriandUtils::BriandTorCellCommandToString(const Briand::BriandTorCellCommand& command) {
@@ -326,7 +320,7 @@ namespace Briand
 	}
 
 	unsigned long BriandUtils::GetUnixTime() {
-		time_t now;
+		long int now;
 		time(&now);
 		return now;
 	}
@@ -429,7 +423,7 @@ namespace Briand
 	void BriandUtils::PrintFileContent(const string& filename) {
 		File f = SPIFFS.open(filename.c_str(), "r");
 		while (f.available()) {
-			Serial.print(static_cast<char>(f.read()));
+			printf(static_cast<char>(f.read()));
 		}
 		f.close();
 	}

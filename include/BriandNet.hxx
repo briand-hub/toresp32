@@ -22,9 +22,9 @@
 #include <memory>
 #include <vector>
 
-#include <Arduino.h>
-#include <WiFiClientSecure.h>
-#include <ArduinoJson.h>
+#include <cJSON.h>
+
+#include <BriandIDFClients.hxx>
 
 #include "BriandDefines.hxx"
 
@@ -55,7 +55,7 @@ namespace Briand
 		static unique_ptr<string> UnsignedCharVectorToString(unique_ptr<vector<unsigned char>>& input, bool emptyContents = true);
 
 		/**
-		 * Method send raw bytes to specified host using WiFiSecureClient and returns raw response bytes.
+		 * Method send raw bytes to specified host using BriandIDFSocketTlsClient and returns raw response bytes.
 		 * @param host Hostname / IP
 		 * @param port Port
 		 * @param content Request (raw bytes) to send (c++ vector must be used)
@@ -65,18 +65,18 @@ namespace Briand
 		static unique_ptr<vector<unsigned char>> RawInsecureRequest(const string& host, const short& port, unique_ptr<vector<unsigned char>>& content, bool emptyContents = true);
 
 		/**
-		 * Method send raw bytes to specified host using yout own connected and ready to go WiFiClientSecure, returns raw response bytes.
-		 * @param client Pointer to your own initialized WiFiClientSecure, connected and ready.
+		 * Method send raw bytes to specified host using yout own connected and ready to go BriandIDFSocketTlsClient, returns raw response bytes.
+		 * @param client Pointer to your own initialized BriandIDFSocketTlsClient, connected and ready.
 		 * @param content Request (raw bytes) to send (c++ vector must be used)
 		 * @param emptyContents set it to true if you want the input buffer empty after request. false to keep it.
 		 * @param closeConnection set it to true if you want close the connection (client->end).
 		 * @param expectResponse set it to false if a response is not expected.
 		 * @return an unique_ptr to the response buffer (c++ vector), empty vector if fails or response is not expected.
 		*/
-		static unique_ptr<vector<unsigned char>> RawSecureRequest(unique_ptr<WiFiClientSecure>& client, unique_ptr<vector<unsigned char>>& content, bool emptyContents = true, bool closeConnection = false, bool expectResponse = true);
+		static unique_ptr<vector<unsigned char>> RawSecureRequest(unique_ptr<BriandIDFSocketTlsClient>& client, unique_ptr<vector<unsigned char>>& content, bool emptyContents = true, bool closeConnection = false, bool expectResponse = true);
 
 		/**
-		 * Method send raw bytes to specified host using WiFiSecureClient and returns raw response bytes.
+		 * Method send raw bytes to specified host using BriandIDFSocketTlsClient and returns raw response bytes.
 		 * @param host Hostname / IP
 		 * @param port Port
 		 * @param content Request (raw bytes) to send (c++ vector must be used)
@@ -98,7 +98,7 @@ namespace Briand
 		static unique_ptr<string> HttpsGet(const string& host, const short& port, const string& path, short& httpReturnCode, const string& agent = "empty", const bool& returnBodyOnly = false);
 
 		/**
-		 * Method send an HttpS request and returns contents in JSON format (Arduino DynamicJsonDocument)
+		 * Method send an HttpS request and returns contents in JSON format
 		 * @param host Hostname/IP (ex. ifconfig.me)
 		 * @param port Port (ex. 443)
 		 * @param path URI path starting with / (ex. /all.json) MUST be urlencoded before!
@@ -106,9 +106,9 @@ namespace Briand
 		 * @param deserializationSuccess if deserilization had success true, if fails false.
 		 * @param agent User-Agent to set in the header
 		 * @param expectedSize Expected Json size to build the DynamicJsonDocument
-		 * @return JsonDocument with fields if success, empty if fails.
+		 * @return JSON objects with fields if success, empty if fails.
 		*/
-		static DynamicJsonDocument HttpsGetJson(const string& host, const short& port, const string& path, short& httpReturnCode, bool& deserializationSuccess, const string& agent = "empty", const unsigned int& expectedSize = 1024);
+		static cJSON* HttpsGetJson(const string& host, const short& port, const string& path, short& httpReturnCode, bool& deserializationSuccess, const string& agent = "empty", const unsigned int& expectedSize = 1024);
 
 		/**
 		 * Method send an Http (NOT HTTPS!) request and returns contents in string format

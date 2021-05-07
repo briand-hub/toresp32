@@ -16,16 +16,15 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <Arduino.h> /* MUST BE THE FIRST HEADER IN CPP FILES! */
-
 #include "BriandNet.hxx"
+
+#include <cJSON.h>
+
+#include <BriandIDFClients.hxx>
 
 #include <iostream>
 #include <memory>
 #include <vector>
-
-#include <WiFiClientSecure.h>
-#include <ArduinoJson.h>
 
 using namespace std;
 
@@ -71,72 +70,47 @@ namespace Briand
 	unique_ptr<vector<unsigned char>> BriandNet::RawInsecureRequest(const string& host, const short& port, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/) {
 		auto output = make_unique<vector<unsigned char>>();
 
-		auto client = make_unique<WiFiClient>();
+		auto client = make_unique<BriandIDFSocketClient>();
+
+		// Set parameters
+		client->SetVerbose(DEBUG);
+		client->SetTimeout(NET_REQUEST_TIMEOUT_S);
 
 		// Connect
-
-		if ( !client->connect(host.c_str(), port) ) {
-			if (VERBOSE) Serial.println("[ERR] Failed to connect");
+		if ( !client->Connect(host.c_str(), port) ) {
+			if (VERBOSE) printf("[ERR] Failed to connect\n");
 			return output;
 		}
 
-		if (DEBUG) Serial.println("[DEBUG] Connected.");
+		if (DEBUG) printf("[DEBUG] Connected.\n");
 
 		// Write request
+		if ( !client->WriteData(content) ) {
+			if (VERBOSE) printf("[ERR] Failed to send data\n");
+			return output;
+		}
 
-		if (emptyContents) {
-			while (content->size() > 0) {
-				client->write( content->at(0) );
-				content->erase(content->begin());
-			}
-		}
-		else {
-			for (unsigned long int i = 0; i<content->size(); i++ ) {
-				client->write( content->at(i) );
-			}
-		}
-		
-		client->flush();
+		if (emptyContents)
+			content->clear();
 
 		// Wait response until timeout reached
 		
-		if (DEBUG) Serial.println("[DEBUG] Request sent.");
-		if (DEBUG) Serial.print("[DEBUG] Waiting response");
+		if (DEBUG) printf("[DEBUG] Request sent.\n");
+		if (DEBUG) printf("[DEBUG] Waiting response");
 
-		unsigned long startedOn = millis();
-		bool timeout = false;
-
-		while (client->available() == 0 && !timeout) {
-			delay(100);
-			timeout = ( millis() - startedOn ) >= NET_REQUEST_TIMEOUT_S*1000;
-			if (DEBUG) Serial.print(".");
-		}
-		if (DEBUG) Serial.print("\n");
-
-		if (timeout) {
-			if (VERBOSE) Serial.println("[ERR] Request has timed out.");
-			client.reset();
-			return output;
-		} 
-
-		// Response ready!
-
-		// WARNING: DO NOT USE condition isConnected() in this while, otherwise reponse truncate happens!!!!
-		while (client->available() > 0) {
-			output->push_back( static_cast<unsigned char>( client->read() ) );
-		}
+		// Response
+		output = client->ReadData(false);
 		
-		if (DEBUG) Serial.printf("[DEBUG] Got response of %lu bytes.\n", output->size());
+		if (DEBUG) printf("[DEBUG] Got response of %lu bytes.\n", output->size());
 
-		if (client->connected())
-			client->stop();
+		client->Disconnect();
 
 		client.reset(); // Release now please, I need RAM!
 
 		return std::move(output);
 	}
 
-	unique_ptr<vector<unsigned char>> BriandNet::RawSecureRequest(unique_ptr<WiFiClientSecure>& client, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/, bool closeConnection /* = false*/, bool expectResponse /* = true */) {
+	unique_ptr<vector<unsigned char>> BriandNet::RawSecureRequest(unique_ptr<BriandIDFSocketTlsClient>& client, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/, bool closeConnection /* = false*/, bool expectResponse /* = true */) {
 		auto output = make_unique<vector<unsigned char>>();
 
 		// Write request
@@ -158,8 +132,8 @@ namespace Briand
 		if (expectResponse) {
 			// Wait response until timeout reached
 			
-			if (DEBUG) Serial.println("[DEBUG] Request sent.");
-			if (DEBUG) Serial.print("[DEBUG] Waiting response");
+			if (DEBUG) printf("[DEBUG] Request sent.\n");
+			if (DEBUG) printf("[DEBUG] Waiting response");
 
 			unsigned long startedOn = millis();
 			bool timeout = false;
@@ -167,12 +141,12 @@ namespace Briand
 			while (client->available() == 0 && !timeout) {
 				delay(100);
 				timeout = ( millis() - startedOn ) >= NET_REQUEST_TIMEOUT_S*1000;
-				if (DEBUG) Serial.print(".");
+				if (DEBUG) printf(".");
 			}
-			if (DEBUG) Serial.print("\n");
+			if (DEBUG) printf("\n");
 
 			if (timeout) {
-				if (VERBOSE) Serial.println("[ERR] Request has timed out.");
+				if (VERBOSE) printf("[ERR] Request has timed out.\n");
 				return output;
 			} 
 
@@ -183,7 +157,7 @@ namespace Briand
 				output->push_back( static_cast<unsigned char>( client->read() ) );
 			}
 			
-			if (DEBUG) Serial.printf("[DEBUG] Got response of %lu bytes.\n", output->size());
+			if (DEBUG) printf("[DEBUG] Got response of %lu bytes.\n", output->size());
 
 			if (client->connected() && closeConnection)
 				client->stop();
@@ -195,7 +169,7 @@ namespace Briand
 	unique_ptr<vector<unsigned char>> BriandNet::RawSecureRequest(const string& host, const short& port, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/) {
 		auto output = make_unique<vector<unsigned char>>();
 
-		auto client = make_unique<WiFiClientSecure>();
+		auto client = make_unique<BriandIDFSocketTlsClient>();
 
 		// TODO : find a way to validate requests.
 		// Not providing a CACert will be a leak of security but hard-coding has disadvantages...
@@ -205,11 +179,11 @@ namespace Briand
 		// Connect
 
 		if ( !client->connect(host.c_str(), port) ) {
-			if (VERBOSE) Serial.println("[ERR] Failed to connect");
+			if (VERBOSE) printf("[ERR] Failed to connect\n");
 			return output;
 		}
 
-		if (DEBUG) Serial.println("[DEBUG] Connected.");
+		if (DEBUG) printf("[DEBUG] Connected.\n");
 
 		// Write request
 
@@ -229,8 +203,8 @@ namespace Briand
 
 		// Wait response until timeout reached
 		
-		if (DEBUG) Serial.println("[DEBUG] Request sent.");
-		if (DEBUG) Serial.print("[DEBUG] Waiting response");
+		if (DEBUG) printf("[DEBUG] Request sent.\n");
+		if (DEBUG) printf("[DEBUG] Waiting response");
 
 		unsigned long startedOn = millis();
 		bool timeout = false;
@@ -238,12 +212,12 @@ namespace Briand
 		while (client->available() == 0 && !timeout) {
 			delay(100);
 			timeout = ( millis() - startedOn ) >= NET_REQUEST_TIMEOUT_S*1000;
-			if (DEBUG) Serial.print(".");
+			if (DEBUG) printf(".");
 		}
-		if (DEBUG) Serial.print("\n");
+		if (DEBUG) printf("\n");
 
 		if (timeout) {
-			if (VERBOSE) Serial.println("[ERR] Request has timed out.");
+			if (VERBOSE) printf("[ERR] Request has timed out.\n");
 			client.reset();
 			return output;
 		} 
@@ -254,7 +228,7 @@ namespace Briand
 			output->push_back( static_cast<unsigned char>( client->read() ) );
 		}
 		
-		if (DEBUG) Serial.printf("[DEBUG] Got response of %lu bytes.\n", output->size());
+		if (DEBUG) printf("[DEBUG] Got response of %lu bytes.\n", output->size());
 
 		if (client->connected())
 			client->stop();
@@ -265,7 +239,7 @@ namespace Briand
 	}
 
 	unique_ptr<string> BriandNet::HttpsGet(const string& host, const short& port, const string& path, short& httpReturnCode, const string& agent /* = "empty"*/, const bool& returnBodyOnly /* = false*/) {
-		if (DEBUG) Serial.printf("[DEBUG] HttpsGet called to https://%s:%d%s\n", host.c_str(), port, path.c_str());
+		if (DEBUG) printf("[DEBUG] HttpsGet called to https://%s:%d%s\n", host.c_str(), port, path.c_str());
 
 		// Prepare request
 
@@ -279,12 +253,12 @@ namespace Briand
 
 		auto contents = StringToUnsignedCharVector(request, true);
 		
-		if (DEBUG) Serial.println("[DEBUG] HttpsGet sending raw request.");
+		if (DEBUG) printf("[DEBUG] HttpsGet sending raw request.\n");
 		auto response = RawSecureRequest(host, port, contents, true);
 
 		if (response->size() > 0) {
 			// Success
-			if (DEBUG) Serial.println("[DEBUG] HttpsGet success.");
+			if (DEBUG) printf("[DEBUG] HttpsGet success.\n");
 
 			// Convert to string
 			auto responseContent = UnsignedCharVectorToString(response, true);
@@ -303,20 +277,20 @@ namespace Briand
 			return responseContent;
 		}
 		else {
-			if (DEBUG) Serial.println("[DEBUG] HttpsGet failed.");
+			if (DEBUG) printf("[DEBUG] HttpsGet failed.\n");
 			return nullptr;
 		}
 	}
 
-	DynamicJsonDocument BriandNet::HttpsGetJson(const string& host, const short& port, const string& path, short& httpReturnCode, bool& deserializationSuccess, const string& agent  /* = "empty"*/, const unsigned int& expectedSize /* = 1024*/) {
-		if (DEBUG) Serial.printf("[DEBUG] HttpsGetJson called to https://%s:%d/%s\n", host.c_str(), port, path.c_str());
+	cJSON* BriandNet::HttpsGetJson(const string& host, const short& port, const string& path, short& httpReturnCode, bool& deserializationSuccess, const string& agent  /* = "empty"*/, const unsigned int& expectedSize /* = 1024*/) {
+		if (DEBUG) printf("[DEBUG] HttpsGetJson called to https://%s:%d/%s\n", host.c_str(), port, path.c_str());
 		
 		deserializationSuccess = false;
 
 		auto response = HttpsGet(host, port, path, httpReturnCode, agent, true);
 
 		if (httpReturnCode == 200) {
-			if (DEBUG) Serial.println("[DEBUG] HttpsGetJson response ok (200).");
+			if (DEBUG) printf("[DEBUG] HttpsGetJson response ok (200).\n");
 
 			// Seems that sometimes additional bytes are included in response when body only is requested. 
 			// So remove before the first { and after the last }
@@ -331,11 +305,11 @@ namespace Briand
 			DeserializationError err = deserializeJson(doc, response->c_str());
 
 			if (err) {
-				if (DEBUG) Serial.printf("[DEBUG] HttpsGetJson deserialization failed: %s\n", err.c_str());
+				if (DEBUG) printf("[DEBUG] HttpsGetJson deserialization failed: %s\n", err.c_str());
 				deserializationSuccess = false;
 			}
 			else {
-				if (DEBUG) Serial.println("[DEBUG] HttpsGetJson deserialization ok.");	
+				if (DEBUG) printf("[DEBUG] HttpsGetJson deserialization ok.\n");	
 				deserializationSuccess = true;
 			}
 
@@ -343,13 +317,13 @@ namespace Briand
 			return doc;
 		}
 		else {
-			if (DEBUG) Serial.printf("[DEBUG] HttpsGetJson failed httpcode = %d\n ", httpReturnCode);
+			if (DEBUG) printf("[DEBUG] HttpsGetJson failed httpcode = %d\n ", httpReturnCode);
 			return DynamicJsonDocument(1); // Just one byte 
 		}
 	}
 
 	unique_ptr<string> BriandNet::HttpInsecureGet(const string& host, const short& port, const string& path, short& httpReturnCode, const string& agent /* = "empty"*/, const bool& returnBodyOnly /* = false*/) {
-		if (DEBUG) Serial.printf("[DEBUG] HttpInsecureGet called to http://%s:%d%s\n", host.c_str(), port, path.c_str());
+		if (DEBUG) printf("[DEBUG] HttpInsecureGet called to http://%s:%d%s\n", host.c_str(), port, path.c_str());
 
 		// Prepare request
 
@@ -363,12 +337,12 @@ namespace Briand
 
 		auto contents = StringToUnsignedCharVector(request, true);
 		
-		if (DEBUG) Serial.println("[DEBUG] HttpInsecureGet sending raw request.");
+		if (DEBUG) printf("[DEBUG] HttpInsecureGet sending raw request.\n");
 		auto response = RawInsecureRequest(host, port, contents, true);
 
 		if (response->size() > 0) {
 			// Success
-			if (DEBUG) Serial.println("[DEBUG] HttpInsecureGet success.");
+			if (DEBUG) printf("[DEBUG] HttpInsecureGet success.\n");
 
 			// Convert to string
 			auto responseContent = UnsignedCharVectorToString(response, true);
@@ -387,7 +361,7 @@ namespace Briand
 			return responseContent;
 		}
 		else {
-			if (DEBUG) Serial.println("[DEBUG] HttpInsecureGet failed.");
+			if (DEBUG) printf("[DEBUG] HttpInsecureGet failed.\n");
 			return nullptr;
 		}
 	}

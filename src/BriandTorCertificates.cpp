@@ -16,9 +16,10 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <Arduino.h> /* MUST BE THE FIRST HEADER IN CPP FILES! */
-
 #include "BriandTorCertificates.hxx"
+
+
+
 
 #include <iostream>
 #include <memory>
@@ -65,7 +66,7 @@ namespace Briand {
 
 	void BriandTorCertificateBase::PrintCertInfo() {
 		if (DEBUG) {
-			Serial.printf("[DEBUG] %s\n", this->GetCertificateShortInfo().c_str());
+			printf("[DEBUG] %s\n", this->GetCertificateShortInfo().c_str());
 		}
 	}
 
@@ -80,12 +81,12 @@ namespace Briand {
 		this->ExtData = make_unique<vector<unsigned char>>();
 		
 		if (DEBUG) {
-			Serial.print("[DEBUG] Ed25519CertificateExtension raw bytes: ");
+			printf("[DEBUG] Ed25519CertificateExtension raw bytes: ");
 			BriandUtils::PrintByteBuffer(*rawdata.get(), rawdata->size()+1, rawdata->size()+1);
 		}
 
 		if (rawdata->size() < 4) {
-			if (DEBUG) Serial.println("[DEBUG] Ed25519CertificateExtension has poor bytes.");
+			if (DEBUG) printf("[DEBUG] Ed25519CertificateExtension has poor bytes.\n");
 			return;
 		}
 
@@ -94,21 +95,21 @@ namespace Briand {
 		this->ExtType = rawdata->at(2);
 		this->ExtFlags = rawdata->at(3);
 
-		if (DEBUG) Serial.printf("[DEBUG] Ed25519CertificateExtension length is of %d bytes.\n", this->ExtLength);
+		if (DEBUG) printf("[DEBUG] Ed25519CertificateExtension length is of %d bytes.\n", this->ExtLength);
 
 		if ( (rawdata->size() - 4) < this->ExtLength ) {
-			if (DEBUG) Serial.println("[DEBUG] Ed25519CertificateExtension has poor bytes for content.");
+			if (DEBUG) printf("[DEBUG] Ed25519CertificateExtension has poor bytes for content.\n");
 			return;
 		}
 
 		this->ExtData->insert(this->ExtData->begin(), rawdata->begin() + 4, rawdata->begin() + 4 + this->ExtLength);
 		
 		if (DEBUG) {
-			Serial.printf("[DEBUG] Ed25519CertificateExtension ExtData: ");
+			printf("[DEBUG] Ed25519CertificateExtension ExtData: ");
 			BriandUtils::PrintByteBuffer(*this->ExtData.get(), this->ExtLength + 1, this->ExtLength + 1);
 		} 
 
-		if (DEBUG) Serial.println("[DEBUG] Ed25519CertificateExtension structure is valid.");
+		if (DEBUG) printf("[DEBUG] Ed25519CertificateExtension structure is valid.\n");
 
 		this->valid = true;
 	}
@@ -149,12 +150,12 @@ namespace Briand {
 		// start to build
 
 		if (DEBUG) {
-			Serial.printf("[DEBUG] Ed25519Certificate raw bytes: ");
+			printf("[DEBUG] Ed25519Certificate raw bytes: ");
 			BriandUtils::PrintByteBuffer(*raw_bytes.get(), raw_bytes->size() + 1, raw_bytes->size() +1);
 		} 
 
 		if (raw_bytes->size() < 40) {
-			if (DEBUG) Serial.println("[DEBUG] Ed25519Certificate has too poor bytes.");
+			if (DEBUG) printf("[DEBUG] Ed25519Certificate has too poor bytes.\n");
 			return;
 		}
 
@@ -171,7 +172,7 @@ namespace Briand {
 		// The "VERSION" field holds the value [01]
 		// However I just check > 0 for future versions
 		if (this->VERSION < 0x01) {
-			if (DEBUG) Serial.println("[DEBUG] Ed25519Certificate has invalid VERSION.");
+			if (DEBUG) printf("[DEBUG] Ed25519Certificate has invalid VERSION.\n");
 			return;
 		}
 
@@ -194,7 +195,7 @@ namespace Briand {
 			// In order to do a right work, prepare a copy of the buffer 
 			// and erase for the first Extension->TotalSize() bytes to do the next one.
 
-			if (DEBUG) Serial.printf("[DEBUG] Ed25519Certificate has %d extensions, checking.\n", this->N_EXTENSIONS);
+			if (DEBUG) printf("[DEBUG] Ed25519Certificate has %d extensions, checking.\n", this->N_EXTENSIONS);
 
 			unsigned int extensionsStartAt = 7 + certified_key_len + 1;
 			unsigned char remainingExtensions = this->N_EXTENSIONS;
@@ -204,7 +205,7 @@ namespace Briand {
 			while (remainingExtensions > 0) {
 				BriandTorEd25519CertificateExtension ext { extBuffer };
 				if (!ext.valid) {
-					if (DEBUG) Serial.printf("[DEBUG] Ed25519Certificate extension %d of %d is invalid.\n", (this->N_EXTENSIONS - remainingExtensions) + 1, this->N_EXTENSIONS);
+					if (DEBUG) printf("[DEBUG] Ed25519Certificate extension %d of %d is invalid.\n", (this->N_EXTENSIONS - remainingExtensions) + 1, this->N_EXTENSIONS);
 					return;
 				}
 
@@ -226,7 +227,7 @@ namespace Briand {
 		// So... all bytes before are the non signature parts, used for certificate signature
 		this->non_signature_parts->insert(this->non_signature_parts->begin(), raw_bytes->begin(), raw_bytes->end() - signature_len);
 
-		if (DEBUG) Serial.println("[DEBUG] Ed25519Certificate structure validated.");
+		if (DEBUG) printf("[DEBUG] Ed25519Certificate structure validated.\n");
 
 		this->isStructValid = true; 
 	}
@@ -250,34 +251,34 @@ namespace Briand {
 		// For ed certificates all signatures are made with an ed key from other certificates
 		// (listed somewhere else, thus parameter) and must not be expired
 
-		if (DEBUG) Serial.printf("[DEBUG] %s signature verification.\n", this->GetCertificateName().c_str());
+		if (DEBUG) printf("[DEBUG] %s signature verification.\n", this->GetCertificateName().c_str());
 
 		bool signatureValid = BriandTorCryptoUtils::CheckSignature_Ed25519(this->non_signature_parts, ed25519PK, this->SIGNATURE);
 
-		if (DEBUG) Serial.printf("[DEBUG] %s signature verification result: %d\n", this->GetCertificateName().c_str(), signatureValid);
+		if (DEBUG) printf("[DEBUG] %s signature verification result: %d\n", this->GetCertificateName().c_str(), signatureValid);
 
 		return signatureValid;
 	}
 
 	void BriandTorEd25519CertificateBase::PrintCertInfo() {
 		if (DEBUG) {		
-			Serial.printf("[DEBUG] Certificate Type: %d/%s->EXPIRATION_DATE (Unix time HOURS) = 0x %08X\n", this->Type, this->GetCertificateName().c_str(), this->EXPIRATION_DATE);
-			Serial.printf("[DEBUG] Certificate Type: %d/%s->EXPIRATION_DATE valid = %d\n", this->Type, this->GetCertificateName().c_str(), !this->IsExpired() );
-			Serial.printf("[DEBUG] Certificate Type: %d/%s->CERTIFIED_KEY = ", this->Type, this->GetCertificateName().c_str());
+			printf("[DEBUG] Certificate Type: %d/%s->EXPIRATION_DATE (Unix time HOURS) = 0x %08X\n", this->Type, this->GetCertificateName().c_str(), this->EXPIRATION_DATE);
+			printf("[DEBUG] Certificate Type: %d/%s->EXPIRATION_DATE valid = %d\n", this->Type, this->GetCertificateName().c_str(), !this->IsExpired() );
+			printf("[DEBUG] Certificate Type: %d/%s->CERTIFIED_KEY = ", this->Type, this->GetCertificateName().c_str());
 			//BriandUtils::PrintOldStyleByteBuffer(this->CERTIFIED_KEY.get(), this->certified_key_len, this->certified_key_len+1, this->certified_key_len);
 			BriandUtils::PrintByteBuffer(*this->CERTIFIED_KEY.get(), this->CERTIFIED_KEY->size(), this->CERTIFIED_KEY->size());
 			
 			if (this->EXTENSIONS->size() > 0) {
 				for (int i = 0; i<this->N_EXTENSIONS; i++) {
-					Serial.printf("[DEBUG] Certificate Type: %d/%s Extension %d of %d : ->type = 0x%02X ->flags = 0x%02X ->len = %hu bytes ->data = ", this->Type, this->GetCertificateName().c_str(), (i+1), this->N_EXTENSIONS, this->EXTENSIONS->at(i).ExtType, this->EXTENSIONS->at(i).ExtFlags, this->EXTENSIONS->at(i).ExtLength);
+					printf("[DEBUG] Certificate Type: %d/%s Extension %d of %d : ->type = 0x%02X ->flags = 0x%02X ->len = %hu bytes ->data = ", this->Type, this->GetCertificateName().c_str(), (i+1), this->N_EXTENSIONS, this->EXTENSIONS->at(i).ExtType, this->EXTENSIONS->at(i).ExtFlags, this->EXTENSIONS->at(i).ExtLength);
 					BriandUtils::PrintByteBuffer(*this->EXTENSIONS->at(i).ExtData.get(), this->EXTENSIONS->at(i).ExtLength+1, this->EXTENSIONS->at(i).ExtLength+1);
 				}
 			}
 			else {
-				Serial.printf("[DEBUG] Certificate Type: %d/%s has no extensions.\n", this->Type, this->GetCertificateName().c_str());	
+				printf("[DEBUG] Certificate Type: %d/%s has no extensions.\n", this->Type, this->GetCertificateName().c_str());	
 			}
 
-			Serial.printf("[DEBUG] Certificate Type: %d/%s->SIGNATURE = ", this->Type, this->GetCertificateName().c_str());
+			printf("[DEBUG] Certificate Type: %d/%s->SIGNATURE = ", this->Type, this->GetCertificateName().c_str());
 			//BriandUtils::PrintOldStyleByteBuffer(this->SIGNATURE.get(), this->signature_len, this->signature_len+1, this->signature_len);
 			BriandUtils::PrintByteBuffer(*this->SIGNATURE.get(), this->SIGNATURE->size(), this->SIGNATURE->size());
 		}
@@ -292,9 +293,9 @@ namespace Briand {
 		// This certificate is a DER-encoded X.509 
 		// The CA is the Cert type 2 and is ... myself!
 
-		if (DEBUG) Serial.printf("[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
+		if (DEBUG) printf("[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
 		bool validationResult = BriandTorCryptoUtils::X509Validate(this->Contents, this->Contents);
-		if (DEBUG) Serial.printf("[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
+		if (DEBUG) printf("[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
 
 		return validationResult;
 	}
@@ -315,7 +316,7 @@ namespace Briand {
 
 		// Parse certificate
 		if ( mbedtls_x509_crt_parse(&certificate, reinterpret_cast<const unsigned char*>(tempBuffer.get()), certSize) != 0) {
-			if (DEBUG) Serial.println("[DEBUG] RSA1024Identity certificate validation: failed to parse certificate.");
+			if (DEBUG) printf("[DEBUG] RSA1024Identity certificate validation: failed to parse certificate.\n");
 
 			// free
 			mbedtls_x509_crt_free(&certificate);
@@ -343,14 +344,14 @@ namespace Briand {
 		this->SIGLEN = 0x00;
 
 		if (DEBUG) {
-			Serial.printf("[DEBUG] RSAEd25519CrossCertificate raw bytes: ");
+			printf("[DEBUG] RSAEd25519CrossCertificate raw bytes: ");
 			BriandUtils::PrintByteBuffer(*raw_bytes.get(), raw_bytes->size()+1, raw_bytes->size()+1);
 		}
 
 		// start to build
 
 		if (raw_bytes->size() < 37) {
-			if (DEBUG) Serial.println("[DEBUG] RSAEd25519CrossCertificate has too poor bytes.");
+			if (DEBUG) printf("[DEBUG] RSAEd25519CrossCertificate has too poor bytes.\n");
 			return;
 		} 
 		
@@ -365,11 +366,11 @@ namespace Briand {
 		this->SIGLEN += raw_bytes->at(this->ed25519_key_size + 4);
 
 		if (raw_bytes->size() < (this->ed25519_key_size + 4 + this->SIGLEN)) {
-			if (DEBUG) Serial.println("[DEBUG] RSAEd25519CrossCertificate has too poor bytes for signature.");
+			if (DEBUG) printf("[DEBUG] RSAEd25519CrossCertificate has too poor bytes for signature.\n");
 			return;
 		} 
 		if (this->SIGLEN < 1) {
-			if (DEBUG) Serial.println("[DEBUG] RSAEd25519CrossCertificate has an invalid SIGLEN value.");
+			if (DEBUG) printf("[DEBUG] RSAEd25519CrossCertificate has an invalid SIGLEN value.\n");
 			return;
 		}
 
@@ -379,7 +380,7 @@ namespace Briand {
 		//std::copy(raw_bytes->begin()+37, raw_bytes->begin()+37+this->SIGLEN, this->SIGNATURE.get());
 		this->SIGNATURE->insert(this->SIGNATURE->begin(), raw_bytes->begin()+this->ed25519_key_size+4+1, raw_bytes->begin()+37+this->SIGLEN);
 
-		if (DEBUG) Serial.println("[DEBUG] RSAEd25519CrossCertificate structure validated.");
+		if (DEBUG) printf("[DEBUG] RSAEd25519CrossCertificate structure validated.\n");
 
 		this->isStructValid = true; 
 	}
@@ -399,12 +400,12 @@ namespace Briand {
 
 	bool BriandTorCertificate_RSAEd25519CrossCertificate::IsValid(const BriandTorCertificate_RSA1024Identity& signAuthenticator) {
 		if (this->IsExpired()) {
-			if (DEBUG) Serial.println("[DEBUG] RSAEd25519CrossCertificate is expired.");
+			if (DEBUG) printf("[DEBUG] RSAEd25519CrossCertificate is expired.\n");
 			return false;
 		}
 			
 		// Check signature
-		if (DEBUG) Serial.println("[DEBUG] RSAEd25519CrossCertificate check if signed by RSA1024 Identity.");
+		if (DEBUG) printf("[DEBUG] RSAEd25519CrossCertificate check if signed by RSA1024 Identity.\n");
 
 		/*The signature is computed on the SHA256 hash of the non-signature parts of the certificate, prefixed with the	string "Tor TLS RSA/Ed25519 cross-certificate".*/
 
@@ -420,19 +421,19 @@ namespace Briand {
 		
 		bool signedCorrectly = BriandTorCryptoUtils::CheckSignature_RSASHA256(messageToVerify, signAuthenticator.Contents, this->SIGNATURE);
 
-		if (DEBUG && signedCorrectly) Serial.println("[DEBUG] RSAEd25519CrossCertificate has valid signature.");
-		else if (DEBUG && !signedCorrectly) Serial.println("[DEBUG] RSAEd25519CrossCertificate has invalid signature!");
+		if (DEBUG && signedCorrectly) printf("[DEBUG] RSAEd25519CrossCertificate has valid signature.\n");
+		else if (DEBUG && !signedCorrectly) printf("[DEBUG] RSAEd25519CrossCertificate has invalid signature!\n");
 
 		return signedCorrectly;
 	}
 
 	void BriandTorCertificate_RSAEd25519CrossCertificate::PrintCertInfo() {
 		if (DEBUG) {				
-			Serial.printf("[DEBUG] RSAEd25519CrossCertificate->ED25519_KEY = ");
+			printf("[DEBUG] RSAEd25519CrossCertificate->ED25519_KEY = ");
 			BriandUtils::PrintByteBuffer(*this->ED25519_KEY.get(), this->ed25519_key_size, this->ed25519_key_size);
-			Serial.printf("[DEBUG] RSAEd25519CrossCertificate->EXPIRATION_DATE (Unix time HOURS) = 0x %08X\n", this->EXPIRATION_DATE);
-			//Serial.printf("[DEBUG] RSAEd25519CrossCertificate->EXPIRATION_DATE valid = %d\n", !this->isExpired() );
-			Serial.printf("[DEBUG] RSAEd25519CrossCertificate->SIGNATURE = ");
+			printf("[DEBUG] RSAEd25519CrossCertificate->EXPIRATION_DATE (Unix time HOURS) = 0x %08X\n", this->EXPIRATION_DATE);
+			//printf("[DEBUG] RSAEd25519CrossCertificate->EXPIRATION_DATE valid = %d\n", !this->isExpired() );
+			printf("[DEBUG] RSAEd25519CrossCertificate->SIGNATURE = ");
 			BriandUtils::PrintByteBuffer(*this->SIGNATURE.get(), this->SIGLEN, this->SIGLEN);
 		}
 	}
@@ -446,9 +447,9 @@ namespace Briand {
 		// This certificate is a DER-encoded X.509 
 		// The CA is the Cert type 2.
 
-		if (DEBUG) Serial.printf("[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
+		if (DEBUG) printf("[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
 		bool validationResult = BriandTorCryptoUtils::X509Validate(this->Contents, signAuthenticator.Contents);
-		if (DEBUG) Serial.printf("[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
+		if (DEBUG) printf("[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
 
 		return validationResult;
 	}
@@ -462,9 +463,9 @@ namespace Briand {
 		// This certificate is a DER-encoded X.509 
 		// The CA is the Cert type 2.
 
-		if (DEBUG) Serial.printf("[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
+		if (DEBUG) printf("[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
 		bool validationResult = BriandTorCryptoUtils::X509Validate(this->Contents, signAuthenticator.Contents);
-		if (DEBUG) Serial.printf("[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
+		if (DEBUG) printf("[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
 
 		return validationResult;
 	}
@@ -476,7 +477,7 @@ namespace Briand {
 
 	bool BriandTorCertificate_Ed25519SigningKey::IsValid(const BriandTorCertificate_RSAEd25519CrossCertificate& signAuthenticator) {
 		if (this->IsExpired()) {
-			if (DEBUG) Serial.println("[DEBUG] Ed25519SigningKey is expired.");
+			if (DEBUG) printf("[DEBUG] Ed25519SigningKey is expired.\n");
 			return false;
 		}
 			
@@ -492,7 +493,7 @@ namespace Briand {
 					if (e.ExtData->size() != signAuthenticator.ED25519_KEY->size() || 
 						!std::equal(e.ExtData->begin(), e.ExtData->end(), signAuthenticator.ED25519_KEY->begin()) 
 						) {
-						if (DEBUG) Serial.println("[DEBUG] Error, Ed25519SigningKey has extension 0x04 not matching the ED25519_KEY in the RSAEd25519CrossCertificate. Validation fails!");
+						if (DEBUG) printf("[DEBUG] Error, Ed25519SigningKey has extension 0x04 not matching the ED25519_KEY in the RSAEd25519CrossCertificate. Validation fails!\n");
 						return false;
 					}
 				}
@@ -501,11 +502,11 @@ namespace Briand {
 
 		// Check if signed by RSAEd25519CrossCertificate
 		if (!this->IsSignatureIsValid(signAuthenticator.ED25519_KEY)) {
-			if (DEBUG) Serial.println("[DEBUG] Ed25519SigningKey has invalid signature.");
+			if (DEBUG) printf("[DEBUG] Ed25519SigningKey has invalid signature.\n");
 			return false;
 		}
 
-		if (DEBUG) Serial.println("[DEBUG] Ed25519SigningKey is valid.");
+		if (DEBUG) printf("[DEBUG] Ed25519SigningKey is valid.\n");
 
 		return true;
 	}
@@ -517,12 +518,12 @@ namespace Briand {
 
 	bool BriandTorCertificate_TLSLink::IsValid(const BriandTorCertificate_Ed25519SigningKey& signAuthenticator, const BriandTorCertificate_LinkKey& linkKeyCert) {
 		if (this->IsExpired()) {
-			if (DEBUG) Serial.println("[DEBUG] TLSLink is expired.");
+			if (DEBUG) printf("[DEBUG] TLSLink is expired.\n");
 			return false;
 		}
 			
 		if (!this->IsSignatureIsValid(signAuthenticator.CERTIFIED_KEY)) {
-			if (DEBUG) Serial.println("[DEBUG] TLSLink has invalid signature.");
+			if (DEBUG) printf("[DEBUG] TLSLink has invalid signature.\n");
 			return false;
 		}
 
@@ -533,11 +534,11 @@ namespace Briand {
 		if (this->CERTIFIED_KEY->size() != linkKeyDigest->size() || 
 			!std::equal(CERTIFIED_KEY->begin(), CERTIFIED_KEY->end(), linkKeyDigest->begin()) 
 			) {
-			if (DEBUG) Serial.println("[DEBUG] Error, the SHA256 digest of LinkCertificate does not match the CertifiedKey.");
+			if (DEBUG) printf("[DEBUG] Error, the SHA256 digest of LinkCertificate does not match the CertifiedKey.\n");
 			return false;
 		}
 
-		if (DEBUG) Serial.println("[DEBUG] TLSLink is valid.");
+		if (DEBUG) printf("[DEBUG] TLSLink is valid.\n");
 
 		return true;
 	}
@@ -549,12 +550,12 @@ namespace Briand {
 
 	bool BriandTorCertificate_Ed25519AuthenticateCellLink::IsValid(const BriandTorCertificate_Ed25519SigningKey& signAuthenticator) {
 		if (this->IsExpired()) {
-			if (DEBUG) Serial.println("[DEBUG] Ed25519AuthenticateCellLink is expired.");
+			if (DEBUG) printf("[DEBUG] Ed25519AuthenticateCellLink is expired.\n");
 			return false;
 		}
 			
 		if (!this->IsSignatureIsValid(signAuthenticator.CERTIFIED_KEY)) {
-			if (DEBUG) Serial.println("[DEBUG] Ed25519AuthenticateCellLink has invalid signature.");
+			if (DEBUG) printf("[DEBUG] Ed25519AuthenticateCellLink has invalid signature.\n");
 			return false;
 		}
 
@@ -562,14 +563,14 @@ namespace Briand {
 		// TODO
 		//
 
-		if (DEBUG) Serial.println("[DEBUG] Ed25519AuthenticateCellLink HAS NO WRITTEN VALIDATION METHODS (only signature and expiration is checked) !!!!!!!!!!!!");
+		if (DEBUG) printf("[DEBUG] Ed25519AuthenticateCellLink HAS NO WRITTEN VALIDATION METHODS (only signature and expiration is checked) !!!!!!!!!!!!\n");
 
 		//
 		// TODO
 		//
 
 
-		if (DEBUG) Serial.println("[DEBUG] Ed25519AuthenticateCellLink is valid.");
+		if (DEBUG) printf("[DEBUG] Ed25519AuthenticateCellLink is valid.\n");
 
 		return true;
 	}

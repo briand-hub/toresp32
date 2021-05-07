@@ -18,9 +18,6 @@
 
 #pragma once
 
-#include <Arduino.h>
-#include <WiFiClientSecure.h>
-
 #include <iostream>
 #include <memory>
 

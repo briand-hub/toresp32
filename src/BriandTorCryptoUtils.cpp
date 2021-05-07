@@ -16,17 +16,16 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <Arduino.h>
-
 #include "BriandTorCryptoUtils.hxx"
+
+
+
 
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <iomanip>
 #include <cstring>
-
-#include <WiFiClientSecure.h>
 
 /* mbedTLS library for SSL / SHA / TLS / RSA */
 #include <mbedtls/ssl.h>
@@ -39,7 +38,7 @@
 #include <mbedtls/base64.h>
 #include <mbedtls/ecp.h>
 
-/* LibSodium found for Ed25519 signatures! It's on framwork :-D */
+/* LibSodium found for Ed25519 signatures! It's on framework :-D */
 #include <sodium.h>
 
 #include "BriandDefines.hxx"
@@ -59,7 +58,7 @@ namespace Briand {
 		auto hashedMessageRaw = BriandUtils::GetOneOldBuffer(mdInfo->size);
 		auto inputRaw = BriandUtils::VectorToArray(input);
 
-		if (DEBUG) Serial.printf("[DEBUG] SHA256 Raw message to encode: ");
+		if (DEBUG) printf("[DEBUG] SHA256 Raw message to encode: ");
 		BriandUtils::PrintOldStyleByteBuffer(inputRaw.get(), input->size(), input->size(), input->size());
 		
 		// Using mbedtls_md() not working as expected!!
@@ -85,7 +84,7 @@ namespace Briand {
 		// however not calling will leak heap!
 		// solution found: use unique_ptr , always working! Thanks C++
 		
-		if (DEBUG) Serial.printf("[DEBUG] SHA256 Raw output: ");
+		if (DEBUG) printf("[DEBUG] SHA256 Raw output: ");
 		BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size, mdInfo->size);
 
 		auto digest = BriandUtils::ArrayToVector(hashedMessageRaw, mdInfo->size);
@@ -104,7 +103,7 @@ namespace Briand {
 		auto hashedMessageRaw = BriandUtils::GetOneOldBuffer(mdInfo->size);
 		auto inputRaw = BriandUtils::VectorToArray(input);
 
-		if (DEBUG) Serial.printf("[DEBUG] SHA1 Raw message to encode: ");
+		if (DEBUG) printf("[DEBUG] SHA1 Raw message to encode: ");
 		BriandUtils::PrintOldStyleByteBuffer(inputRaw.get(), input->size(), input->size(), input->size());
 		
 		// Using mbedtls_md() not working as expected!!
@@ -130,7 +129,7 @@ namespace Briand {
 		// however not calling will leak heap!
 		// solution found: use unique_ptr , always working! Thanks C++
 		
-		if (DEBUG) Serial.printf("[DEBUG] SHA1 Raw output: ");
+		if (DEBUG) printf("[DEBUG] SHA1 Raw output: ");
 		BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size, mdInfo->size);
 
 		auto digest = BriandUtils::ArrayToVector(hashedMessageRaw, mdInfo->size);
@@ -150,7 +149,7 @@ namespace Briand {
 		auto inputRaw = BriandUtils::VectorToArray(input);
 		auto keyRaw = BriandUtils::VectorToArray(key);
 
-		if (DEBUG) Serial.printf("[DEBUG] HMAC-SHA256 Raw message to encode: ");
+		if (DEBUG) printf("[DEBUG] HMAC-SHA256 Raw message to encode: ");
 		BriandUtils::PrintOldStyleByteBuffer(inputRaw.get(), input->size(), input->size(), input->size());
 		
 		// Using mbedtls_md() not working as expected!!
@@ -176,7 +175,7 @@ namespace Briand {
 		// however not calling will leak heap!
 		// solution found: use unique_ptr , always working! Thanks C++
 		
-		if (DEBUG) Serial.printf("[DEBUG] HMAC-SHA256 Raw output: ");
+		if (DEBUG) printf("[DEBUG] HMAC-SHA256 Raw output: ");
 		BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size, mdInfo->size);
 
 		auto digest = BriandUtils::ArrayToVector(hashedMessageRaw, mdInfo->size);
@@ -236,7 +235,7 @@ namespace Briand {
 		auto certBuffer = BriandUtils::VectorToArray(x509DerCertificate);
 
 		if ( mbedtls_x509_crt_parse(&rsaIde, certBuffer.get(), x509DerCertificate->size()) != 0) {
-			Serial.println("[DEBUG] CheckSignature RSA/SHA256: failed to parse certificate.");
+			printf("[DEBUG] CheckSignature RSA/SHA256: failed to parse certificate.\n");
 			
 			// Free
 			mbedtls_x509_crt_free(&rsaIde);
@@ -256,7 +255,7 @@ namespace Briand {
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(verifyResult, reinterpret_cast<char*>(errBuf.get()), 128);
 
-			Serial.printf("[DEBUG] CheckSignature RSA/SHA256 signature INVALID: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			printf("[DEBUG] CheckSignature RSA/SHA256 signature INVALID: %s\n", reinterpret_cast<char*>(errBuf.get()));
 			
 			// Free
 			mbedtls_x509_crt_free(&rsaIde);
@@ -266,7 +265,7 @@ namespace Briand {
 		// Free (MUST!)
 		mbedtls_x509_crt_free(&rsaIde);
 
-		Serial.printf("[DEBUG] CheckSignature RSA/SHA256 signature valid.\n");
+		printf("[DEBUG] CheckSignature RSA/SHA256 signature valid.\n");
 
 		return true;
 	}	
@@ -297,7 +296,7 @@ namespace Briand {
 
 		// Parse CA and add to chain
 		if (mbedtls_x509_crt_parse(&chain, tempBuffer.get(), x509CACertificate->size()) != 0) {
-			if (DEBUG) Serial.printf("[DEBUG] X509Validate: failed to parse CA certificate.\n");
+			if (DEBUG) printf("[DEBUG] X509Validate: failed to parse CA certificate.\n");
 
 			// free
 			mbedtls_x509_crt_free(&chain);
@@ -315,7 +314,7 @@ namespace Briand {
 
 		// Parse Peer and add to chain
 		if ( mbedtls_x509_crt_parse(&chain, tempBuffer.get(), x509PeerCertificate->size()) != 0) {
-			if (DEBUG) Serial.printf("[DEBUG] X509Validate: failed to parse peer certificate.\n");
+			if (DEBUG) printf("[DEBUG] X509Validate: failed to parse peer certificate.\n");
 
 			// free
 			mbedtls_x509_crt_free(&chain);
@@ -335,7 +334,7 @@ namespace Briand {
 			if (DEBUG) {
 				tempBuffer = BriandUtils::GetOneOldBuffer(256 + 1);
 				mbedtls_x509_crt_verify_info( reinterpret_cast<char*>(tempBuffer.get()), 256, "", verification_flags);
-				Serial.printf("[DEBUG] X509Validate failed because %s\n", reinterpret_cast<const char*>(tempBuffer.get()));
+				printf("[DEBUG] X509Validate failed because %s\n", reinterpret_cast<const char*>(tempBuffer.get()));
 			} 
 
 			// free 
@@ -345,7 +344,7 @@ namespace Briand {
 			return false;
 		}
 
-		if (DEBUG) Serial.printf("[DEBUG] X509Validate: success.\n");
+		if (DEBUG) printf("[DEBUG] X509Validate: success.\n");
 
 		// free data structs
 		mbedtls_x509_crt_free(&chain);
@@ -364,7 +363,7 @@ namespace Briand {
 		// Multiple calls to sodium_init() do not cause additional descriptors to be opened.
 		// sodium_init() returns 0 on success, -1 on failure, and 1 if the library had already been initialized
 		if (sodium_init() < 0) {
-			if (DEBUG) Serial.println("[DEBUG] CheckSignature Ed25519 Error on sodium_init()");
+			if (DEBUG) printf("[DEBUG] CheckSignature Ed25519 Error on sodium_init()\n");
 			return false;
 		}
 
@@ -374,11 +373,11 @@ namespace Briand {
 		auto signatureBuffer = BriandUtils::VectorToArray(signature);
 
 		if (crypto_sign_verify_detached(signatureBuffer.get(), messageBuffer.get(), message->size(), pkBuffer.get()) != 0) {
-			if (DEBUG) Serial.println("[DEBUG] CheckSignature Ed25519 signature is not valid.");
+			if (DEBUG) printf("[DEBUG] CheckSignature Ed25519 signature is not valid.\n");
 			return false;
 		}
 
-		if (DEBUG) Serial.printf("[DEBUG] CheckSignature Ed25519 signature valid.\n");
+		if (DEBUG) printf("[DEBUG] CheckSignature Ed25519 signature valid.\n");
 
 		return true;
 	}
@@ -427,7 +426,7 @@ namespace Briand {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] ECDH_Curve25519_GenKeys failed initialize RNG: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			if (DEBUG) printf("[DEBUG] ECDH_Curve25519_GenKeys failed initialize RNG: %s\n", reinterpret_cast<char*>(errBuf.get()));
 			// Free
 			mbedtls_ctr_drbg_free( &ctr_drbg );
 			mbedtls_entropy_free( &entropy );
@@ -454,7 +453,7 @@ namespace Briand {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] ECDH_Curve25519_GenKeys failed on generating keys: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			if (DEBUG) printf("[DEBUG] ECDH_Curve25519_GenKeys failed on generating keys: %s\n", reinterpret_cast<char*>(errBuf.get()));
 			// Free
 			mbedtls_ecp_point_free(&G);
 			mbedtls_ecp_group_free(&ecpGroup);
@@ -516,7 +515,7 @@ namespace Briand {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] ECDH_Curve25519_ComputeSharedSecret failed to read private key: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			if (DEBUG) printf("[DEBUG] ECDH_Curve25519_ComputeSharedSecret failed to read private key: %s\n", reinterpret_cast<char*>(errBuf.get()));
 			// Free
 			mbedtls_ecp_group_free(&ecpGroup);
 			mbedtls_mpi_free(&shared_secret);
@@ -533,7 +532,7 @@ namespace Briand {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] ECDH_Curve25519_ComputeSharedSecret failed to read public key: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			if (DEBUG) printf("[DEBUG] ECDH_Curve25519_ComputeSharedSecret failed to read public key: %s\n", reinterpret_cast<char*>(errBuf.get()));
 			// Free
 			mbedtls_ecp_group_free(&ecpGroup);
 			mbedtls_mpi_free(&shared_secret);
@@ -551,7 +550,7 @@ namespace Briand {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] ECDH_Curve25519_ComputeSharedSecret failed to compute shared secret: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			if (DEBUG) printf("[DEBUG] ECDH_Curve25519_ComputeSharedSecret failed to compute shared secret: %s\n", reinterpret_cast<char*>(errBuf.get()));
 			// Free
 			mbedtls_ecp_group_free(&ecpGroup);
 			mbedtls_mpi_free(&shared_secret);
@@ -568,7 +567,7 @@ namespace Briand {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
-			if (DEBUG) Serial.printf("[DEBUG] ECDH_Curve25519_ComputeSharedSecret failed to write out the shared secret: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			if (DEBUG) printf("[DEBUG] ECDH_Curve25519_ComputeSharedSecret failed to write out the shared secret: %s\n", reinterpret_cast<char*>(errBuf.get()));
 			// Free
 			mbedtls_ecp_group_free(&ecpGroup);
 			mbedtls_mpi_free(&shared_secret);
@@ -595,19 +594,19 @@ namespace Briand {
 		// Check if fields are OK (should be but...)
 
 		if (relay.CURVE25519_PRIVATE_KEY == nullptr) {
-			Serial.println("[DEBUG] NtorHandshakeComplete: error! Relay CURVE25519_PRIVATE_KEY is null!");
+			printf("[DEBUG] NtorHandshakeComplete: error! Relay CURVE25519_PRIVATE_KEY is null!\n");
 			return false;
 		}
 		if (relay.CURVE25519_PUBLIC_KEY == nullptr) {
-			Serial.println("[DEBUG] NtorHandshakeComplete: error! Relay CURVE25519_PUBLIC_KEY context is null!");
+			printf("[DEBUG] NtorHandshakeComplete: error! Relay CURVE25519_PUBLIC_KEY context is null!\n");
 			return false;
 		}
 		if (relay.CREATED_EXTENDED_RESPONSE_SERVER_PK == nullptr) {
-			Serial.println("[DEBUG] NtorHandshakeComplete: error! CREATED_EXTENDED_RESPONSE_SERVER_PK context is null!");
+			printf("[DEBUG] NtorHandshakeComplete: error! CREATED_EXTENDED_RESPONSE_SERVER_PK context is null!\n");
 			return false;
 		}
 		if (relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH == nullptr) {
-			Serial.println("[DEBUG] NtorHandshakeComplete: error! CREATED_EXTENDED_RESPONSE_SERVER_AUTH context is null!");
+			printf("[DEBUG] NtorHandshakeComplete: error! CREATED_EXTENDED_RESPONSE_SERVER_AUTH context is null!\n");
 			return false;
 		}
 
@@ -659,18 +658,18 @@ namespace Briand {
 		*/
 
 		if (DEBUG) {
-			Serial.printf("[DEBUG] X = My Curve25519 public key: ");
+			printf("[DEBUG] X = My Curve25519 public key: ");
 			BriandUtils::PrintByteBuffer(*relay.CURVE25519_PUBLIC_KEY.get());
-			Serial.printf("[DEBUG] x = My Curve25519 private key: ");
+			printf("[DEBUG] x = My Curve25519 private key: ");
 			BriandUtils::PrintByteBuffer(*relay.CURVE25519_PRIVATE_KEY.get());
-			Serial.printf("[DEBUG] B = Relay's NTOR key: ");
+			printf("[DEBUG] B = Relay's NTOR key: ");
 			BriandUtils::PrintByteBuffer(*ntorKeyVec.get());
-			Serial.printf("[DEBUG] Y = Relay's public key: ");
+			printf("[DEBUG] Y = Relay's public key: ");
 			BriandUtils::PrintByteBuffer(*relay.CREATED_EXTENDED_RESPONSE_SERVER_PK.get());
-			Serial.printf("[DEBUG] ID = Relay's fingerprint: %s\n", relay.fingerprint->c_str());
-			Serial.printf("[DEBUG] Relay's AUTH: ");
+			printf("[DEBUG] ID = Relay's fingerprint: %s\n", relay.fingerprint->c_str());
+			printf("[DEBUG] Relay's AUTH: ");
 			BriandUtils::PrintByteBuffer(*relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH.get());
-			Serial.printf("[DEBUG] PROTOID: ");
+			printf("[DEBUG] PROTOID: ");
 			BriandUtils::PrintByteBuffer(*PROTOID.get());
 		}
 
@@ -679,12 +678,12 @@ namespace Briand {
 		// EXP(Y,x)
 		auto tempVector = BriandTorCryptoUtils::ECDH_Curve25519_ComputeSharedSecret(relay.CREATED_EXTENDED_RESPONSE_SERVER_PK, relay.CURVE25519_PRIVATE_KEY);
 		if (tempVector->size() == 0) {
-			if (DEBUG) Serial.println("[DEBUG] NtorHandshakeComplete: shared secret failed to compute: EXP(Y,x)!");
+			if (DEBUG) printf("[DEBUG] NtorHandshakeComplete: shared secret failed to compute: EXP(Y,x)!\n");
 			return false;
 		}
 		
 		if (DEBUG) {
-			Serial.printf("[DEBUG] NtorHandshakeComplete: EXP(Y,x) = ");
+			printf("[DEBUG] NtorHandshakeComplete: EXP(Y,x) = ");
 			BriandUtils::PrintByteBuffer(*tempVector.get());
 		}
 
@@ -695,12 +694,12 @@ namespace Briand {
 		// EXP(B,x)
 		tempVector = BriandTorCryptoUtils::ECDH_Curve25519_ComputeSharedSecret(ntorKeyVec, relay.CURVE25519_PRIVATE_KEY);
 		if (tempVector->size() == 0) {
-			if (DEBUG) Serial.println("[DEBUG] NtorHandshakeComplete: shared secret failed to compute: EXP(B,x)!");
+			if (DEBUG) printf("[DEBUG] NtorHandshakeComplete: shared secret failed to compute: EXP(B,x)!\n");
 			return false;
 		}
 
 		if (DEBUG) {
-			Serial.printf("[DEBUG] NtorHandshakeComplete: EXP(B,x) = ");
+			printf("[DEBUG] NtorHandshakeComplete: EXP(B,x) = ");
 			BriandUtils::PrintByteBuffer(*tempVector.get());
 		}
 		
@@ -720,7 +719,7 @@ namespace Briand {
 		secret_input->insert(secret_input->end(), PROTOID->begin(), PROTOID->end());
 
 		if (DEBUG)  {
-			Serial.printf("[DEBUG] NtorHandshakeComplete (complete) secret_input: ");
+			printf("[DEBUG] NtorHandshakeComplete (complete) secret_input: ");
 			BriandUtils::PrintByteBuffer(*secret_input.get(), secret_input->size(), secret_input->size());
 		}
 
@@ -729,7 +728,7 @@ namespace Briand {
 		relay.KEYSEED = GetDigest_HMAC_SHA256(secret_input, t_key);
 
 		if (DEBUG)  {
-			Serial.printf("[DEBUG] NtorHandshakeComplete KEYSEED: ");
+			printf("[DEBUG] NtorHandshakeComplete KEYSEED: ");
 			BriandUtils::PrintByteBuffer(*relay.KEYSEED.get(), relay.KEYSEED->size(), relay.KEYSEED->size());
 		}
 
@@ -752,15 +751,15 @@ namespace Briand {
 		/* The client verifies that AUTH == H(auth_input, t_mac). */
 		auto auth_verify = GetDigest_HMAC_SHA256(auth_input, t_mac);
 		if (auth_verify->size() != relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size()) {
-			Serial.println("[DEBUG] NtorHandshakeComplete Error, AUTH size and H(auth_input, t_mac) size does not match!");
+			printf("[DEBUG] NtorHandshakeComplete Error, AUTH size and H(auth_input, t_mac) size does not match!\n");
 			return false;
 		}
 		if (!std::equal(auth_verify->begin(), auth_verify->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH->begin())) {
-			Serial.println("[DEBUG] NtorHandshakeComplete Error, AUTH and H(auth_input, t_mac) not matching!");
+			printf("[DEBUG] NtorHandshakeComplete Error, AUTH and H(auth_input, t_mac) not matching!\n");
 			return false;
 		}
 
-		if (DEBUG) Serial.println("[DEBUG] NtorHandshakeComplete Relay response to CREATE2/EXTEND2 verified (success).");
+		if (DEBUG) printf("[DEBUG] NtorHandshakeComplete Relay response to CREATE2/EXTEND2 verified (success).\n");
 	
 		return false;
 
@@ -797,7 +796,7 @@ namespace Briand {
 
 		// Clear and simple:
 
-		if (DEBUG) Serial.print("[DEBUG] Generating keys with HKDF...");
+		if (DEBUG) printf("[DEBUG] Generating keys with HKDF...");
 
 		unsigned short KEY_LEN = 16;
 	   	unsigned short HASH_LEN = 20;
@@ -872,7 +871,7 @@ namespace Briand {
 
 		hkdf.reset();
 		
-		if (DEBUG) Serial.print("done!\n");
+		if (DEBUG) printf("done!\n");
 
 		return true;
 	}

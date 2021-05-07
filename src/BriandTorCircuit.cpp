@@ -16,12 +16,11 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <Arduino.h> /* MUST BE THE FIRST HEADER IN CPP FILES! */
-
 #include "BriandTorCircuit.hxx"
 
-#include <WiFiClientSecure.h>
-#include "time.h"
+
+#include <time.h>
+
 
 #include <iostream>
 #include <memory>
@@ -61,7 +60,7 @@ namespace Briand {
 			}
 		}
 
-		Serial.printf("[DEBUG] Starting search for %s node.\n", relayS.c_str());
+		printf("[DEBUG] Starting search for %s node.\n", relayS.c_str());
 
 		bool done = false;
 		
@@ -86,7 +85,7 @@ namespace Briand {
 		if (tentative != nullptr) {
 			// Fetch relay descriptors
 
-			if (DEBUG) Serial.printf("[DEBUG] Retrieving descriptors for %s node...\n", relayS.c_str());
+			if (DEBUG) printf("[DEBUG] Retrieving descriptors for %s node...\n", relayS.c_str());
 
 			if (tentative->FetchDescriptorsFromAuthority()) {
 
@@ -95,14 +94,14 @@ namespace Briand {
 				else if (relayType == 2) this->exitNode = std::move(tentative);
 
 				done = true;
-				if (DEBUG) Serial.printf("[DEBUG] %s node ok.\n", relayS.c_str());
+				if (DEBUG) printf("[DEBUG] %s node ok.\n", relayS.c_str());
 			}
 			else {
-				if (DEBUG) Serial.printf("[DEBUG] Retrieving descriptors for %s node FAILED\n", relayS.c_str());
+				if (DEBUG) printf("[DEBUG] Retrieving descriptors for %s node FAILED\n", relayS.c_str());
 			}
 		}
 
-		if (!done && VERBOSE) Serial.printf("[ERR] FAIL to get a valid %s node.\n", relayS.c_str());
+		if (!done && VERBOSE) printf("[ERR] FAIL to get a valid %s node.\n", relayS.c_str());
 
 		return done;
 	}
@@ -113,7 +112,7 @@ namespace Briand {
 
 		this->CIRCID = ( Briand::BriandUtils::GetRandomByte() << 8 ) + Briand::BriandUtils::GetRandomByte();
 
-		if(DEBUG) Serial.printf("[DEBUG] Temporary CircID = %d\n", this->CIRCID);
+		if(DEBUG) printf("[DEBUG] Temporary CircID = %d\n", this->CIRCID);
 
 		unique_ptr<Briand::BriandTorCell> tempCell = nullptr;
 		unique_ptr<vector<unsigned char>> tempCellResponse = nullptr;
@@ -152,7 +151,7 @@ namespace Briand {
 
 		// Send a VERSION the guard
 
-		if (DEBUG) Serial.println("[DEBUG] Sending first VERSION to guard.");
+		if (DEBUG) printf("[DEBUG] Sending first VERSION to guard.\n");
 
 		tempCell = make_unique<Briand::BriandTorCell>(0, this->CIRCID, Briand::BriandTorCellCommand::VERSIONS);
 
@@ -163,12 +162,12 @@ namespace Briand {
 		tempCell.reset();
 
 		if (tempCellResponse->size() == 0) {
-			if (VERBOSE) Serial.println("[ERR] Error on sending first VERSION to Guard.");
+			if (VERBOSE) printf("[ERR] Error on sending first VERSION to Guard.\n");
 			this->Cleanup();
 			return false;
 		}
 
-		if (DEBUG) Serial.printf("[DEBUG] Cell response! :-D Contents (first 32 bytes): ");
+		if (DEBUG) printf("[DEBUG] Cell response! :-D Contents (first 32 bytes): ");
 		if (DEBUG) Briand::BriandUtils::PrintByteBuffer( *(tempCellResponse.get()), 128, 32 );
 		
 		// The response contents should have a lot of informations.
@@ -183,53 +182,53 @@ namespace Briand {
 		this->LINKPROTOCOLVERSION = tempCell->GetLinkProtocolFromVersionCell();
 
 		if (this->LINKPROTOCOLVERSION == 0) {
-			if (VERBOSE) Serial.println("[ERR] Error on receiving first VERSION from Guard, unable to negotiate link protocol version.");
+			if (VERBOSE) printf("[ERR] Error on receiving first VERSION from Guard, unable to negotiate link protocol version.\n");
 			this->Cleanup();
 			return false;
 		}
 		else if (this->LINKPROTOCOLVERSION < 4) {
-			if (VERBOSE) Serial.printf("[ERR] Guard has an old link protocol (version %d but required >= 4).\n", this->LINKPROTOCOLVERSION);
+			if (VERBOSE) printf("[ERR] Guard has an old link protocol (version %d but required >= 4).\n", this->LINKPROTOCOLVERSION);
 			this->Cleanup();
 			return false;
 		}
 		else if (DEBUG) {
-			Serial.printf("[DEBUG] Link protocol version %d negotiation SUCCESS.\n", this->LINKPROTOCOLVERSION);
+			printf("[DEBUG] Link protocol version %d negotiation SUCCESS.\n", this->LINKPROTOCOLVERSION);
 		}
 
 		// The next part of buffer should be a CERTS cell. Free some buffer to point to next cell. And save RAM :)
 
 		tempCellResponse->erase(tempCellResponse->begin(), tempCellResponse->begin() + tempCell->GetCellTotalSizeBytes() );
 
-		if (DEBUG) Serial.print("[DEBUG] Next chunk (first 32 bytes printed): ");
+		if (DEBUG) printf("[DEBUG] Next chunk (first 32 bytes printed): ");
 		if (DEBUG) Briand::BriandUtils::PrintByteBuffer( *(tempCellResponse.get()), 128, 32 );
 
 		tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION);
 		if (tempCell->GetCommand() != Briand::BriandTorCellCommand::CERTS) {
-			if (VERBOSE) Serial.printf("[ERR] Error, expected CERTS cell but received %s.\n", Briand::BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
+			if (VERBOSE) printf("[ERR] Error, expected CERTS cell but received %s.\n", Briand::BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
 			this->Cleanup();
 			return false;
 		}
 
-		if (DEBUG) Serial.println("[DEBUG] Got CERTS cell!");
+		if (DEBUG) printf("[DEBUG] Got CERTS cell!\n");
 		
 		if (! tempCell->SetRelayCertificatesFromCertsCell(this->guardNode) ) {
-			if (VERBOSE) Serial.println("[ERR] CERTS cell seems not valid.");
+			if (VERBOSE) printf("[ERR] CERTS cell seems not valid.\n");
 			this->Cleanup();
 			return false;
 		}
 
 		if (DEBUG) {
-			Serial.printf("[DEBUG] Guard has %d certifcates loaded.\n", this->guardNode->GetCertificateCount());
+			printf("[DEBUG] Guard has %d certifcates loaded.\n", this->guardNode->GetCertificateCount());
 			this->guardNode->PrintAllCertificateShortInfo();
 		} 
 
 		if ( ! this->guardNode->ValidateCertificates() ) {
-			if (VERBOSE) Serial.println("[ERR] CERTS cell received has invalid certificates.");
+			if (VERBOSE) printf("[ERR] CERTS cell received has invalid certificates.\n");
 			this->Cleanup();
 			return false;
 		}
 
-		if (DEBUG) Serial.println("[DEBUG] CERTS cell certificates validation succeded.");
+		if (DEBUG) printf("[DEBUG] CERTS cell certificates validation succeded.\n");
 
 		// The next part of buffer should be a AUTH_CHALLENGE cell. Free some buffer to point to next cell. And save RAM :)
 
@@ -237,19 +236,19 @@ namespace Briand {
 
 		// AUTH_CHALLENGE is used for authenticate, might not do that.
 
-		if (DEBUG) Serial.print("[DEBUG] Next chunk (first 32 bytes printed): ");
+		if (DEBUG) printf("[DEBUG] Next chunk (first 32 bytes printed): ");
 		if (DEBUG) Briand::BriandUtils::PrintByteBuffer( *(tempCellResponse.get()), 128, 32 );
 
 		tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION);
 		if (tempCell->GetCommand() != Briand::BriandTorCellCommand::AUTH_CHALLENGE) {
-			if (VERBOSE) Serial.printf("[ERR] Error, expected AUTH_CHALLENGE cell but received %s.\n", Briand::BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
+			if (VERBOSE) printf("[ERR] Error, expected AUTH_CHALLENGE cell but received %s.\n", Briand::BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
 			this->Cleanup();
 			return false;
 		}
 
-		if (DEBUG) Serial.println("[DEBUG] Got AUTH_CHALLENGE cell!");
+		if (DEBUG) printf("[DEBUG] Got AUTH_CHALLENGE cell!\n");
 
-		if (DEBUG) Serial.println("[DEBUG] WARNING: AUTH_CHALLENGE cell is not handled at moment from this version.");
+		if (DEBUG) printf("[DEBUG] WARNING: AUTH_CHALLENGE cell is not handled at moment from this version.\n");
 		// TODO dont't mind for now..
 
 		// The next part of buffer should be a NETINFO cell. Free some buffer to point to next cell. And save RAM :)
@@ -258,17 +257,17 @@ namespace Briand {
 
 		tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION);
 		if (tempCell->GetCommand() != Briand::BriandTorCellCommand::NETINFO) {
-			if (VERBOSE) Serial.printf("[ERR] Error, expected NETINFO cell but received %s.\n", Briand::BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
+			if (VERBOSE) printf("[ERR] Error, expected NETINFO cell but received %s.\n", Briand::BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
 			this->Cleanup();
 			return false;
 		}
 
-		if (DEBUG) Serial.println("[DEBUG] Got NETINFO cell!");
+		if (DEBUG) printf("[DEBUG] Got NETINFO cell!\n");
 
-		if (DEBUG) Serial.println("[DEBUG] Info: this version do not check or handle incoming NETINFO cell.");
+		if (DEBUG) printf("[DEBUG] Info: this version do not check or handle incoming NETINFO cell.\n");
 		// TODO dont't mind for now..
 
-		if (DEBUG) Serial.println("[DEBUG] Got all cells needed for handshake :-)");
+		if (DEBUG) printf("[DEBUG] Got all cells needed for handshake :-)\n");
 
 		// The next part of buffer needs to be ignored, could be cleared and save RAM.
 		// WARNING: for answer to auth all bytes received must be kept!
@@ -282,19 +281,19 @@ namespace Briand {
 
 		// Answer with NETINFO CELL
 
-		if (DEBUG) Serial.println("[DEBUG] Sending NETINFO cell to guard.");
+		if (DEBUG) printf("[DEBUG] Sending NETINFO cell to guard.\n");
 
 		tempCell = make_unique<BriandTorCell>( this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::NETINFO );
 		tempCell->BuildAsNETINFO(this->sClient->localIP());
 
 		if (DEBUG) {
-			Serial.printf("[DEBUG] NETINFO cell payload to send: ");
+			printf("[DEBUG] NETINFO cell payload to send: ");
 			tempCell->PrintCellPayloadToSerial();
 		} 
 
 		tempCellResponse = tempCell->SendCell(this->sClient, false, false); // Last false: do not expect a response
 
-		Serial.printf("[DEBUG] NETINFO cell sent.\n");
+		printf("[DEBUG] NETINFO cell sent.\n");
 
 		// Freee
 		tempCell.reset();
@@ -304,7 +303,7 @@ namespace Briand {
 	}
 
 	bool BriandTorCircuit::Create2() {
-		if (DEBUG) Serial.println("[DEBUG] Sending CREATE2 cell to guard.");
+		if (DEBUG) printf("[DEBUG] Sending CREATE2 cell to guard.\n");
 
 		/*					
 			Users set up circuits incrementally, one hop at a time. To create a
@@ -319,38 +318,38 @@ namespace Briand {
 		auto tempCell = make_unique<Briand::BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::CREATE2);
 		
 		if (!tempCell->BuildAsCREATE2(*this->guardNode.get())) {
-			if (DEBUG) Serial.println("[DEBUG] Failed on building cell CREATE2.");
+			if (DEBUG) printf("[DEBUG] Failed on building cell CREATE2.\n");
 			return false;
 		}
 
-		if (DEBUG) Serial.println("[DEBUG] CREATE2 sent. Waiting for CREATED2.");
+		if (DEBUG) printf("[DEBUG] CREATE2 sent. Waiting for CREATED2.\n");
 		auto tempCellResponse = tempCell->SendCell(this->sClient, false);
 		tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
 		if (!tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION)) {
-			if (VERBOSE) Serial.printf("[ERR] Error, response cell had invalid bytes (failed to build from buffer).\n");
+			if (VERBOSE) printf("[ERR] Error, response cell had invalid bytes (failed to build from buffer).\n");
 			this->Cleanup();
 			return false;
 		}
 		
 		// If a DESTROY given, tell me why
 		if (tempCell->GetCommand() == BriandTorCellCommand::DESTROY) {
-			if (VERBOSE) Serial.printf("[ERR] Error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
+			if (VERBOSE) printf("[ERR] Error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
 			this->Cleanup();
 			return false;
 		}
 
 		if (tempCell->GetCommand() != BriandTorCellCommand::CREATED2) {
-			if (VERBOSE) Serial.printf("[ERR] Error, response contains %s cell instead of CREATED2. Failure.\n", BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
+			if (VERBOSE) printf("[ERR] Error, response contains %s cell instead of CREATED2. Failure.\n", BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
 			this->Cleanup();
 			return false;
 		}
 
-		if (DEBUG) Serial.println("[DEBUG] Got CREATED2, payload:");
+		if (DEBUG) printf("[DEBUG] Got CREATED2, payload:");
 		if (DEBUG) tempCell->PrintCellPayloadToSerial();
 
 		// Finish the handshake!
 		if (!this->guardNode->FinishHandshake(tempCell->GetPayload())) {
-			if (VERBOSE) Serial.printf("[ERR] Error on concluding handshake!\n");
+			if (VERBOSE) printf("[ERR] Error on concluding handshake!\n");
 			// From now... always destroy
 			this->TearDown();
 			this->Cleanup();
@@ -450,25 +449,25 @@ namespace Briand {
 			below)
 		*/
 
-		if (DEBUG) Serial.println("[DEBUG] Starting relay search.");
+		if (DEBUG) printf("[DEBUG] Starting relay search.\n");
 
 		if (!this->FindAndPopulateRelay(0)) return false; // GUARD
 
 		if (DEBUG) this->guardNode->PrintRelayInfo();
 
-		if (DEBUG) Serial.println("[DEBUG] Starting relay search for middle node.");
+		if (DEBUG) printf("[DEBUG] Starting relay search for middle node.\n");
 		
 		if (!this->FindAndPopulateRelay(1)) return false; // MIDDLE
 
 		if (DEBUG) this->middleNode->PrintRelayInfo();
 		
-		if (DEBUG) Serial.println("[DEBUG] Starting relay search for exit node.");
+		if (DEBUG) printf("[DEBUG] Starting relay search for exit node.\n");
 
 		if (!this->FindAndPopulateRelay(2)) return false; // EXIT
 
 		if (DEBUG) this->exitNode->PrintRelayInfo();
 
-		if (DEBUG) Serial.println("[DEBUG] Guard node ready, start sending VERSION to guard.");
+		if (DEBUG) printf("[DEBUG] Guard node ready, start sending VERSION to guard.\n");
 
 		// All nodes found! Free some RAM
 		this->relaySearcher.reset();
@@ -487,12 +486,12 @@ namespace Briand {
 		// Connect to GUARD
 
 		if ( ! this->sClient->connect(this->guardNode->GetHost().c_str(), this->guardNode->GetPort() ) ) {
-			if (VERBOSE) Serial.println("[ERR] Failed to connect to Guard.");
+			if (VERBOSE) printf("[ERR] Failed to connect to Guard.\n");
 			this->Cleanup();
 			return false;
 		}
 
-		if (DEBUG) Serial.println("[DEBUG] Connected to guard node.");
+		if (DEBUG) printf("[DEBUG] Connected to guard node.\n");
 
 		/** Steps validation */
 		bool stepDone = false;
@@ -501,7 +500,7 @@ namespace Briand {
 		stepDone = this->StartInProtocolWithGuard(false); // false = do not answer with self authenticate
 
 		if (!stepDone) {
-			if (DEBUG) Serial.println("[DEBUG] Failed to conclude InProtocol with guard.");
+			if (DEBUG) printf("[DEBUG] Failed to conclude InProtocol with guard.\n");
 			return false;
 		}
 
@@ -509,12 +508,12 @@ namespace Briand {
 		// This version does not support old CREATE.
 
 		if (this->guardNode->certRSAEd25519CrossCertificate == nullptr) {
-			if (DEBUG) Serial.println("[DEBUG] The guard is missing the Ed25519 identity certificate so a CREATE2 is impossible.");
+			if (DEBUG) printf("[DEBUG] The guard is missing the Ed25519 identity certificate so a CREATE2 is impossible.\n");
 			return false;
 		}
 
 
-		if (DEBUG) Serial.println("[DEBUG] All information complete. Starting creating the circuit with CREATE2.");
+		if (DEBUG) printf("[DEBUG] All information complete. Starting creating the circuit with CREATE2.\n");
 
 		// Re-setup CircID with 4 bytes (link protocol >=4)
 
@@ -540,46 +539,46 @@ namespace Briand {
 		// So it's clear, my circid must have MSB to 1
 		this->CIRCID = this->CIRCID | 0x80000000;
 
-		if (DEBUG) Serial.printf("[DEBUG] NEW CircID: %08X \n", this->CIRCID);
+		if (DEBUG) printf("[DEBUG] NEW CircID: %08X \n", this->CIRCID);
 
 		// CREATE/CREATE2
 
 		stepDone = this->Create2();
 
 		if (!stepDone) {
-			if (DEBUG) Serial.println("[DEBUG] Failed to conclude CREATE2 with guard.");
+			if (DEBUG) printf("[DEBUG] Failed to conclude CREATE2 with guard.\n");
 			return false;
 		}
 
 		this->isCreating = true;
 
-		if (DEBUG) Serial.println("[DEBUG] CREATE2 success. Extending to Middle node.");
+		if (DEBUG) printf("[DEBUG] CREATE2 success. Extending to Middle node.\n");
 
 		// EXTEND2 to middle
 
 		stepDone = this->Extend2(false);
 
 		if (!stepDone) {
-			if (DEBUG) Serial.println("[DEBUG] Failed to conclude EXTEND2 with middle node.");
+			if (DEBUG) printf("[DEBUG] Failed to conclude EXTEND2 with middle node.\n");
 			this->isCreating = false;
 			this->TearDown();
 			return false;
 		}
 
-		if (DEBUG) Serial.println("[DEBUG] EXTEND2 with Middle success. Extending to Exit node.");
+		if (DEBUG) printf("[DEBUG] EXTEND2 with Middle success. Extending to Exit node.\n");
 
 		// EXTEND2 to exit
 
 		stepDone = this->Extend2(true);
 
 		if (!stepDone) {
-			if (DEBUG) Serial.println("[DEBUG] Failed to conclude EXTEND2 with exit node.");
+			if (DEBUG) printf("[DEBUG] Failed to conclude EXTEND2 with exit node.\n");
 			this->isCreating = false;
 			this->TearDown();
 			return false;
 		}
 
-		if (DEBUG) Serial.println("[DEBUG] EXTEND2 with Exit success. All done!!");
+		if (DEBUG) printf("[DEBUG] EXTEND2 with Exit success. All done!!\n");
 
 		if (DEBUG) this->PrintCircuitInfo();
 
@@ -647,22 +646,22 @@ namespace Briand {
 		*/
 
 		if (this->sClient != nullptr && this->sClient->connected() && (this->isBuilt || this->isCreating) && !this->isClosed) {
-			if (DEBUG) Serial.printf("[DEBUG] Sending DESTROY cell to Guard with reason %u\n", static_cast<unsigned char>(reason));
+			if (DEBUG) printf("[DEBUG] Sending DESTROY cell to Guard with reason %u\n", static_cast<unsigned char>(reason));
 
 			auto tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::DESTROY);
 
 			tempCell->AppendToPayload(static_cast<unsigned char>(reason));
 			tempCell->SendCell(this->sClient, true, false);
 
-			if (DEBUG) Serial.println("[DEBUG] DESTROY cell sent.");
+			if (DEBUG) printf("[DEBUG] DESTROY cell sent.\n");
 						
 			this->sClient->stop();
 			this->sClient.reset();
 
-			if (DEBUG) Serial.println("[DEBUG] Circuit TearDown success.");
+			if (DEBUG) printf("[DEBUG] Circuit TearDown success.\n");
 		}
 		else {
-			if (DEBUG) Serial.println("[DEBUG] Circuit does not need TearDown.");
+			if (DEBUG) printf("[DEBUG] Circuit does not need TearDown.\n");
 		}
 
 		// However, always reset values to avoid misunderstandings
@@ -677,11 +676,11 @@ namespace Briand {
 	void BriandTorCircuit::PrintCircuitInfo() {
 		if (VERBOSE) {
 			if (this->isBuilt && !(this->isClosing || this->isClosed)) {
-				Serial.printf("[INFO] Circuit with ID %08X is operative since Unix time %lu.\n", this->CIRCID, this->createdOn);
-				Serial.printf("[INFO] You <----> G[%s] <----> M[%s] <----> E[%s] <----> Web\n", this->guardNode->nickname->c_str(), this->middleNode->nickname->c_str(), this->exitNode->nickname->c_str());
+				printf("[INFO] Circuit with ID %08X is operative since Unix time %lu.\n", this->CIRCID, this->createdOn);
+				printf("[INFO] You <----> G[%s] <----> M[%s] <----> E[%s] <----> Web\n", this->guardNode->nickname->c_str(), this->middleNode->nickname->c_str(), this->exitNode->nickname->c_str());
 			}
 			else {
-				Serial.printf("[INFO] Circuit is not built, closed or in closing.\n");
+				printf("[INFO] Circuit is not built, closed or in closing.\n");
 			}
 		}
 	}

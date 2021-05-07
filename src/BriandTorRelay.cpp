@@ -16,18 +16,16 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <Arduino.h> /* MUST BE THE FIRST HEADER IN CPP FILES! */
-
 #include "BriandTorRelay.hxx"
+
+
+
 
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <vector>
 #include <algorithm>
-
-#include <ArduinoJson.h>
-#include <WiFiClientSecure.h>
 
 // Crypto library chosen
 #include <mbedtls/ecdh.h>
