@@ -159,12 +159,15 @@ void TorEsp32Setup() {
 	ret = esp_vfs_spiffs_register(&conf);
 
 	if (ret != ESP_OK) {
-		if (ret == ESP_FAIL)
+		if (ret == ESP_FAIL) {
 			if (VERBOSE) printf("FAILED! (mont error)\n");
-		else if (ret == ESP_ERR_NOT_FOUND)
+		}
+		else if (ret == ESP_ERR_NOT_FOUND) {
 			if (VERBOSE) printf("FAILED! (failed to find SPIFFS partition)\n");
-		else 
+		}
+		else {
 			if (VERBOSE) printf("FAILED! reason: %s\n", esp_err_to_name(ret));
+		}
 		
 		return; // Will create panic
 	}
@@ -235,10 +238,11 @@ void TorEsp32Setup() {
     }
 
 	// Init WiFi to AP+STA 
+	
+	if (VERBOSE) printf("[INFO] Initializing WiFi\n");
 
 	WiFi = Briand::BriandIDFWifiManager::GetInstance();
-
-	if (VERBOSE) printf("[INFO] Initializing WiFi\n");
+	WiFi->SetWifiMode(WIFI_MODE_APSTA);
 	
 	if (VERBOSE) 
 		WiFi->SetVerbose(true, true);
