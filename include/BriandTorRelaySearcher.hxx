@@ -41,13 +41,11 @@ namespace Briand {
 		private:
 
 		/** File name for the exit nodes cache */
-		const char* NODES_FILE_EXIT = "/cache_exit";
+		const char* NODES_FILE_EXIT = "/spiffs/cache_exit";
 		/** File name for the guard nodes cache */
-		const char* NODES_FILE_GUARD = "/cache_guard";
+		const char* NODES_FILE_GUARD = "/spiffs/cache_guard";
 		/** File name for the middle nodes cache */
-		const char* NODES_FILE_MIDDLE = "/cache_middle";
-		/** This is an important parameter. Calculated with the longest response for 25 nodes (exit node, wich includes exit_policy_summary) with tool: https://arduinojson.org/v6/assistant/ */
-		const int EXPECTED_SIZE = 24576 * (TOR_NODES_CACHE_SIZE/25);
+		const char* NODES_FILE_MIDDLE = "/spiffs/cache_middle";
 
 		protected:
 

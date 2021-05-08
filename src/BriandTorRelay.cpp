@@ -44,7 +44,7 @@ namespace Briand {
 
 	BriandTorRelay::BriandTorRelay() {
 		this->nickname = make_unique<string>("");
-		this->first_address = make_unique<string>("");
+		this->address = make_unique<string>("");
 		this->fingerprint = make_unique<string>("");
 		this->flags = 0x0000;
 		this->effective_family = make_unique<string>("");
@@ -70,7 +70,7 @@ namespace Briand {
 
 	BriandTorRelay::~BriandTorRelay() {
 		this->nickname.reset();
-		this->first_address.reset();
+		this->address.reset();
 		this->fingerprint.reset();
 		this->effective_family.reset();
 
@@ -94,21 +94,11 @@ namespace Briand {
 	}
 
 	string BriandTorRelay::GetHost() {
-		int sepPos = this->first_address->find(':');
-		if (sepPos != std::string::npos) {
-			return string( this->first_address->substr(0, sepPos) );
-		}
-		else
-			return string("");
+		return *this->address.get();
 	}
 
 	unsigned short BriandTorRelay::GetPort() {
-		int sepPos = this->first_address->find(':');
-		if (sepPos != std::string::npos) {
-			return stoi( this->first_address->substr(sepPos + 1 ) ); // from there to the end
-		}
-		else
-			return 0;
+		return this->port;
 	}
 
 	unsigned short BriandTorRelay::GetCertificateCount() {
@@ -133,7 +123,7 @@ namespace Briand {
 				combination, the initiator MUST check the following.
 			*/
 
-			if (DEBUG) Serial.println("[DEBUG] Relay has Ed25519+RSA identity keys.");
+			if (DEBUG) printf("[DEBUG] Relay has Ed25519+RSA identity keys.\n");
 
 			/*
 				* The CERTS cell contains exactly one CertType 2 "ID" certificate.
@@ -151,7 +141,7 @@ namespace Briand {
 				this->certTLSLink == nullptr ||
 				this->certRSAEd25519CrossCertificate == nullptr ) 
 			{
-				Serial.println("[DEBUG] Relay has invalid number of certificates.");
+				printf("[DEBUG] Relay has invalid number of certificates.\n");
 				return false;
 			}
 
@@ -170,7 +160,7 @@ namespace Briand {
 				(this->certRsa1024AuthenticateCell != nullptr && !this->certRsa1024AuthenticateCell->IsValid( *this->certRsa1024Identity.get() ))
 				) 
 			{
-				Serial.println("[DEBUG] Relay has invalid or expired X.509 certificates.");
+				printf("[DEBUG] Relay has invalid or expired X.509 certificates.\n");
 				return false;
 			}
 
@@ -179,14 +169,14 @@ namespace Briand {
 			/* The certified key in the ID certificate is a 1024-bit RSA key. */
 			unsigned short keyLen = this->certRsa1024Identity->GetRsaKeyLength();
 			if (keyLen != 1024) {
-				if (DEBUG) Serial.printf("[DEBUG] Error, RSA1024_Identity_Self_Signed has an invalid key size of %d bit, expected 1024.\n", keyLen);
+				if (DEBUG) printf("[DEBUG] Error, RSA1024_Identity_Self_Signed has an invalid key size of %d bit, expected 1024.\n", keyLen);
 				return false;
 			}
 
 			/* The RSA->Ed25519 cross-certificate certifies the Ed25519 identity, and is signed with the RSA identity listed in the "ID" certificate. */
 			if (!this->certRSAEd25519CrossCertificate->IsValid( *this->certRsa1024Identity.get() )) 
 			{
-				Serial.println("[DEBUG] Error, RSAEd25519CrossCertificate is expired or not correctly signed by RSA identity.");
+				printf("[DEBUG] Error, RSAEd25519CrossCertificate is expired or not correctly signed by RSA identity.\n");
 				return false;
 			}
 
@@ -197,7 +187,7 @@ namespace Briand {
 			*/
 
 			if (!this->certTLSLink->IsValid( *this->certEd25519SigningKey.get(), *this->certLinkKey.get() )) {
-				Serial.println("[DEBUG] Error, TLS Link is expired, not correctly signed by RSA identity or included certified key not matching SHA256 digest of Link certificate.");
+				printf("[DEBUG] Error, TLS Link is expired, not correctly signed by RSA identity or included certified key not matching SHA256 digest of Link certificate.\n");
 				return false;
 			}
 
@@ -205,16 +195,16 @@ namespace Briand {
 			
 			// This is not understood, unclear. The Link (certype 5) certified key contains the sha256 digest of the full content of the link (certtype 1) certificate :/
 
-			if (DEBUG) Serial.println("[DEBUG] WARNING: this test is skipped because unclear: \"The certified key in the Link certificate matches the link key that was used to negotiate the TLS connection.\"");
+			if (DEBUG) printf("[DEBUG] WARNING: this test is skipped because unclear: \"The certified key in the Link certificate matches the link key that was used to negotiate the TLS connection.\"\n");
 			// TODO
 
 			/* The identity key listed in the ID->Signing cert was used to sign the ID->Signing Cert. (CertType 4 Ed25519) */
 			if (!this->certEd25519SigningKey->IsValid( *this->certRSAEd25519CrossCertificate.get() )) {
-				Serial.println("[DEBUG] Error, Ed25519SigningKey is expired or not correctly signed by RSAEd25519CrossCertificate's ED25519KEY.");
+				printf("[DEBUG] Error, Ed25519SigningKey is expired or not correctly signed by RSAEd25519CrossCertificate's ED25519KEY.\n");
 				return false;
 			}
 
-			if (DEBUG) Serial.println("[DEBUG] Relay with RSA+Ed25519 identity has the right and valid certificates.");
+			if (DEBUG) printf("[DEBUG] Relay with RSA+Ed25519 identity has the right and valid certificates.\n");
 			
 			return true;
 		}
@@ -224,7 +214,7 @@ namespace Briand {
 				the initiator MUST check the following:
 			*/
 
-			if (DEBUG) Serial.println("[DEBUG] Relay has RSA identity key only.");
+			if (DEBUG) printf("[DEBUG] Relay has RSA identity key only.\n");
 
 			/*
 				* The CERTS cell contains exactly one CertType 1 "Link" certificate.
@@ -233,7 +223,7 @@ namespace Briand {
 
 			if (this->certRsa1024Identity == nullptr || this->certLinkKey == nullptr ) 
 			{
-				Serial.println("[DEBUG] Relay has invalid number of certificates.");
+				printf("[DEBUG] Relay has invalid number of certificates.\n");
 				return false;
 			}
 
@@ -249,14 +239,14 @@ namespace Briand {
 				(this->certRsa1024AuthenticateCell != nullptr && !this->certRsa1024AuthenticateCell->IsValid( *this->certRsa1024Identity.get() ))
 				) 
 			{
-				Serial.println("[DEBUG] Relay has invalid or expired X.509 certificates.");
+				printf("[DEBUG] Relay has invalid or expired X.509 certificates.\n");
 				return false;
 			}
 	
 			/*	The certified key in the ID certificate is a 1024-bit RSA key. */
 			unsigned short keyLen = this->certRsa1024Identity->GetRsaKeyLength();
 			if (keyLen != 1024) {
-				if (DEBUG) Serial.printf("[DEBUG] Error, RSA1024_Identity_Self_Signed has an invalid key size of %d bit, expected 1024.\n", keyLen);
+				if (DEBUG) printf("[DEBUG] Error, RSA1024_Identity_Self_Signed has an invalid key size of %d bit, expected 1024.\n", keyLen);
 				return false;
 			}
 
@@ -266,12 +256,12 @@ namespace Briand {
 			// TODO
 			//
 
-			if (DEBUG) Serial.println("[DEBUG] Relay with RSA identity key only has the right and valid certificates.");
+			if (DEBUG) printf("[DEBUG] Relay with RSA identity key only has the right and valid certificates.\n");
 
 			return true;
 		}
 		else {
-			if (DEBUG) Serial.println("[DEBUG] Relay has no valid certificates to verify (no identity)!");
+			if (DEBUG) printf("[DEBUG] Relay has no valid certificates to verify (no identity)!\n");
 			return false;
 		}
 
@@ -297,7 +287,7 @@ namespace Briand {
 
 		while(httpCode != 200 && curDir < TOR_DIR_AUTHORITIES_NUMBER) {
 			auto randomDirectory = TOR_DIR_AUTHORITIES[TOR_DIR_LAST_USED];
-			if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromAuthority Query to dir #%u (%s).\n", TOR_DIR_LAST_USED, randomDirectory.nickname);
+			if (DEBUG) printf("[DEBUG] FetchDescriptorsFromAuthority Query to dir #%u (%s).\n", TOR_DIR_LAST_USED, randomDirectory.nickname);
 
 			string path = "/tor/server/fp/" + *this->fingerprint.get();	// also /tor/server/d/<F> working
 			bool secureRequest = false;
@@ -310,12 +300,12 @@ namespace Briand {
 			if (httpCode != 200) {
 				curDir++;
 				TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED + 1) % TOR_DIR_AUTHORITIES_NUMBER;
-				if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromAuthority missed valid response, retry with dir #%u.\n", TOR_DIR_LAST_USED);
+				if (DEBUG) printf("[DEBUG] FetchDescriptorsFromAuthority missed valid response, retry with dir #%u.\n", TOR_DIR_LAST_USED);
 			}
 		}
 
 		if (httpCode == 200) {
-			if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromAuthority GET success.\n");
+			if (DEBUG) printf("[DEBUG] FetchDescriptorsFromAuthority GET success.\n");
 			unsigned int starts, ends;
 
 			// Find the ntor-onion-key 
@@ -323,7 +313,7 @@ namespace Briand {
 			ends = response->find("\n", starts);
 			
 			if (starts == string::npos || ends == string::npos) {
-				if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromAuthority ntor-onion-key failed.\n");
+				if (DEBUG) printf("[DEBUG] FetchDescriptorsFromAuthority ntor-onion-key failed.\n");
 				this->descriptorNtorOnionKey->assign("");
 				return false;
 			}
@@ -355,7 +345,7 @@ namespace Briand {
 			// TODO : other descriptors needed??
 		}
 		else {
-			if (DEBUG) Serial.printf("[DEBUG] FetchDescriptorsFromAuthority has failed, httpcode: %d\n", httpCode);
+			if (DEBUG) printf("[DEBUG] FetchDescriptorsFromAuthority has failed, httpcode: %d\n", httpCode);
 			return false;
 		}
 
@@ -381,7 +371,7 @@ namespace Briand {
 
 		// Check if data is enough WARNING: in future the length may change!
 		if (created2_extended2_payload->size() < 2+G_LENGTH+H_LENGTH) {
-			if (VERBOSE) Serial.printf("[ERR] Error, CREATED2 contains inconsistent payload (%u bytes against %u expected). Failure.\n", created2_extended2_payload->size(), 2+G_LENGTH+H_LENGTH);
+			if (VERBOSE) printf("[ERR] Error, CREATED2 contains inconsistent payload (%u bytes against %u expected). Failure.\n", created2_extended2_payload->size(), 2+G_LENGTH+H_LENGTH);
 			return false;
 		}
 
@@ -391,7 +381,7 @@ namespace Briand {
 
 		// Check HLEN consistent
 		if (HLEN != G_LENGTH+H_LENGTH) {
-			if (VERBOSE) Serial.printf("[ERR] Error, CREATED2 contains inconsistent HLEN payload (%u bytes against %u expected). Failure.\n", HLEN, G_LENGTH+H_LENGTH);
+			if (VERBOSE) printf("[ERR] Error, CREATED2 contains inconsistent HLEN payload (%u bytes against %u expected). Failure.\n", HLEN, G_LENGTH+H_LENGTH);
 			return false;
 		}
 
@@ -404,7 +394,7 @@ namespace Briand {
 			);
 		
 		if (DEBUG) {
-			Serial.printf("[DEBUG] Relay's PK: ");
+			printf("[DEBUG] Relay's PK: ");
 			BriandUtils::PrintByteBuffer(*this->CREATED_EXTENDED_RESPONSE_SERVER_PK.get(), this->CREATED_EXTENDED_RESPONSE_SERVER_PK->size(), this->CREATED_EXTENDED_RESPONSE_SERVER_PK->size());
 		}
 
@@ -417,7 +407,7 @@ namespace Briand {
 			);
 
 		if (DEBUG) {
-			Serial.printf("[DEBUG] Relay's AUTH: ");
+			printf("[DEBUG] Relay's AUTH: ");
 			BriandUtils::PrintByteBuffer(*this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH.get(), this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size(), this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size());
 		}
 
@@ -433,20 +423,20 @@ namespace Briand {
 		bool keysReady = BriandTorCryptoUtils::NtorHandshakeComplete(*this);
 
 		if (!keysReady) {
-			if (DEBUG) Serial.println("[DEBUG] The handshake is failed, no keys have been exchanged.");
+			if (DEBUG) printf("[DEBUG] The handshake is failed, no keys have been exchanged.\n");
 			return false;
 		}
 
 		if (DEBUG) {
-			Serial.printf("[DEBUG] Forward key: ");
+			printf("[DEBUG] Forward key: ");
 			BriandUtils::PrintByteBuffer( *this->KEY_Forward_Kf.get() );
-			Serial.printf("[DEBUG] Backward key: ");
+			printf("[DEBUG] Backward key: ");
 			BriandUtils::PrintByteBuffer( *this->KEY_Backward_Kb.get() );
-			Serial.printf("[DEBUG] Forward digest: ");
+			printf("[DEBUG] Forward digest: ");
 			BriandUtils::PrintByteBuffer( *this->KEY_ForwardDigest_Df.get() );
-			Serial.printf("[DEBUG] Backward digest: ");
+			printf("[DEBUG] Backward digest: ");
 			BriandUtils::PrintByteBuffer( *this->KEY_BackwardDigest_Db.get() );
-			Serial.printf("[DEBUG] Hidden service nonce: ");
+			printf("[DEBUG] Hidden service nonce: ");
 			BriandUtils::PrintByteBuffer( *this->KEY_HiddenService_Nonce.get() );
 		}
 
@@ -477,12 +467,12 @@ namespace Briand {
 
 	void BriandTorRelay::PrintRelayInfo() {
 		if (DEBUG) {
-			Serial.printf("[DEBUG] Nickame: %s\n", this->nickname->c_str());
-			Serial.printf("[DEBUG] Address: %s\n", this->first_address->c_str());
-			Serial.printf("[DEBUG] Fingerprint: %s\n", this->fingerprint->c_str());
-			Serial.printf("[DEBUG] Effective Family (raw contents): %s\n", this->effective_family->c_str());
-			Serial.printf("[DEBUG] Encoded descriptor NTOR onion key: %s\n", this->descriptorNtorOnionKey->c_str());
-			Serial.printf("[DEBUG] Decoded descriptor NTOR onion key: ");
+			printf("[DEBUG] Nickame: %s\n", this->nickname->c_str());
+			printf("[DEBUG] Address: %s\n", this->address->c_str());
+			printf("[DEBUG] Fingerprint: %s\n", this->fingerprint->c_str());
+			printf("[DEBUG] Effective Family (raw contents): %s\n", this->effective_family->c_str());
+			printf("[DEBUG] Encoded descriptor NTOR onion key: %s\n", this->descriptorNtorOnionKey->c_str());
+			printf("[DEBUG] Decoded descriptor NTOR onion key: ");
 			auto dec = BriandTorCryptoUtils::Base64Decode(*this->descriptorNtorOnionKey.get());
 			BriandUtils::PrintByteBuffer(*dec.get(), dec->size(), dec->size());
 		}

@@ -21,6 +21,8 @@
 #include <iostream>
 #include <memory>
 
+#include <BriandIDFClients.hxx>
+
 #include "BriandTorDefinitions.hxx"
 #include "BriandTorRelay.hxx"
 #include "BriandTorRelaySearcher.hxx"
@@ -47,7 +49,7 @@ namespace Briand {
 		unsigned int CIRCID;					// the CIRCID of this circuit
 		unsigned short LINKPROTOCOLVERSION; 	// the version of this circuit
 
-		unique_ptr<WiFiClientSecure> sClient;	// Client used for communications
+		unique_ptr<BriandIDFSocketTlsClient> sClient;	// Client used for communications
 
 		/**
 		 * Method to cleanup pointers etc. before returning after a failed operation in BuildCircuit()

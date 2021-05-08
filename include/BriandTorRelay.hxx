@@ -40,7 +40,9 @@ namespace Briand {
 		public:
 
 		unique_ptr<string> nickname;
-		unique_ptr<string> first_address;
+		//unique_ptr<string> first_address;
+		unique_ptr<string> address;
+		unsigned short port;
 		unique_ptr<string> fingerprint;
 		/** @deprecated unused! */
 		unique_ptr<string> effective_family;

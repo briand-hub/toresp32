@@ -18,17 +18,17 @@
 
 #include "BriandTorRelaySearcher.hxx"
 
-
-
-
-
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <fstream>
 #include <vector>
 #include <algorithm>
 
-// Crypto library chosen
+#include <lwip/sockets.h>
+#include <lwip/inet.h>
+#include <lwip/ip_addr.h>
+#include <cJSON.h>
 #include <mbedtls/ecdh.h>
 
 #include "BriandDefines.hxx"
@@ -162,22 +162,27 @@ namespace Briand {
 			auto json = this->GetOnionooJson("relay", "nickname,or_addresses,fingerprint", TOR_FLAGS_GUARD_MUST_HAVE, success, TOR_NODES_CACHE_SIZE);
 			if (success) {
 				if (DEBUG) printf("[DEBUG] Downloading guard cache from Oniooo success, saving cache.\n");
+				
 				// Prepend the time to object (the first byte is the "{" initialization)
 				string addTimestamp = "\"cachecreatedon\":" + std::to_string(BriandUtils::GetUnixTime()) + ",";
 				json->insert(json->begin()+1, addTimestamp.begin(), addTimestamp.end());
 				if (DEBUG) printf("[DEBUG] Guard cache from Oniooo will have a size of %u bytes.\n", json->size());
-				File f = SPIFFS.open(NODES_FILE_GUARD, "w");
+				
+				ofstream f(NODES_FILE_GUARD, ios::out | ios::trunc);
+
 				// Buffer has important size, so is better write with buffers of 1K bytes
 				while(json->length() > 0) {
 					if (json->length() < 1000) {
-						f.write(reinterpret_cast<const unsigned char*>(json->c_str()), json->length());
+						f << json->c_str();
 						json->clear();
 					}
 					else {
-						f.write(reinterpret_cast<const unsigned char*>(json->c_str()), 1000);
+						f.write(json->c_str(), 1000);
 						json->erase(json->begin(), json->begin()+1000);
 					}
 				}
+
+				f.flush();
 				f.close();
 				json.reset(); // save ram
 				if (DEBUG) printf("[DEBUG] Guard cache from Oniooo saved to %s\n", this->NODES_FILE_GUARD);
@@ -204,19 +209,24 @@ namespace Briand {
 				string addTimestamp = "\"cachecreatedon\":" + std::to_string(BriandUtils::GetUnixTime()) + ",";
 				json->insert(json->begin()+1, addTimestamp.begin(), addTimestamp.end());
 				if (DEBUG) printf("[DEBUG] Middle cache from Oniooo will have a size of %u bytes.\n", json->size());
-				File f = SPIFFS.open(NODES_FILE_MIDDLE, "w");
+
+				ofstream f(NODES_FILE_MIDDLE, ios::out | ios::trunc);
+
 				// Buffer has important size, so is better write with buffers of 1K bytes
 				while(json->length() > 0) {
 					if (json->length() < 1000) {
-						f.write(reinterpret_cast<const unsigned char*>(json->c_str()), json->length());
+						f << json->c_str();
 						json->clear();
 					}
 					else {
-						f.write(reinterpret_cast<const unsigned char*>(json->c_str()), 1000);
+						f.write(json->c_str(), 1000);
 						json->erase(json->begin(), json->begin()+1000);
 					}
 				}
+
+				f.flush();
 				f.close();
+
 				json.reset(); // save ram
 				if (DEBUG) printf("[DEBUG] Middle cache from Oniooo saved to %s\n", this->NODES_FILE_MIDDLE);
 			}
@@ -243,18 +253,22 @@ namespace Briand {
 				string addTimestamp = "\"cachecreatedon\":" + std::to_string(BriandUtils::GetUnixTime()) + ",";
 				json->insert(json->begin()+1, addTimestamp.begin(), addTimestamp.end());
 				if (DEBUG) printf("[DEBUG] Middle exit from Oniooo will have a size of %u bytes.\n", json->size());
-				File f = SPIFFS.open(NODES_FILE_EXIT, "w");
+				
+				ofstream f(NODES_FILE_EXIT, ios::out | ios::trunc);
+
 				// Buffer has important size, so is better write with buffers of 1K bytes
 				while(json->length() > 0) {
 					if (json->length() < 1000) {
-						f.write(reinterpret_cast<const unsigned char*>(json->c_str()), json->length());
+						f << json->c_str();
 						json->clear();
 					}
 					else {
-						f.write(reinterpret_cast<const unsigned char*>(json->c_str()), 1000);
+						f.write(json->c_str(), 1000);
 						json->erase(json->begin(), json->begin()+1000);
 					}
 				}
+
+				f.flush();
 				f.close();
 				json.reset(); // save ram
 				if (DEBUG) printf("[DEBUG] Exit cache from Oniooo saved to %s\n", this->NODES_FILE_EXIT);
@@ -275,23 +289,43 @@ namespace Briand {
 	bool BriandTorRelaySearcher::CheckCacheFile(const char* filename) {
 		bool valid = false;
 
-		if (SPIFFS.exists(filename)) {
-			DynamicJsonDocument doc(this->EXPECTED_SIZE);
+		ifstream file(filename, ios::in);
 
-			File file = SPIFFS.open(filename, "r");
-			DeserializationError err = deserializeJson(doc, file);
-			if (!err) {
-				unsigned long int cacheAge = doc["cachecreatedon"];//.as<unsigned long int>();
-				if (DEBUG) printf("[DEBUG] %s cache created on %lu.\n", filename, cacheAge);
-				if ( (cacheAge + (TOR_NODES_CACHE_VAL_H*3600)) >= BriandUtils::GetUnixTime() ) {
-					valid = true;
-				}
-			}
-			else {
-				if (DEBUG) printf("[DEBUG] %s cache deserialization error: %s\n", filename, err.c_str());
-			}
+		if (file.good()) {
+			auto json = make_unique<string>("");
+			string line;
 
+			while (file.good()) {
+				getline(file, line);
+				json->append(line);
+			}
+			
 			file.close();
+
+			cJSON* root = cJSON_Parse(json->c_str());
+
+			if (root == NULL) {
+				// Get last error
+				const char *error_ptr = cJSON_GetErrorPtr();
+				if (DEBUG) printf("[DEBUG] %s cache deserialization error: %s\n", filename, error_ptr);
+				// Free resources
+				cJSON_Delete(root);
+				return false;
+			}
+
+			unsigned long int cacheAge = 0;
+			auto cacheField = cJSON_GetObjectItemCaseSensitive(root, "cachecreatedon");
+			if (cacheField != NULL && cJSON_IsNumber(cacheField)) {
+				cacheAge = static_cast<unsigned long int>(cacheField->valueint);
+			}
+
+			if (DEBUG) printf("[DEBUG] %s cache created on %lu.\n", filename, cacheAge);
+
+			if ( (cacheAge + (TOR_NODES_CACHE_VAL_H*3600)) >= BriandUtils::GetUnixTime() ) {
+				valid = true;
+			}
+
+			cJSON_Delete(root);
 		}
 		else {
 			if (DEBUG) printf("[DEBUG] %s cache file does not exist.\n", filename);
@@ -301,10 +335,18 @@ namespace Briand {
 	}
 
 	bool BriandTorRelaySearcher::IPsInSameFamily(const string& first, const string& second) {
-		IPAddress ip1, ip2;
-		ip1.fromString(first.substr(0, first.find_first_of(":")).c_str());
-		ip2.fromString(second.substr(0, second.find_first_of(":")).c_str());
-		return (ip1[0] == ip2[0] && ip1[1] == ip2[1]);
+		struct in_addr ip1, ip2;
+
+		// Convert to in_addr (uint32)
+		inet_aton(first.c_str(), &ip1);
+		inet_aton(second.c_str(), &ip2);
+
+		// Compare (WARNING: LITTLE ENDIAN!!!! so... take the LAST bytes)
+		ip1.s_addr = ip1.s_addr & 0x0000FFFF;
+		ip2.s_addr = ip2.s_addr & 0x0000FFFF;
+
+		// Elegant :)
+		return ip1.s_addr == ip2.s_addr;
 	}
 
 	BriandTorRelaySearcher::BriandTorRelaySearcher() {
@@ -335,32 +377,55 @@ namespace Briand {
 			
 			if (DEBUG) printf("[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
 
-			DynamicJsonDocument json(this->EXPECTED_SIZE);
-
-			File file = SPIFFS.open(this->NODES_FILE_GUARD, "r");
-			DeserializationError err = deserializeJson(json, file);
-			if (!err) {
-				relay = make_unique<Briand::BriandTorRelay>();
-
-				// Sure you have enough?
-				while (json["relays"][this->randomPick].isNull())
-					this->randomize();
-
-				relay->nickname->assign( json["relays"][this->randomPick]["nickname"].as<const char*>() );
-				relay->fingerprint->assign( json["relays"][this->randomPick]["fingerprint"].as<const char*>() );
-				relay->first_address->assign( json["relays"][this->randomPick]["or_addresses"][0].as<const char*>() );
-
-				if (json["relays"][this->randomPick].containsKey("effective_family"))
-					relay->effective_family->assign( json["relays"][this->randomPick]["effective_family"].as<const char*>() );
-
-				json.clear();
+			ifstream file(this->NODES_FILE_GUARD, ios::in);
+			auto json = make_unique<string>("");
+			string line;
+			while (file.good()) {
+				getline(file, line);
+				json->append(line);
 			}
-			else {
-				if (DEBUG) printf("[DEBUG] %s cache deserialization error: %s. Cache has been invalidated.\n", this->NODES_FILE_GUARD, err.c_str());
-				this->cacheValid = false;
-			}
-
 			file.close();
+			cJSON* root = cJSON_Parse(json->c_str());
+
+			if (root == NULL || cJSON_GetObjectItemCaseSensitive(root, "relays") == NULL) {
+				// Get last error
+				const char *error_ptr = cJSON_GetErrorPtr();
+				if (DEBUG) printf("[DEBUG] Guard cache deserialization error: %s\n", error_ptr);
+				// Free resources
+				cJSON_Delete(root);
+				return relay;
+			}
+
+			auto relays = cJSON_GetObjectItemCaseSensitive(root, "relays");
+			if (!cJSON_IsArray(relays)) {
+				if (DEBUG) printf("[DEBUG] Guard cache deserialization error (no relays array)\n");
+				// Free resources
+				cJSON_Delete(root);
+				return relay;
+			}
+
+			relay = make_unique<Briand::BriandTorRelay>();
+			int relaysNo = cJSON_GetArraySize(relays);
+			while (this->randomPick >= relaysNo)
+				this->randomize();
+			
+			auto randomRelay = cJSON_GetArrayItem(relays, this->randomPick);
+			relay->nickname->assign( cJSON_GetObjectItemCaseSensitive(randomRelay, "nickname")->valuestring );
+			relay->fingerprint->assign( cJSON_GetObjectItemCaseSensitive(randomRelay, "fingerprint")->valuestring );
+			
+			// Take first address, separate host and port
+			auto addresses = cJSON_GetObjectItemCaseSensitive(randomRelay, "or_addresses");
+			string firstAddress = cJSON_GetArrayItem(addresses, 0)->valuestring;
+			int pos = firstAddress.find(':');
+			relay->address->assign(firstAddress.substr(0, pos));
+			relay->port = std::stoi(firstAddress.substr(pos+1, 5));
+
+			// Could not be here
+			auto effective_family = cJSON_GetObjectItemCaseSensitive(randomRelay, "effective_family");
+			if (effective_family != NULL && cJSON_IsString(effective_family))
+				relay->effective_family->assign(effective_family->valuestring);
+			
+			cJSON_Delete(root);
 		}
 		else {
 			if (VERBOSE) printf("[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
@@ -382,58 +447,69 @@ namespace Briand {
 			
 			if (DEBUG) printf("[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
 
-			DynamicJsonDocument json(this->EXPECTED_SIZE);
-
-			File file = SPIFFS.open(this->NODES_FILE_MIDDLE, "r");
-			DeserializationError err = deserializeJson(json, file);
-			if (!err) {
-				relay = make_unique<Briand::BriandTorRelay>();
-
-				// Sure you have enough?
-				while (json["relays"][this->randomPick].isNull())
-					this->randomize();
-
-				// Check that the IP do not match if parameter given
-				if (avoidGuardIp.length() > 0) {
-					// Use it in the rare case the cache contains all-same-family nodes
-					auto allViewedCheck = make_unique<vector<unsigned char>>();
-					bool sameFamily;
-					do {
-						sameFamily = this->IPsInSameFamily( string(json["relays"][this->randomPick]["or_addresses"][0].as<const char*>()), avoidGuardIp);
-
-						if (sameFamily) {
-							allViewedCheck->push_back(this->randomPick);
-							this->randomize();
-							// Sure you have enough?
-							while (json["relays"][this->randomPick].isNull())
-								this->randomize();
-						}
-					} while (sameFamily || allViewedCheck->size() == TOR_NODES_CACHE_SIZE);
-
-					if (sameFamily && allViewedCheck->size() == TOR_NODES_CACHE_SIZE) {
-						if (VERBOSE) printf("[ERR] The middle tor cache has nodes that always matches the selected guard... FAILURE!\n");
-						return relay;
-					}
-					else {
-						if (DEBUG) printf("[DEBUG] Found that middle IP %s is different than guard %s and it is OK.\n", json["relays"][this->randomPick]["or_addresses"][0].as<const char*>(), avoidGuardIp.c_str());
-					}
-				}
-
-				relay->nickname->assign( json["relays"][this->randomPick]["nickname"].as<const char*>() );
-				relay->fingerprint->assign( json["relays"][this->randomPick]["fingerprint"].as<const char*>() );
-				relay->first_address->assign( json["relays"][this->randomPick]["or_addresses"][0].as<const char*>() );
-
-				if (json["relays"][this->randomPick].containsKey("effective_family"))
-					relay->effective_family->assign( json["relays"][this->randomPick]["effective_family"].as<const char*>() );
-
-				json.clear();
+			ifstream file(this->NODES_FILE_GUARD, ios::in);
+			auto json = make_unique<string>("");
+			string line;
+			while (file.good()) {
+				getline(file, line);
+				json->append(line);
 			}
-			else {
-				if (DEBUG) printf("[DEBUG] %s cache deserialization error: %s. Cache has been invalidated.\n", this->NODES_FILE_MIDDLE, err.c_str());
-				this->cacheValid = false;
-			}
-
 			file.close();
+			cJSON* root = cJSON_Parse(json->c_str());
+
+			if (root == NULL || cJSON_GetObjectItemCaseSensitive(root, "relays") == NULL) {
+				// Get last error
+				const char *error_ptr = cJSON_GetErrorPtr();
+				if (DEBUG) printf("[DEBUG] Guard cache deserialization error: %s\n", error_ptr);
+				// Free resources
+				cJSON_Delete(root);
+				return relay;
+			}
+
+			auto relays = cJSON_GetObjectItemCaseSensitive(root, "relays");
+			if (!cJSON_IsArray(relays)) {
+				if (DEBUG) printf("[DEBUG] Guard cache deserialization error (no relays array)\n");
+				// Free resources
+				cJSON_Delete(root);
+				return relay;
+			}
+
+			relay = make_unique<Briand::BriandTorRelay>();
+			int relaysNo = cJSON_GetArraySize(relays);
+			
+			// Must be avoided the guard IP!
+			bool sameFamily = false;
+
+			do {
+				do {
+					this->randomize();
+				} while (this->randomPick >= relaysNo);
+				
+				auto randomRelay = cJSON_GetArrayItem(relays, this->randomPick);
+				relay->nickname->assign( cJSON_GetObjectItemCaseSensitive(randomRelay, "nickname")->valuestring );
+				relay->fingerprint->assign( cJSON_GetObjectItemCaseSensitive(randomRelay, "fingerprint")->valuestring );
+				
+				// Take first address, separate host and port
+				auto addresses = cJSON_GetObjectItemCaseSensitive(randomRelay, "or_addresses");
+				string firstAddress = cJSON_GetArrayItem(addresses, 0)->valuestring;
+				int pos = firstAddress.find(':');
+				relay->address->assign(firstAddress.substr(0, pos));
+				relay->port = std::stoi(firstAddress.substr(pos+1, 5));
+
+				// Check if in the same family
+				if (avoidGuardIp.length() > 0) {
+					sameFamily = this->IPsInSameFamily(avoidGuardIp, *relay->address.get());
+				}
+				
+				// Could not be here
+				auto effective_family = cJSON_GetObjectItemCaseSensitive(randomRelay, "effective_family");
+				if (effective_family != NULL && cJSON_IsString(effective_family))
+					relay->effective_family->assign(effective_family->valuestring);
+
+			} while (sameFamily);
+			
+			
+			cJSON_Delete(root);
 		}
 		else {
 			if (VERBOSE) printf("[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
@@ -455,62 +531,72 @@ namespace Briand {
 			
 			if (DEBUG) printf("[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
 
-			DynamicJsonDocument json(this->EXPECTED_SIZE);
-
-			File file = SPIFFS.open(this->NODES_FILE_EXIT, "r");
-			DeserializationError err = deserializeJson(json, file);
-			if (!err) {
-				relay = make_unique<Briand::BriandTorRelay>();
-
-				// Sure you have enough?
-				while (json["relays"][this->randomPick].isNull())
-					this->randomize();
-
-				// Check that the IP do not match if parameter given
-				if (avoidGuardIp.length() > 0 && avoidMiddleIp.length() > 0) {
-					// Use it in the rare case the cache contains all-same-family nodes
-					auto allViewedCheck = make_unique<vector<unsigned char>>();
-					bool sameFamily;
-					do {
-						sameFamily = this->IPsInSameFamily( string(json["relays"][this->randomPick]["or_addresses"][0].as<const char*>()), avoidGuardIp) ||
-										this->IPsInSameFamily( string(json["relays"][this->randomPick]["or_addresses"][0].as<const char*>()), avoidMiddleIp);
-
-						if (sameFamily) {
-							allViewedCheck->push_back(this->randomPick);
-							this->randomize();
-							// Sure you have enough?
-							while (json["relays"][this->randomPick].isNull())
-								this->randomize();
-						}
-					} while (sameFamily && allViewedCheck->size() < TOR_NODES_CACHE_SIZE);
-
-					if (sameFamily && allViewedCheck->size() == TOR_NODES_CACHE_SIZE) {
-						if (VERBOSE) printf("[ERR] The exit tor cache has nodes that always matches the selected guard/middle... FAILURE!\n");
-						return relay;
-					}
-					else {
-						if (DEBUG) printf("[DEBUG] Found that exit IP %s is different than guard %s and middle %s and it is OK.\n", json["relays"][this->randomPick]["or_addresses"][0].as<const char*>(), avoidGuardIp.c_str(), avoidMiddleIp.c_str());
-					}
-				}
-				else if ((avoidGuardIp.length() + avoidMiddleIp.length()) > 0) {
-					if (VERBOSE) printf("[WARNING] In GetExitRelay received only one (guard or middle) to avoid. CHECK WILL NOT BE DONE!\n");
-				}
-
-				relay->nickname->assign( json["relays"][this->randomPick]["nickname"].as<const char*>() );
-				relay->fingerprint->assign( json["relays"][this->randomPick]["fingerprint"].as<const char*>() );
-				relay->first_address->assign( json["relays"][this->randomPick]["or_addresses"][0].as<const char*>() );
-
-				if (json["relays"][this->randomPick].containsKey("effective_family"))
-					relay->effective_family->assign( json["relays"][this->randomPick]["effective_family"].as<const char*>() );
-
-				json.clear();
+			ifstream file(this->NODES_FILE_GUARD, ios::in);
+			auto json = make_unique<string>("");
+			string line;
+			while (file.good()) {
+				getline(file, line);
+				json->append(line);
 			}
-			else {
-				if (DEBUG) printf("[DEBUG] %s cache deserialization error: %s. Cache has been invalidated.\n", this->NODES_FILE_EXIT, err.c_str());
-				this->cacheValid = false;
-			}
-
 			file.close();
+			cJSON* root = cJSON_Parse(json->c_str());
+
+			if (root == NULL || cJSON_GetObjectItemCaseSensitive(root, "relays") == NULL) {
+				// Get last error
+				const char *error_ptr = cJSON_GetErrorPtr();
+				if (DEBUG) printf("[DEBUG] Guard cache deserialization error: %s\n", error_ptr);
+				// Free resources
+				cJSON_Delete(root);
+				return relay;
+			}
+
+			auto relays = cJSON_GetObjectItemCaseSensitive(root, "relays");
+			if (!cJSON_IsArray(relays)) {
+				if (DEBUG) printf("[DEBUG] Guard cache deserialization error (no relays array)\n");
+				// Free resources
+				cJSON_Delete(root);
+				return relay;
+			}
+
+			relay = make_unique<Briand::BriandTorRelay>();
+			int relaysNo = cJSON_GetArraySize(relays);
+			
+			// Must be avoided the guard IP and also the middle IP!
+			bool sameFamily = false;
+
+			do {
+				do {
+					this->randomize();
+				} while (this->randomPick >= relaysNo);
+				
+				auto randomRelay = cJSON_GetArrayItem(relays, this->randomPick);
+				relay->nickname->assign( cJSON_GetObjectItemCaseSensitive(randomRelay, "nickname")->valuestring );
+				relay->fingerprint->assign( cJSON_GetObjectItemCaseSensitive(randomRelay, "fingerprint")->valuestring );
+				
+				// Take first address, separate host and port
+				auto addresses = cJSON_GetObjectItemCaseSensitive(randomRelay, "or_addresses");
+				string firstAddress = cJSON_GetArrayItem(addresses, 0)->valuestring;
+				int pos = firstAddress.find(':');
+				relay->address->assign(firstAddress.substr(0, pos));
+				relay->port = std::stoi(firstAddress.substr(pos+1, 5));
+
+				// Check if in the same family with guard
+				if (avoidGuardIp.length() > 0) {
+					sameFamily = this->IPsInSameFamily(avoidGuardIp, *relay->address.get());
+				}
+				// Check if in the same family with middle
+				if (avoidMiddleIp.length() > 0) {
+					sameFamily = this->IPsInSameFamily(avoidMiddleIp, *relay->address.get());
+				}
+				
+				// Could not be here
+				auto effective_family = cJSON_GetObjectItemCaseSensitive(randomRelay, "effective_family");
+				if (effective_family != NULL && cJSON_IsString(effective_family))
+					relay->effective_family->assign(effective_family->valuestring);
+
+			} while (sameFamily);
+			
+			cJSON_Delete(root);
 		}
 		else {
 			if (VERBOSE) printf("[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
@@ -520,9 +606,9 @@ namespace Briand {
 	}
 
 	void BriandTorRelaySearcher::InvalidateCache(bool forceRefresh) {
-		if (SPIFFS.exists(this->NODES_FILE_GUARD)) SPIFFS.remove(this->NODES_FILE_GUARD);
-		if (SPIFFS.exists(this->NODES_FILE_MIDDLE)) SPIFFS.remove(this->NODES_FILE_MIDDLE);
-		if (SPIFFS.exists(this->NODES_FILE_EXIT)) SPIFFS.remove(this->NODES_FILE_EXIT);
+		std::remove(this->NODES_FILE_GUARD);
+		std::remove(this->NODES_FILE_MIDDLE);
+		std::remove(this->NODES_FILE_EXIT);
 		if (forceRefresh) this->RefreshOnionooCache();
 	}
 

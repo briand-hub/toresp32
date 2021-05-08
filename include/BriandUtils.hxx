@@ -74,10 +74,16 @@ namespace Briand
 		static string BriandTorRelayFlagsToString(unsigned short flagMask, const string& prepend = "", const string& separator=" ");
 
 		/**
-		 * Method to query ifconfig.me for obtain headers/ip info
+		 * Method to query ifconfig.me and obtain headers/ip info
 		 * @return string with main informations, empty if fails
 		*/
 		static string BriandIfConfigMe();
+
+		/**
+		 * Method to get public IP address from ifconfig.me
+		 * @return string with IP, empty if fails
+		*/
+		static string BriandGetPublicIPFromIfConfigMe();
 
 		/**
 		 * DEBUG Method to print raw bytes to serial output (hex format)

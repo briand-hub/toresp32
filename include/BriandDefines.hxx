@@ -25,7 +25,7 @@
 
     constexpr bool VERBOSE = true;							// show messages
     constexpr bool DEBUG = true;							// show debug info (USE ONLY IN DEBUGGING, MUST BE SET TO false WHEN USING!)
-    constexpr unsigned int SERIAL_BAUD_RATE = 115200;		// serial monitor/console baud rate (115200 default)
+    //constexpr unsigned int SERIAL_BAUD_RATE = 115200;		// serial monitor/console baud rate (115200 default)
     constexpr bool CHANGE_MAC_TO_RANDOM = true;				// choose if you want to change the MAC address to a random one for improved security
     constexpr unsigned short WIFI_CONNECTION_TIMEOUT = 30;  // timeout in seconds, expired with no wifi STA connection will reboot system
     constexpr unsigned char WIFI_HOSTNAME_LEN = 8;			// random hostname length for AP/STA

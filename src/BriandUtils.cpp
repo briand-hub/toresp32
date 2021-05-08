@@ -24,6 +24,8 @@
 
 #include <iostream>
 #include <memory>
+#include <fstream>
+#include <algorithm>
 
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
@@ -41,7 +43,7 @@ namespace Briand
 
 		// return static_cast<unsigned char>( esp_random() );
 
-		// Better implementation
+		// Better implementation, best if wifi is enabled
 
 		return static_cast<unsigned char>( esp_random() % 0x100 );
 	}
@@ -201,61 +203,99 @@ namespace Briand
 		short httpCode = 0;
 		string randomAgent = string( Briand::BriandUtils::GetRandomHostName().get() );
 
-		DynamicJsonDocument doc = Briand::BriandNet::HttpsGetJson("ifconfig.me", 443, "/all.json", httpCode, success, randomAgent, 512);
+		cJSON* doc = Briand::BriandNet::HttpsGetJson("ifconfig.me", 443, "/all.json", httpCode, success, randomAgent);
 
 		// Prepare output
 		string output("");
 
 		if (success) {
-			if (doc.containsKey("ip_addr")) {
+			auto ip_addr = cJSON_GetObjectItemCaseSensitive(doc, "ip_addr");
+			auto remote_host = cJSON_GetObjectItemCaseSensitive(doc, "remote_host");
+			auto user_agent = cJSON_GetObjectItemCaseSensitive(doc, "user_agent");
+			auto port = cJSON_GetObjectItemCaseSensitive(doc, "port");
+			auto language = cJSON_GetObjectItemCaseSensitive(doc, "language");
+			auto encoding = cJSON_GetObjectItemCaseSensitive(doc, "encoding");
+			auto mime = cJSON_GetObjectItemCaseSensitive(doc, "mime");
+			auto via = cJSON_GetObjectItemCaseSensitive(doc, "via");
+			auto forwarded = cJSON_GetObjectItemCaseSensitive(doc, "forwarded");
+
+			if (ip_addr != NULL && ip_addr->valuestring != NULL) {
 				output.append("[IFCONFIG.me Public ip]: ");
-				output.append( doc["ip_addr"].as<const char*>() );
+				output.append( ip_addr->valuestring );
 				output.append("\n");
 			}
-			if (doc.containsKey("remote_host")) {
+			if (remote_host != NULL && remote_host->valuestring != NULL) {
 				output.append("[IFCONFIG.me Remote host]: ");
-				output.append( doc["remote_host"].as<const char*>() );
+				output.append( remote_host->valuestring );
 				output.append("\n");
 			}
-			if (doc.containsKey("user_agent")) {
+			if (user_agent != NULL && user_agent->valuestring != NULL) {
 				output.append("[IFCONFIG.me User-Agent]: ");
-				output.append( doc["user_agent"].as<const char*>() );
+				output.append( user_agent->valuestring );
 				output.append("\n");
 			}
-			if (doc.containsKey("port")) {
+			if (port != NULL && cJSON_IsNumber(port)) {
 				output.append("[IFCONFIG.me Port]: ");
-				output.append( std::to_string( doc["port"].as<int>() ) );
+				output.append( std::to_string( port->valueint ) );
 				output.append("\n");
 			}
-			if (doc.containsKey("language")) {
+			if (language != NULL && language->valuestring != NULL) {
 				output.append("[IFCONFIG.me Language]: ");
-				output.append( doc["language"].as<const char*>() );
+				output.append( language->valuestring );
 				output.append("\n");
 			}
-			if (doc.containsKey("encoding")) {
+			if (encoding != NULL && encoding->valuestring != NULL) {
 				output.append("[IFCONFIG.me Encoding]: ");
-				output.append( doc["encoding"].as<const char*>() );
+				output.append( encoding->valuestring );
 				output.append("\n");
 			}
-			if (doc.containsKey("mime")) {
+			if (mime != NULL && mime->valuestring != NULL) {
 				output.append("[IFCONFIG.me Mime]: ");
-				output.append( doc["mime"].as<const char*>() );
+				output.append( mime->valuestring );
 				output.append("\n");
 			}
-			if (doc.containsKey("via")) {
+			if (via != NULL && via->valuestring != NULL) {
 				output.append("[IFCONFIG.me Via]: ");
-				output.append( doc["via"].as<const char*>() );
+				output.append( via->valuestring );
 				output.append("\n");
 			}
-			if (doc.containsKey("forwarded")) {
+			if (forwarded != NULL && forwarded->valuestring != NULL) {
 				output.append("[IFCONFIG.me Forwarded]: ");
-				output.append( doc["forwarded"].as<const char*>() );
+				output.append( forwarded->valuestring );
 				output.append("\n");
 			}
 		}
 		else {
 			printf("[ERR] Error on downloading from https://ifconfig.me/all.json Http code: %d Deserialization success: %d\n", httpCode, success);
 		}
+
+		cJSON_Delete(doc);
+
+		return output;
+	}
+
+	string BriandUtils::BriandGetPublicIPFromIfConfigMe() {
+		bool success = false;
+		short httpCode = 0;
+		string randomAgent = string( Briand::BriandUtils::GetRandomHostName().get() );
+
+		cJSON* doc = Briand::BriandNet::HttpsGetJson("ifconfig.me", 443, "/all.json", httpCode, success, randomAgent);
+
+		// Prepare output
+		string output("");
+
+		if (success) {
+			auto ip_addr = cJSON_GetObjectItemCaseSensitive(doc, "ip_addr");
+
+			if (ip_addr != NULL && ip_addr->valuestring != NULL) {
+				output.assign(ip_addr->valuestring);
+			}
+		}
+		else {
+			printf("[ERR] Error on downloading IP Informations from https://ifconfig.me/all.json Http code: %d Deserialization success: %d\n", httpCode, success);
+		}
+
+		cJSON_Delete(doc);
 
 		return output;
 	}
@@ -421,9 +461,12 @@ namespace Briand
 	}
 
 	void BriandUtils::PrintFileContent(const string& filename) {
-		File f = SPIFFS.open(filename.c_str(), "r");
-		while (f.available()) {
-			printf(static_cast<char>(f.read()));
+		ifstream f;
+		f.open(filename, ios::binary | ios::in);
+		unsigned char c = f.get();
+		while (f.good()) {
+			cout << c;
+			c = f.get();
 		}
 		f.close();
 	}

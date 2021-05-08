@@ -26,6 +26,8 @@
 #include <memory>
 #include <sstream>
 
+#include <BriandIDFClients.hxx>
+
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
 #include "BriandUtils.hxx"
@@ -41,8 +43,8 @@ namespace Briand {
 		if (this->relaySearcher != nullptr) this->relaySearcher.reset();
 		if (this->sClient != nullptr) {
 			// close connetion if active
-			if (this->sClient->connected())
-				this->sClient->stop();
+			if (this->sClient->IsConnected())
+				this->sClient->Disconnect();
 			this->sClient.reset();
 		}
 	}
@@ -71,13 +73,13 @@ namespace Briand {
 		}
 		else if (relayType == 1) {
 			if (this->guardNode != nullptr) 
-				tentative = this->relaySearcher->GetMiddleRelay(*this->guardNode->first_address.get());
+				tentative = this->relaySearcher->GetMiddleRelay(*this->guardNode->address.get());
 			else
 				tentative = this->relaySearcher->GetMiddleRelay("");
 		} 
 		else if (relayType == 2) {
 			if (this->guardNode != nullptr && this->middleNode != nullptr)
-				tentative = this->relaySearcher->GetExitRelay(*this->guardNode->first_address.get(), *this->middleNode->first_address.get());
+				tentative = this->relaySearcher->GetExitRelay(*this->guardNode->address.get(), *this->middleNode->address.get());
 			else
 				tentative = this->relaySearcher->GetExitRelay("", "");
 		} 
@@ -284,7 +286,9 @@ namespace Briand {
 		if (DEBUG) printf("[DEBUG] Sending NETINFO cell to guard.\n");
 
 		tempCell = make_unique<BriandTorCell>( this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::NETINFO );
-		tempCell->BuildAsNETINFO(this->sClient->localIP());
+		struct in_addr public_ip;
+		inet_aton(BriandUtils::BriandGetPublicIPFromIfConfigMe().c_str(), &public_ip);
+		tempCell->BuildAsNETINFO( public_ip );
 
 		if (DEBUG) {
 			printf("[DEBUG] NETINFO cell payload to send: ");
@@ -399,8 +403,8 @@ namespace Briand {
 
 		if (this->sClient != nullptr) {
 			// close connetion if active
-			if (this->sClient->connected())
-				this->sClient->stop();
+			if (this->sClient->IsConnected())
+				this->sClient->Disconnect();
 			this->sClient.reset();
 		}
 
@@ -476,16 +480,18 @@ namespace Briand {
 
 		// Build the client and connect to guard
 		
-		this->sClient = make_unique<WiFiClientSecure>();
+		this->sClient = make_unique<BriandIDFSocketTlsClient>();
+		this->sClient->SetVerbose(DEBUG);
+		this->sClient->SetTimeout(NET_REQUEST_TIMEOUT_S);
 
 		// TODO : find a way to validate requests.
 		// Not providing a CACert will be a leak of security but hard-coding has disadvantages...
 
-		this->sClient->setInsecure();
+		//this->sClient->setInsecure();
 
 		// Connect to GUARD
 
-		if ( ! this->sClient->connect(this->guardNode->GetHost().c_str(), this->guardNode->GetPort() ) ) {
+		if ( ! this->sClient->Connect(this->guardNode->GetHost().c_str(), this->guardNode->GetPort() ) ) {
 			if (VERBOSE) printf("[ERR] Failed to connect to Guard.\n");
 			this->Cleanup();
 			return false;
@@ -645,7 +651,7 @@ namespace Briand {
 				12 -- NOSUCHSERVICE   (Request for unknown hidden service)
 		*/
 
-		if (this->sClient != nullptr && this->sClient->connected() && (this->isBuilt || this->isCreating) && !this->isClosed) {
+		if (this->sClient != nullptr && this->sClient->IsConnected() && (this->isBuilt || this->isCreating) && !this->isClosed) {
 			if (DEBUG) printf("[DEBUG] Sending DESTROY cell to Guard with reason %u\n", static_cast<unsigned char>(reason));
 
 			auto tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::DESTROY);
@@ -655,7 +661,7 @@ namespace Briand {
 
 			if (DEBUG) printf("[DEBUG] DESTROY cell sent.\n");
 						
-			this->sClient->stop();
+			this->sClient->Disconnect();
 			this->sClient.reset();
 
 			if (DEBUG) printf("[DEBUG] Circuit TearDown success.\n");

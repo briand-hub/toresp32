@@ -1,5 +1,16 @@
 {
 	"files.associations": {
-		"iostream": "cpp"
+		"iostream": "cpp",
+		"iosfwd": "cpp",
+		"string": "cpp",
+		"string_view": "cpp",
+		"array": "cpp",
+		"*.tcc": "cpp",
+		"memory": "cpp",
+		"future": "cpp",
+		"istream": "cpp",
+		"functional": "cpp",
+		"tuple": "cpp",
+		"utility": "cpp"
 	}
 }

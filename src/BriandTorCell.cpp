@@ -18,9 +18,6 @@
 
 #include "BriandTorCell.hxx"
 
-
-
-
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -158,7 +155,7 @@ namespace Briand {
 		Briand::BriandUtils::PrintByteBuffer( *(this->Payload.get()) , this->Payload->size(), this->Payload->size() );
 	}
 
-	unique_ptr<vector<unsigned char>> BriandTorCell::SendCell(unique_ptr<WiFiClientSecure>& client, bool closeConnection /* = false*/, bool expectResponse /* = true */) {
+	unique_ptr<vector<unsigned char>> BriandTorCell::SendCell(unique_ptr<BriandIDFSocketTlsClient>& client, bool closeConnection /* = false*/, bool expectResponse /* = true */) {
 		// Prepare the cell header and pad payload if necessary
 		auto cellBuffer = make_unique<vector<unsigned char>>();
 
@@ -482,7 +479,7 @@ namespace Briand {
 		return true;
 	}
 
-	void BriandTorCell::BuildAsNETINFO(const IPAddress& yourIP) {
+	void BriandTorCell::BuildAsNETINFO(const struct in_addr& yourPublicIP) {
 		/*
 			The cell's payload is:
 			TIME       (Timestamp)                     [4 bytes]
@@ -522,21 +519,27 @@ namespace Briand {
 			IPSIZE = 16;
 		} 
 
+		//
+		// TODO : add IPV6 Support
+		//
+
 		this->AppendToPayload(IPSIZE);
 
-		/* Append IP bytes */
-		for (unsigned char i = 0; i < IPSIZE; i++) {
-			this->AppendToPayload( static_cast<unsigned char>(yourIP[i]));
-		}
+		/* Append IP bytes, reverse order! */
+		this->AppendToPayload( static_cast<unsigned char>( (yourPublicIP.s_addr & 0x000000FF) >> 0 ));
+		this->AppendToPayload( static_cast<unsigned char>( (yourPublicIP.s_addr & 0x0000FF00) >> 8 ));
+		this->AppendToPayload( static_cast<unsigned char>( (yourPublicIP.s_addr & 0x00FF0000) >> 16 ));
+		this->AppendToPayload( static_cast<unsigned char>( (yourPublicIP.s_addr & 0xFF000000) >> 24 ));
 		
 		/* NMYADDR , same infos ... */
 		// one address
 		this->AppendToPayload(0x01);
 		this->AppendToPayload(IPV);
 		this->AppendToPayload(IPSIZE);
-		for (unsigned char i = 0; i < IPSIZE; i++) {
-			this->AppendToPayload( static_cast<unsigned char>(yourIP[i]));
-		}
+		this->AppendToPayload( static_cast<unsigned char>( (yourPublicIP.s_addr & 0x000000FF) >> 0 ));
+		this->AppendToPayload( static_cast<unsigned char>( (yourPublicIP.s_addr & 0x0000FF00) >> 8 ));
+		this->AppendToPayload( static_cast<unsigned char>( (yourPublicIP.s_addr & 0x00FF0000) >> 16 ));
+		this->AppendToPayload( static_cast<unsigned char>( (yourPublicIP.s_addr & 0xFF000000) >> 24 ));
 	}
 
 	bool BriandTorCell::BuildAsCREATE2(BriandTorRelay& relay) {

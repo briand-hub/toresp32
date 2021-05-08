@@ -101,7 +101,7 @@ namespace Briand
 		// Response
 		output = client->ReadData(false);
 		
-		if (DEBUG) printf("[DEBUG] Got response of %lu bytes.\n", output->size());
+		if (DEBUG) printf("[DEBUG] Got response of %d bytes.\n", output->size());
 
 		client->Disconnect();
 
@@ -114,71 +114,49 @@ namespace Briand
 		auto output = make_unique<vector<unsigned char>>();
 
 		// Write request
-		if (emptyContents) {
-			while (content->size() > 0) {
-				client->write( content->at(0) );
-				content->erase(content->begin());
-			}
-		}
-		else {
-			for (unsigned long int i = 0; i<content->size(); i++ ) {
-				client->write( content->at(i) );
-			}
-		}
-		
-		client->flush();
 
+		client->WriteData(content);
+
+		if (emptyContents)
+			content->clear();
+		
 		// If response expected
 		if (expectResponse) {
 			// Wait response until timeout reached
+			// Read response
+			output = client->ReadData();
 			
-			if (DEBUG) printf("[DEBUG] Request sent.\n");
-			if (DEBUG) printf("[DEBUG] Waiting response");
+			if (DEBUG) printf("[DEBUG] Got response of %d bytes.\n", output->size());
 
-			unsigned long startedOn = millis();
-			bool timeout = false;
-
-			while (client->available() == 0 && !timeout) {
-				delay(100);
-				timeout = ( millis() - startedOn ) >= NET_REQUEST_TIMEOUT_S*1000;
-				if (DEBUG) printf(".");
-			}
-			if (DEBUG) printf("\n");
-
-			if (timeout) {
-				if (VERBOSE) printf("[ERR] Request has timed out.\n");
-				return output;
-			} 
-
-			// Response ready!
-
-			// WARNING: DO NOT USE condition isConnected() in this while, otherwise reponse truncate happens!!!!
-			while (client->available() > 0) {
-				output->push_back( static_cast<unsigned char>( client->read() ) );
-			}
-			
-			if (DEBUG) printf("[DEBUG] Got response of %lu bytes.\n", output->size());
-
-			if (client->connected() && closeConnection)
-				client->stop();
+			if (client->IsConnected() && closeConnection)
+				client->Disconnect();
 		}
 
 		return std::move(output);
 	}
 
-	unique_ptr<vector<unsigned char>> BriandNet::RawSecureRequest(const string& host, const short& port, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/) {
+	unique_ptr<vector<unsigned char>> BriandNet::RawSecureRequest(const string& host, const short& port, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/, const unique_ptr<string>& pemCAcert /*= nullptr*/, const unique_ptr<vector<unsigned char>>& derCAcert /*= nullptr*/) {
 		auto output = make_unique<vector<unsigned char>>();
 
 		auto client = make_unique<BriandIDFSocketTlsClient>();
 
-		// TODO : find a way to validate requests.
-		// Not providing a CACert will be a leak of security but hard-coding has disadvantages...
+		// Set parameters
+		client->SetVerbose(DEBUG);
+		client->SetTimeout(NET_REQUEST_TIMEOUT_S);
 
-		client->setInsecure();
+		if (pemCAcert != nullptr) {
+			client->SetCACertificateChainPEM(*pemCAcert.get());
+		}
+		else if (derCAcert != nullptr) {
+			client->AddCACertificateToChainDER(*derCAcert.get());
+		}
+		else {
+			if (DEBUG) printf("[DEBUG] Insecure mode (no PEM/DER CA certificate).\n");
+		}
 
 		// Connect
 
-		if ( !client->connect(host.c_str(), port) ) {
+		if ( !client->Connect(host, port) ) {
 			if (VERBOSE) printf("[ERR] Failed to connect\n");
 			return output;
 		}
@@ -186,59 +164,31 @@ namespace Briand
 		if (DEBUG) printf("[DEBUG] Connected.\n");
 
 		// Write request
+		client->WriteData(content);
 
-		if (emptyContents) {
-			while (content->size() > 0) {
-				client->write( content->at(0) );
-				content->erase(content->begin());
-			}
-		}
-		else {
-			for (unsigned long int i = 0; i<content->size(); i++ ) {
-				client->write( content->at(i) );
-			}
-		}
-		
-		client->flush();
+
+		if (emptyContents)
+			content->clear();
 
 		// Wait response until timeout reached
 		
 		if (DEBUG) printf("[DEBUG] Request sent.\n");
 		if (DEBUG) printf("[DEBUG] Waiting response");
 
-		unsigned long startedOn = millis();
-		bool timeout = false;
-
-		while (client->available() == 0 && !timeout) {
-			delay(100);
-			timeout = ( millis() - startedOn ) >= NET_REQUEST_TIMEOUT_S*1000;
-			if (DEBUG) printf(".");
-		}
-		if (DEBUG) printf("\n");
-
-		if (timeout) {
-			if (VERBOSE) printf("[ERR] Request has timed out.\n");
-			client.reset();
-			return output;
-		} 
-
 		// Response ready!
-
-		while (client->connected() && client->available() > 0) {
-			output->push_back( static_cast<unsigned char>( client->read() ) );
-		}
+		output = client->ReadData();
 		
-		if (DEBUG) printf("[DEBUG] Got response of %lu bytes.\n", output->size());
+		if (DEBUG) printf("[DEBUG] Got response of %d bytes.\n", output->size());
 
-		if (client->connected())
-			client->stop();
+		if (client->IsConnected())
+			client->Disconnect();
 
 		client.reset(); // Release now please, I need RAM!
 
 		return std::move(output);
 	}
 
-	unique_ptr<string> BriandNet::HttpsGet(const string& host, const short& port, const string& path, short& httpReturnCode, const string& agent /* = "empty"*/, const bool& returnBodyOnly /* = false*/) {
+	unique_ptr<string> BriandNet::HttpsGet(const string& host, const short& port, const string& path, short& httpReturnCode, const string& agent /* = "empty"*/, const bool& returnBodyOnly /* = false*/, const unique_ptr<string>& pemCAcert /*= nullptr*/, const unique_ptr<vector<unsigned char>>& derCAcert /*= nullptr*/) {
 		if (DEBUG) printf("[DEBUG] HttpsGet called to https://%s:%d%s\n", host.c_str(), port, path.c_str());
 
 		// Prepare request
@@ -252,9 +202,10 @@ namespace Briand
 		request->append("\r\n");
 
 		auto contents = StringToUnsignedCharVector(request, true);
+		request.reset();
 		
 		if (DEBUG) printf("[DEBUG] HttpsGet sending raw request.\n");
-		auto response = RawSecureRequest(host, port, contents, true);
+		auto response = RawSecureRequest(host, port, contents, true, pemCAcert, derCAcert);
 
 		if (response->size() > 0) {
 			// Success
@@ -282,7 +233,7 @@ namespace Briand
 		}
 	}
 
-	cJSON* BriandNet::HttpsGetJson(const string& host, const short& port, const string& path, short& httpReturnCode, bool& deserializationSuccess, const string& agent  /* = "empty"*/, const unsigned int& expectedSize /* = 1024*/) {
+	cJSON* BriandNet::HttpsGetJson(const string& host, const short& port, const string& path, short& httpReturnCode, bool& deserializationSuccess, const string& agent  /* = "empty"*/, const unique_ptr<string>& pemCAcert /*= nullptr*/, const unique_ptr<vector<unsigned char>>& derCAcert /*= nullptr*/) {
 		if (DEBUG) printf("[DEBUG] HttpsGetJson called to https://%s:%d/%s\n", host.c_str(), port, path.c_str());
 		
 		deserializationSuccess = false;
@@ -301,24 +252,25 @@ namespace Briand
 			if (fpos != std::string::npos) response->erase(response->begin(), response->begin() + fpos);
 			if (lpos != std::string::npos) response->erase(response->begin() + lpos + 1, response->end());
 
-			DynamicJsonDocument doc( expectedSize ); 
-			DeserializationError err = deserializeJson(doc, response->c_str());
+			cJSON* root = cJSON_Parse(response->c_str());
 
-			if (err) {
-				if (DEBUG) printf("[DEBUG] HttpsGetJson deserialization failed: %s\n", err.c_str());
-				deserializationSuccess = false;
-			}
-			else {
-				if (DEBUG) printf("[DEBUG] HttpsGetJson deserialization ok.\n");	
-				deserializationSuccess = true;
+			if (root == NULL) {
+				// Get last error
+				const char *error_ptr = cJSON_GetErrorPtr();
+				if (DEBUG) printf("[DEBUG] JSON parsing error: %s\n", error_ptr);
+				// Free resources
+				cJSON_Delete(root);
+				return NULL;
 			}
 
-			doc.shrinkToFit();
-			return doc;
+			if (DEBUG) printf("[DEBUG] JSON deserialization success.\n");
+			deserializationSuccess = true;
+
+			return root;
 		}
 		else {
 			if (DEBUG) printf("[DEBUG] HttpsGetJson failed httpcode = %d\n ", httpReturnCode);
-			return DynamicJsonDocument(1); // Just one byte 
+			return NULL;
 		}
 	}
 

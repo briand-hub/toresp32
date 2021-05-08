@@ -22,6 +22,8 @@
 #include <memory>
 #include <vector>
 
+#include <BriandIDFClients.hxx>
+
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
 #include "BriandUtils.hxx"
@@ -115,12 +117,12 @@ namespace Briand {
 
 		/**
 		 * Method to send cell over the net using the initialized and connected client secure. Cell must have Payload ready before calling!
-		 * @param client Pointer to your own initialized WiFiClientSecure, connected and ready.
+		 * @param client Pointer to your own initialized BriandIDFSocketTlsClient, connected and ready.
 		 * @param closeConnection set it to true if you want close the connection (client->end).
 		 * @param expectResponse set to true if should wait for response, false instead (in this case output vector will be empty)
 		 * @return Pointer to response contents
 		*/
-		unique_ptr<vector<unsigned char>> SendCell(unique_ptr<WiFiClientSecure>& client, bool closeConnection = false, bool expectResponse = true);
+		unique_ptr<vector<unsigned char>> SendCell(unique_ptr<BriandIDFSocketTlsClient>& client, bool closeConnection = false, bool expectResponse = true);
 
 		/**
 		 * Method to rebuild cell informations starting from a buffer received. Could override link protocol version.
@@ -173,7 +175,7 @@ namespace Briand {
 		 * with right link protocol version, CircID and command.
 		 * @param yourIP the WAN IP
 		*/
-		void BuildAsNETINFO(const IPAddress& yourIP);
+		void BuildAsNETINFO(const struct in_addr& yourPublicIP);
 
 		/**
 		 * Method builds this cell as a fresh CREATE2 to exchange with the specified relay. 

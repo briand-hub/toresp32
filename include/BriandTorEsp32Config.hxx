@@ -18,16 +18,22 @@
 
 #include <iostream>
 #include <memory>
+#include <fstream>
 
 // HW Accelleration by ESP32 cryptographic hardware
-#include <mbedtls/aes.h>
+// #include <mbedtls/aes.h> gives linker error!
+#include <esp32/aes.h>
 
 #include "BriandDefines.hxx"
+#include "BriandUtils.hxx"
 
 using namespace std;
 
 namespace Briand
 {
+	/* Configuration file name */
+	constexpr const char* TORESP32_CONFIG_FILE_NAME = "/spiffs/torespconfig";
+
 	/**
 	 * Class to handle configuration file
 	 * If encrypted must be decrypted providing key (AES128 CTR)
@@ -43,7 +49,7 @@ namespace Briand
 
 		public:
 
-		unique_ptr<unsigned char[]> encrypt(const string& input) {
+		unique_ptr<unsigned char[]> Encrypt(const string& input) {
 			constexpr unsigned short BLOCK_SIZE_BYTES = 16;
 			
 			unsigned int INPUT_SIZE = input.length();
@@ -52,24 +58,24 @@ namespace Briand
 			unsigned char nonce_counter[BLOCK_SIZE_BYTES] = { 0x00 };
 			auto outBuffer = make_unique<unsigned char[]>(INPUT_SIZE);
 
-			mbedtls_aes_context aes_context;
+			esp_aes_context aes_context;
 
 			// Init AES
-			mbedtls_aes_init(&aes_context);
+			esp_aes_init(&aes_context);
 			
 			// Set ENC key, first param context pointer, second the key, third the key-len in BITS
-			mbedtls_aes_setkey_enc(&aes_context, reinterpret_cast<const unsigned char*>(this->enc_key.c_str()), this->enc_key.length() * 8);
+			esp_aes_setkey(&aes_context, reinterpret_cast<const unsigned char*>(this->enc_key.c_str()), this->enc_key.length() * 8);
 			
 			// Encrypt (only CBC mode makes 16-bytes per round, CTR has not this problem with input)
-			mbedtls_aes_crypt_ctr(&aes_context, INPUT_SIZE, &nonce_size, nonce_counter, iv, reinterpret_cast<const unsigned char*>(input.c_str()), outBuffer.get());
+			esp_aes_crypt_ctr(&aes_context, INPUT_SIZE, &nonce_size, nonce_counter, iv, reinterpret_cast<const unsigned char*>(input.c_str()), outBuffer.get());
 
 			// Free context
-			mbedtls_aes_free(&aes_context);
+			esp_aes_free(&aes_context);
 
 			return outBuffer;
 		}
 
-		string decrypt(unique_ptr<unsigned char[]>& input, unsigned int inputSizeBytes) {
+		string Decrypt(unique_ptr<unsigned char[]>& input, unsigned int inputSizeBytes) {
 			constexpr unsigned short BLOCK_SIZE_BYTES = 16;
 			
 			unsigned char iv[BLOCK_SIZE_BYTES] = { 0x00 };			// zero-init IV
@@ -79,19 +85,19 @@ namespace Briand
 
 			string output("");
 
-			mbedtls_aes_context aes_context;
+			esp_aes_context aes_context;
 
 			// Init AES
-			mbedtls_aes_init(&aes_context);
-
+			esp_aes_init(&aes_context);
+			
 			// Set ENC key, first param context pointer, second the key, third the key-len in BITS
-			mbedtls_aes_setkey_dec(&aes_context, reinterpret_cast<const unsigned char*>(this->enc_key.c_str()), this->enc_key.length() * 8);
+			esp_aes_setkey(&aes_context, reinterpret_cast<const unsigned char*>(this->enc_key.c_str()), this->enc_key.length() * 8);
 
 			// Encrypt (only CBC mode makes 16-bytes per round, CTR has not this problem with input)
-			mbedtls_aes_crypt_ctr(&aes_context, inputSizeBytes, &nonce_size, nonce_counter, iv, (input.get()), outBuffer.get());
+			esp_aes_crypt_ctr(&aes_context, inputSizeBytes, &nonce_size, nonce_counter, iv, (input.get()), outBuffer.get());
 
 			// Free context
-			mbedtls_aes_free(&aes_context);
+			esp_aes_free(&aes_context);
 
 			output.resize(inputSizeBytes);
 			for (int i=0; i<inputSizeBytes; i++) {
@@ -126,52 +132,52 @@ namespace Briand
 		 * Check if exists a configuration file
 		 * @return true if exists
 		*/
-		static bool existConfig() {
-			if (!SPIFFS.exists("/torespconfig"))
-				return false;
+		static bool ExistConfig() {
+			ifstream file(TORESP32_CONFIG_FILE_NAME, ios::in);
+			bool exists = file.good();
+			file.close();
 
-			return true;
+			return exists;
 		}
 
 		/**
 		 * Reads configuration file
 		 * @return true if OK
 		*/
-		bool readConfig() {
-			if (!SPIFFS.exists("/torespconfig")) {
+		bool ReadConfig() {
+			if (!BriandTorEsp32Config::ExistConfig()) {
 				return false;
 			}
 			else {
-				File f = SPIFFS.open("/torespconfig", "r");				
+				ifstream f(TORESP32_CONFIG_FILE_NAME, ios::in | ios::binary);
 
-				unsigned int bytesRead = 0;
-				auto buffer = make_unique<unsigned char[]>(f.size());
+				auto buffer = make_unique<vector<unsigned char>>();
 
-				while (f.available()) {
-					buffer[bytesRead] = f.read();
-					bytesRead++;
+				while (f.good()) {
+					buffer->push_back(f.get());
 				}
 				f.close();
 
-				string contents = this->decrypt(buffer, bytesRead);
+				auto tempVector = BriandUtils::VectorToArray(buffer);
+				string contents = this->Decrypt(tempVector, buffer->size());
 
 				unsigned int pos;
 
-				if (DEBUG) Serial.println("\n[DEBUG] File decrypted. Contents:");
+				if (DEBUG) printf("\n[DEBUG] File decrypted. Contents:");
 
 				// First line => Essid
 				pos = contents.find("\r\n");
 				if (pos == string::npos) return false;
 				this->WESSID = contents.substr(0, pos);
 				contents.erase(0, pos + 2);
-				if (DEBUG) Serial.printf("[DEBUG] Essid: %s\n", this->WESSID.c_str());
+				if (DEBUG) printf("[DEBUG] Essid: %s\n", this->WESSID.c_str());
 
 				// Second line => Password
 				pos = contents.find("\r\n");
 				if (pos == string::npos) return false;
 				this->WPASSWORD = contents.substr(0, pos);
 				contents.erase(0, pos + 2);
-				if (DEBUG) Serial.printf("[DEBUG] Password: %s\n", this->WPASSWORD.c_str());
+				if (DEBUG) printf("[DEBUG] Password: %s\n", this->WPASSWORD.c_str());
 
 				// 3rd line => Serial encryption password (could be empty)
 				pos = contents.find("\r\n");
@@ -180,7 +186,7 @@ namespace Briand
 				if (this->SERIAL_ENC_KEY.length() < 16)
 					this->SERIAL_ENC_KEY.clear();
 				contents.erase(0, pos + 2);
-				if (DEBUG) Serial.printf("[DEBUG] Enc KEY: %s\n", this->SERIAL_ENC_KEY.c_str());
+				if (DEBUG) printf("[DEBUG] Enc KEY: %s\n", this->SERIAL_ENC_KEY.c_str());
 
 				return true;
 			}
@@ -189,7 +195,7 @@ namespace Briand
 		/**
 		 * Writes configuration file
 		*/
-		void writeConfig() {
+		void WriteConfig() {
 			string contents("");
 			contents.append(this->WESSID);
 			contents.append("\r\n");
@@ -204,11 +210,12 @@ namespace Briand
 				contents.append("\r\n");
 			}
 
-			auto buffer = this->encrypt(contents);
+			auto buffer = this->Encrypt(contents);
 
-			File f = SPIFFS.open("/torespconfig", "w");
+			ofstream f(TORESP32_CONFIG_FILE_NAME, ios::out | ios::binary);
+
 			for (int i=0; i<contents.length(); i++) {
-				f.write( buffer[i] );
+				f.put(buffer[i]);
 			}
 
 			f.flush();
@@ -219,8 +226,8 @@ namespace Briand
 		 * Removes the configuration file (format)
 		 * maybe in future wiping?
 		*/
-		void destroyConfig() {
-			SPIFFS.remove("/torespconfig");
+		void DestroyConfig() {
+			std::remove(TORESP32_CONFIG_FILE_NAME);
 		}
 	};
 }

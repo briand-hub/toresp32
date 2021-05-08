@@ -29,6 +29,7 @@
 #include <driver/gpio.h>
 #include <esp_spiffs.h>
 #include <esp_sntp.h>
+#include <esp_timer.h>
 
 /* Standard C++ libraries */
 #include <iostream>
@@ -176,10 +177,12 @@ void TorEsp32Setup() {
 	
 	unsigned int total = 0, used = 0;
 	ret = esp_spiffs_info(conf.partition_label, &total, &used);
-	if (ret != ESP_OK)
+	if (ret != ESP_OK) {
 		if (VERBOSE) printf("[INFO] Failed to get SPIFFS partition information: %s\n", esp_err_to_name(ret));
-	else
+	}	
+	else {
 		if (VERBOSE) printf("[INFO] Partition size: total: %d used: %d bytes.\n", total, used);
+	} 
 
     if (VERBOSE) {
         // Benchmarking
@@ -188,26 +191,19 @@ void TorEsp32Setup() {
         // Execute tests
         printf("[TEST] UULONG MAX VALUE (hex): 0x%016llx\n", ULLONG_MAX);
 
-        // Check Filesystem
-        if (!SPIFFS.begin(true))
-            printf("[TEST] Filesystem SPIFFS error.\n");
-        else 
-            printf("[TEST] Filesystem SPIFFS OK.\n");
-
         // Test AES configuration encryption suite (MbedTLS suite)
         string test = "Hello from an {AES128} configuration file.";
         string key = "1234567890123456";
-        int t = 0;
         auto config = make_unique<Briand::BriandTorEsp32Config>(key);
         printf("[TEST] AES Encryption test, string <%s> with key <%s>\n", test.c_str(), key.c_str());
-        testStart = millis();
-        auto buf = config->encrypt(test);
-        printf("[TEST] Took %lu milliseconds.\n", (millis() - testStart));
+        testStart = esp_timer_get_time();
+        auto buf = config->Encrypt(test);
+        printf("[TEST] Took %llu milliseconds.\n", (esp_timer_get_time() - testStart)/1000L);
         printf("[TEST] Encrypted Bytes: ");
 		Briand::BriandUtils::PrintOldStyleByteBuffer(buf.get(), test.length(), test.length()+1, test.length());
-        testStart = millis();
-        printf("[TEST] Decrypted Bytes: <%s>\n", config->decrypt(buf, test.length()).c_str());
-        printf("[TEST] Took %lu milliseconds.\n", (millis() - testStart));
+        testStart = esp_timer_get_time();
+        printf("[TEST] Decrypted Bytes: <%s>\n", config->Decrypt(buf, test.length()).c_str());
+        printf("[TEST] Took %llu milliseconds.\n", (esp_timer_get_time() - testStart)/1000L);
         printf("[TEST] AES Test success.\n");
 		buf.reset();
 		config.reset();
@@ -218,9 +214,9 @@ void TorEsp32Setup() {
 		auto message = Briand::BriandUtils::HexStringToVector(testMessage, "");
 		printf("[TEST] Perform SHA256 hash of:  %s\n", testMessage.c_str());
 		printf("[TEST] Expected output:         %s\n", expResult.c_str());
-        testStart = millis();
+        testStart = esp_timer_get_time();
 		auto hash = Briand::BriandTorCryptoUtils::GetDigest_SHA256(message);
-		printf("[TEST] Took %lu milliseconds.\n", (millis() - testStart));
+		printf("[TEST] Took %llu milliseconds.\n", (esp_timer_get_time() - testStart)/1000);
         printf("[TEST] SHA256 computed hash is: ");
 		Briand::BriandUtils::PrintByteBuffer(*(hash.get()), hash->size()+1, hash->size());
 		auto expResultV = Briand::BriandUtils::HexStringToVector(expResult, "");
@@ -282,13 +278,11 @@ void TorEsp32Main(void* taskArg) {
 				if (in == 8 && SERIAL_INPUT_POINTER->length() > 0) {
 					SERIAL_INPUT_POINTER->resize(SERIAL_INPUT_POINTER->length() - 1);
 					// To "show" backspace print backspace, then a space and a new backspace
-					printf(in);
-					printf(" ");
-					printf(in);
+					printf("%c %c", in, in);
 				}
 				else if (in != 8) {
 					SERIAL_INPUT_POINTER->push_back(in);
-					printf(in);
+					printf("%c", in);
 				}
 			}
 			else if (in == 13) {
@@ -309,7 +303,7 @@ void TorEsp32Main(void* taskArg) {
 		else if (nextStep == 1) {
 			// Setup done, check if there is any saved configuration.
 			// If so, ask user the password to decrypt, if no password given then delete old configuration and ask for new
-			if (Briand::BriandTorEsp32Config::existConfig()) {
+			if (Briand::BriandTorEsp32Config::ExistConfig()) {
 				printf("Configuration file found. Enter Password to use or [Enter] to skip: ");
 				startSerialRead(CONFIG_PASSWORD.get());
 				nextStep = 2;
@@ -325,10 +319,10 @@ void TorEsp32Main(void* taskArg) {
 			if (CONFIG_PASSWORD->length() >= 16) {
 				CONFIG_PASSWORD->resize(16);
 
-				if (!cfg->readConfig()) {
+				if (!cfg->ReadConfig()) {
 					// Not valid, destroy and re-do
 					printf("\n[WARN] Configuration is not valid! Has been destroyed forever!\n");
-					cfg->destroyConfig();
+					cfg->DestroyConfig();
 					CONFIG_PASSWORD->clear();
 
 					nextStep = 3; // ask for essid
@@ -348,7 +342,7 @@ void TorEsp32Main(void* taskArg) {
 			}
 			else {
 				printf("\n[WARN] Password not given or less than 16 chars.\n");
-				cfg->destroyConfig();            
+				cfg->DestroyConfig();            
 				printf("[WARN] Configuration has been destroyed forever!\n");
 				CONFIG_PASSWORD->clear();
 
@@ -375,34 +369,18 @@ void TorEsp32Main(void* taskArg) {
 		}
 		else if (nextStep == 6) {
 			// Connect station, until timeout reached.
-			unsigned long int timeout = millis() + WIFI_CONNECTION_TIMEOUT*1000;
-			printf("[INFO] Connecting to %s", STA_ESSID->c_str());
+			printf("[INFO] Connecting to %s ...", STA_ESSID->c_str());
 
-			WiFi.begin(STA_ESSID->c_str(), STA_PASSW->c_str());
-			while (!WiFi.isConnected() && millis() < timeout) {
-				delay(1000);
-				if (VERBOSE) printf(".");
-			}
-
-			if (!WiFi.isConnected()) {
+			if (!WiFi->ConnectStation(*STA_ESSID.get(), *STA_PASSW.get(), WIFI_CONNECTION_TIMEOUT, *STA_HOSTNAME.get(), true)) {
 				printf("\n\n[ERR] WIFI CONNECTION ERROR/TIMEOUT. SYSTEM WILL RESTART IN 5 SECONDS!\n");
-				delay(5*1000);
+				vTaskDelay(5000 / portTICK_PERIOD_MS);
 				reboot();
 			}
 
 			printf("connected!\n");
 
-			// hostname must be refreshed there
-			// otherwise some routers cache the previous (ex. UniFi)
-			if (WiFi.setHostname(STA_HOSTNAME->c_str())) {
-				if (VERBOSE) printf("[INFO] STA WiFi hostname has been reset to: %s\n", WiFi.getHostname());
-			}
-			else {
-				if (VERBOSE) printf("[ERR] STA WiFi hostname could not be reset to a random one! It is: %s\n", WiFi.getHostname());
-			}
-
-			if (VERBOSE) printf("[INFO] LAN IP Address: %s\n", WiFi.localIP().toString().c_str());
-			delay(500);
+			if (VERBOSE) printf("[INFO] STA MAC: %s\n", WiFi->GetStaMAC().c_str());
+			if (VERBOSE) printf("[INFO] LAN IP Address: %s\n", WiFi->GetStaIP().c_str());
 
 			nextStep = 7;
 		}
@@ -425,7 +403,7 @@ void TorEsp32Main(void* taskArg) {
 				cfg->WESSID.append( STA_ESSID->c_str() );
 				cfg->WPASSWORD.append(STA_PASSW->c_str());
 				cfg->SERIAL_ENC_KEY.append(SERIAL_ENC_KEY->c_str());
-				cfg->writeConfig();
+				cfg->WriteConfig();
 				printf("\n[INFO] Configuration file written!\n");
 			}
 			else {
@@ -441,13 +419,12 @@ void TorEsp32Main(void* taskArg) {
 
 			if(VERBOSE) printf("[INFO] Now initializing AP interface...\n");
 
-			auto apEssid = Briand::BriandUtils::GetRandomSSID();
-			auto apPassword = Briand::BriandUtils::GetRandomPassword(WIFI_AP_PASSWORD_LEN);
-			if (WiFi.softAP(apEssid.get(), apPassword.get(), WIFI_AP_CH, WIFI_AP_HIDDEN, WIFI_AP_MAX_CONN)) {
-				if(VERBOSE) printf("[INFO] AP Ready. ESSID: %s PASSWORD: %s\n", apEssid.get(), apPassword.get());
-				AP_ESSID = make_unique<string>( apEssid.get() );
-				AP_PASSW = make_unique<string>( apPassword.get() );
-				
+			AP_ESSID = make_unique<string>(Briand::BriandUtils::GetRandomSSID().get());
+			AP_PASSW = make_unique<string>(Briand::BriandUtils::GetRandomPassword(WIFI_AP_PASSWORD_LEN).get());
+			//if (WiFi.softAP(apEssid.get(), apPassword.get(), WIFI_AP_CH, WIFI_AP_HIDDEN, WIFI_AP_MAX_CONN)) {
+			if (WiFi->StartAP(*AP_ESSID.get(), *AP_PASSW.get(), WIFI_AP_CH, WIFI_AP_MAX_CONN, true)) {
+				if(VERBOSE) printf("[INFO] AP Ready. ESSID: %s PASSWORD: %s\n", AP_ESSID->c_str(), AP_PASSW->c_str());
+
 				//
 				// TODO: add a handler for AP commands
 				//
@@ -480,9 +457,9 @@ void TorEsp32Main(void* taskArg) {
 			printf("\n\n[INFO] SYSTEM READY! Type help for commands.\n\n");
 
 			// Start heap-leak warning watch
-			HEAP_LEAK_CHECK = ESP.getFreeHeap() + ESP.getFreePsram();
+			HEAP_LEAK_CHECK = Briand::BriandESPDevice::GetFreeHep(); // TODO + Briand::BriandESPDevice::GetFreePsram();
 
-			if (VERBOSE) printf("[INFO] Free heap at system start is %lu bytes.\n", HEAP_LEAK_CHECK);
+			if (VERBOSE) printf("[INFO] Free heap at system start is %u bytes.\n", HEAP_LEAK_CHECK);
 		}
 		else if (nextStep == 10000) {
 			// Here system ready for commands
@@ -642,20 +619,21 @@ void executeCommand(string& cmd) {
         syncTimeWithNTP();
     }
     else if (cmd.compare("devinfo") == 0) {
-        printf("CPU Frequency: %uMHz\n", Briand::BriandESPDevice::GetCpuFreqMHz());
-        printf("Heap size: %u bytes\n", Briand::BriandESPDevice::GetHeapSize());
+        printf("CPU Frequency: %luMHz\n", Briand::BriandESPDevice::GetCpuFreqMHz());
+        printf("Heap size: %lu bytes\n", Briand::BriandESPDevice::GetHeapSize());
         printf("Free heap: %u bytes\n", esp_get_free_heap_size());
-		printf("PSram size: %u bytes\n", Briand::BriandESPDevice::GetPsramSize());
-        printf("Free PSram: %u bytes\n", Briand::BriandESPDevice::GetFreePsram());
+		// TODO printf("PSram size: %d bytes\n", Briand::BriandESPDevice::GetPsramSize());
+        // TODO printf("Free PSram: %d bytes\n", Briand::BriandESPDevice::GetFreePsram());
         
 		unsigned int total = 0, used = 0;
 		esp_spiffs_info(NULL, &total, &used);
-		printf("File system size: %u bytes\n", total);
-        printf("File system used: %u bytes\n", used);
-        printf("File system free: %u bytes\n", (total-used));
+		printf("File system size: %d bytes\n", total);
+        printf("File system used: %d bytes\n", used);
+        printf("File system free: %d bytes\n", (total-used));
     }
 	else if (cmd.compare("meminfo") == 0) {
-        printf("HEAP FREE: %u / %u bytes. PSRAM FREE: %u / %u bytes.\n", esp_get_free_heap_size(), Briand::BriandESPDevice::GetHeapSize(), Briand::BriandESPDevice::GetFreePsram(), Briand::BriandESPDevice::GetPsramSize());
+        // TODO printf("HEAP FREE: %u / %u bytes. PSRAM FREE: %u / %u bytes.\n", esp_get_free_heap_size(), Briand::BriandESPDevice::GetHeapSize(), Briand::BriandESPDevice::GetFreePsram(), Briand::BriandESPDevice::GetPsramSize());
+		printf("HEAP FREE: %u / %lu bytes.\n", esp_get_free_heap_size(), Briand::BriandESPDevice::GetHeapSize());
     }
 	else if (cmd.compare("netinfo") == 0) {
         printf("AP Hostname: %s\n", AP_HOSTNAME->c_str());
@@ -749,7 +727,7 @@ void executeCommand(string& cmd) {
 
 	// Debug: print memory used by command
     int consumption = (heapBefore - static_cast<int>(esp_get_free_heap_size()));
-	if (DEBUG) printf("[DEBUG] Heap consumption: %d (from %d to %lu) bytes.\n", consumption, heapBefore, esp_get_free_heap_size());
+	if (DEBUG) printf("[DEBUG] Heap consumption: %d (from %d to %d) bytes.\n", consumption, heapBefore, esp_get_free_heap_size());
 
     // Always useful: check if code has heap leaks 
     // sometimes I do the mistake to use .release() insted of .reset() on smart pointers :P	
