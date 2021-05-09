@@ -98,7 +98,7 @@ void app_main() {
 	TorEsp32Setup();
 
 	// Start application loop
-	xTaskCreate(TorEsp32Main, "TorEsp32", 4096, NULL, 5, NULL);
+	xTaskCreate(TorEsp32Main, "TorEsp32", 8192, NULL, 5, NULL);
 	// TODO: verify stack size
 }
 
@@ -238,12 +238,7 @@ void TorEsp32Setup() {
 	if (VERBOSE) printf("[INFO] Initializing WiFi\n");
 
 	WiFi = Briand::BriandIDFWifiManager::GetInstance();
-	WiFi->SetWifiMode(WIFI_MODE_APSTA);
-	
-	if (VERBOSE) 
-		WiFi->SetVerbose(true, true);
-	else
-		WiFi->SetVerbose(true, false);
+	WiFi->SetVerbose(false, true);
 
 	// Init STA and AP random hostnames
 
@@ -272,8 +267,8 @@ void TorEsp32Main(void* taskArg) {
 
 		// If during serial input reading, wait while the command is entered and confirmed.
 		if (SERIAL_INPUT_READING) {
-			char in = fgetc(stdin);
-			if (in != 13 && in != 10 && in > 0) {
+			char in = (char)fgetc(stdin);
+			if (in != 13 && in != 10 && in > 0 && in != 0xFF) {
 				// Backspace handling
 				if (in == 8 && SERIAL_INPUT_POINTER->length() > 0) {
 					SERIAL_INPUT_POINTER->resize(SERIAL_INPUT_POINTER->length() - 1);
@@ -285,13 +280,16 @@ void TorEsp32Main(void* taskArg) {
 					printf("%c", in);
 				}
 			}
-			else if (in == 13) {
+			else if (in == 13 || in == 10) {
 				SERIAL_INPUT_READING = false;
 				SERIAL_INPUT_POINTER = nullptr;
-				// Trim any \r 
-				//SERIAL_INPUT_POINTER->erase( SERIAL_INPUT_POINTER-> )
+
+				// de-buffer (terminal "sticky" keys)
+				while (in != 0xFF || in < 0) in = (char)fgetc(stdin);
 			}
-			return;
+
+			// delay before next check
+			vTaskDelay(20/portTICK_PERIOD_MS);
 		}
 		// ---------------------------------------------------------------------------------
 		// STEPS: 
@@ -371,7 +369,7 @@ void TorEsp32Main(void* taskArg) {
 			// Connect station, until timeout reached.
 			printf("[INFO] Connecting to %s ...", STA_ESSID->c_str());
 
-			if (!WiFi->ConnectStation(*STA_ESSID.get(), *STA_PASSW.get(), WIFI_CONNECTION_TIMEOUT, *STA_HOSTNAME.get(), true)) {
+			if (!WiFi->ConnectStation(*STA_ESSID.get(), *STA_PASSW.get(), WIFI_CONNECTION_TIMEOUT, *STA_HOSTNAME.get(), CHANGE_MAC_TO_RANDOM)) {
 				printf("\n\n[ERR] WIFI CONNECTION ERROR/TIMEOUT. SYSTEM WILL RESTART IN 5 SECONDS!\n");
 				vTaskDelay(5000 / portTICK_PERIOD_MS);
 				reboot();
@@ -422,8 +420,11 @@ void TorEsp32Main(void* taskArg) {
 			AP_ESSID = make_unique<string>(Briand::BriandUtils::GetRandomSSID().get());
 			AP_PASSW = make_unique<string>(Briand::BriandUtils::GetRandomPassword(WIFI_AP_PASSWORD_LEN).get());
 			//if (WiFi.softAP(apEssid.get(), apPassword.get(), WIFI_AP_CH, WIFI_AP_HIDDEN, WIFI_AP_MAX_CONN)) {
-			if (WiFi->StartAP(*AP_ESSID.get(), *AP_PASSW.get(), WIFI_AP_CH, WIFI_AP_MAX_CONN, true)) {
+			if (WiFi->StartAP(*AP_ESSID.get(), *AP_PASSW.get(), WIFI_AP_CH, WIFI_AP_MAX_CONN, CHANGE_MAC_TO_RANDOM)) {
 				if(VERBOSE) printf("[INFO] AP Ready. ESSID: %s PASSWORD: %s\n", AP_ESSID->c_str(), AP_PASSW->c_str());
+				
+				// Change default ip
+				WiFi->SetApIPv4(10, 0, 0, 1);
 
 				//
 				// TODO: add a handler for AP commands

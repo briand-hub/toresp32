@@ -74,7 +74,7 @@ namespace Briand
 
 		// Set parameters
 		client->SetVerbose(DEBUG);
-		client->SetTimeout(NET_REQUEST_TIMEOUT_S);
+		client->SetTimeout(NET_CONNECT_TIMEOUT_S, NET_IO_TIMEOUT_S);
 
 		// Connect
 		if ( !client->Connect(host.c_str(), port) ) {
@@ -142,7 +142,7 @@ namespace Briand
 
 		// Set parameters
 		client->SetVerbose(DEBUG);
-		client->SetTimeout(NET_REQUEST_TIMEOUT_S);
+		client->SetTimeout(NET_CONNECT_TIMEOUT_S, NET_IO_TIMEOUT_S);
 
 		if (pemCAcert != nullptr) {
 			client->SetCACertificateChainPEM(*pemCAcert.get());

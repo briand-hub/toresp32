@@ -7,6 +7,25 @@
 * Simplify code in TorCircuit class
 * Authenticate cell? => Prepare stub method to authenticate client
 
+## 2021-05-08
+## Switch to IDF complete
+RAM:   [=         ]  12.0% (used 39440 bytes from 327680 bytes)
+Flash: [======    ]  61.7% (used 1293890 bytes from 2097152 bytes)
+
+**SdkConfig changes**:
+
+	Enabled Component config->HTTP Server->WebSocket server support
+	Enabled Component config->HTTP Server->ESP_HTTPS_SERVER support
+	
+	Enabled Component config->mbedTLS->HKDF algortithm
+	Enabled Component config->mbedTLS->Expiry verification
+	Disabled Component config->mbedTLS->Support TLS 1.0
+
+	Compiler options -> Optimize for size
+	Compiler options -> Assertion level -> Silent
+	Compiler options -> Enable C++ Exceptions
+	Component config -> Log Output set to error only
+
 ## 2021-05-02
 ### SWITCH TO IDF Framework
 - [x] platformio.ini modifications

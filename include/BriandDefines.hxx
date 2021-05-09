@@ -34,9 +34,10 @@
     constexpr unsigned char WIFI_AP_CH = 1;					// wifichannel for AP
     constexpr unsigned char WIFI_AP_HIDDEN = 0;				// AP hidden Essid (1) or not (0)
     constexpr unsigned char WIFI_AP_MAX_CONN = 1;			// AP maximum connections (set to 1 for more security, just you) 
-    constexpr unsigned char NET_REQUEST_TIMEOUT_S = 30;		// Elapsed this number of seconds, any connection is intended to be timed out!
+    constexpr unsigned char NET_CONNECT_TIMEOUT_S = 30;		// Elapsed this number of seconds, any connection is intended to be timed out!
+    constexpr unsigned char NET_IO_TIMEOUT_S = 5;		    // Timeout for socket read/write operations
     constexpr const char* NTP_SERVER = "pool.ntp.org";    	// NTP server to use
-    constexpr char HEAP_LEAK_LIMIT = 5;						// Heap consumption since system readiness more than HEAP_LEAK_LIMIT% will warn
+    constexpr const char HEAP_LEAK_LIMIT = 5;				// Heap consumption since system readiness more than HEAP_LEAK_LIMIT% will warn
     constexpr unsigned char TOR_CIRCUITS_KEEPALIVE = 3;		// No. of Tor circuits to be kept always open and ready
     constexpr unsigned char TOR_NODES_CACHE_SIZE = 50;		// No. of Tor nodes, for each type (guard/exit/middle) to keep saved. (Avoid more than 50)
     constexpr unsigned char TOR_NODES_CACHE_VAL_H = 24;		// Hours since the chache of nodes is considered OLD and must be downloaded again

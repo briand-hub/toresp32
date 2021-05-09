@@ -482,7 +482,7 @@ namespace Briand {
 		
 		this->sClient = make_unique<BriandIDFSocketTlsClient>();
 		this->sClient->SetVerbose(DEBUG);
-		this->sClient->SetTimeout(NET_REQUEST_TIMEOUT_S);
+		this->sClient->SetTimeout(NET_CONNECT_TIMEOUT_S, NET_IO_TIMEOUT_S);
 
 		// TODO : find a way to validate requests.
 		// Not providing a CACert will be a leak of security but hard-coding has disadvantages...
