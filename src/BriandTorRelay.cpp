@@ -469,6 +469,7 @@ namespace Briand {
 		if (DEBUG) {
 			printf("[DEBUG] Nickame: %s\n", this->nickname->c_str());
 			printf("[DEBUG] Address: %s\n", this->address->c_str());
+			printf("[DEBUG] OR Port: %u\n", this->port);
 			printf("[DEBUG] Fingerprint: %s\n", this->fingerprint->c_str());
 			printf("[DEBUG] Effective Family (raw contents): %s\n", this->effective_family->c_str());
 			printf("[DEBUG] Encoded descriptor NTOR onion key: %s\n", this->descriptorNtorOnionKey->c_str());

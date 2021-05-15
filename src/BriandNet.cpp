@@ -110,7 +110,7 @@ namespace Briand
 		return std::move(output);
 	}
 
-	unique_ptr<vector<unsigned char>> BriandNet::RawSecureRequest(unique_ptr<BriandIDFSocketTlsClient>& client, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/, bool closeConnection /* = false*/, bool expectResponse /* = true */) {
+	unique_ptr<vector<unsigned char>> BriandNet::RawSecureRequest(const unique_ptr<BriandIDFSocketTlsClient>& client, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/, bool closeConnection /* = false*/, bool expectResponse /* = true */) {
 		auto output = make_unique<vector<unsigned char>>();
 
 		// Write request
@@ -131,6 +131,8 @@ namespace Briand
 			if (client->IsConnected() && closeConnection)
 				client->Disconnect();
 		}
+		
+		if (closeConnection) printf("\n\nCLOSE CONNECTION SET\n\n");
 
 		return std::move(output);
 	}
@@ -173,7 +175,7 @@ namespace Briand
 		// Wait response until timeout reached
 		
 		if (DEBUG) printf("[DEBUG] Request sent.\n");
-		if (DEBUG) printf("[DEBUG] Waiting response");
+		if (DEBUG) printf("[DEBUG] Waiting response\n");
 
 		// Response ready!
 		output = client->ReadData();

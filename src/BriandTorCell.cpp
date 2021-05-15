@@ -214,6 +214,7 @@ namespace Briand {
 
 		// That's all, send cell through network!
 		auto response = BriandNet::RawSecureRequest(client, cellBuffer, true, closeConnection, expectResponse); // clear cell buffer after request to save ram.
+
 		cellBuffer.reset(); // free ram
 
 		return std::move(response);

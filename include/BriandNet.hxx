@@ -74,7 +74,7 @@ namespace Briand
 		 * @param expectResponse set it to false if a response is not expected.
 		 * @return an unique_ptr to the response buffer (c++ vector), empty vector if fails or response is not expected.
 		*/
-		static unique_ptr<vector<unsigned char>> RawSecureRequest(unique_ptr<BriandIDFSocketTlsClient>& client, unique_ptr<vector<unsigned char>>& content, bool emptyContents = true, bool closeConnection = false, bool expectResponse = true);
+		static unique_ptr<vector<unsigned char>> RawSecureRequest(const unique_ptr<BriandIDFSocketTlsClient>& client, unique_ptr<vector<unsigned char>>& content, bool emptyContents = true, bool closeConnection = false, bool expectResponse = true);
 
 		/**
 		 * Method send raw bytes to specified host using BriandIDFSocketTlsClient and returns raw response bytes.

@@ -114,7 +114,7 @@ namespace Briand {
 
 		this->CIRCID = ( Briand::BriandUtils::GetRandomByte() << 8 ) + Briand::BriandUtils::GetRandomByte();
 
-		if(DEBUG) printf("[DEBUG] Temporary CircID = %d\n", this->CIRCID);
+		if(DEBUG) printf("[DEBUG] Temporary CircID = 0x%04X\n", this->CIRCID);
 
 		unique_ptr<Briand::BriandTorCell> tempCell = nullptr;
 		unique_ptr<vector<unsigned char>> tempCellResponse = nullptr;
@@ -329,6 +329,7 @@ namespace Briand {
 		if (DEBUG) printf("[DEBUG] CREATE2 sent. Waiting for CREATED2.\n");
 		auto tempCellResponse = tempCell->SendCell(this->sClient, false);
 		tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
+		
 		if (!tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION)) {
 			if (VERBOSE) printf("[ERR] Error, response cell had invalid bytes (failed to build from buffer).\n");
 			this->Cleanup();
@@ -482,6 +483,7 @@ namespace Briand {
 		
 		this->sClient = make_unique<BriandIDFSocketTlsClient>();
 		this->sClient->SetVerbose(DEBUG);
+		this->sClient->SetID(9999);
 		this->sClient->SetTimeout(NET_CONNECT_TIMEOUT_S, NET_IO_TIMEOUT_S);
 
 		// TODO : find a way to validate requests.
@@ -545,7 +547,7 @@ namespace Briand {
 		// So it's clear, my circid must have MSB to 1
 		this->CIRCID = this->CIRCID | 0x80000000;
 
-		if (DEBUG) printf("[DEBUG] NEW CircID: %08X \n", this->CIRCID);
+		if (DEBUG) printf("[DEBUG] NEW CircID: 0x%08X \n", this->CIRCID);
 
 		// CREATE/CREATE2
 

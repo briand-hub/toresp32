@@ -442,15 +442,16 @@ namespace Briand {
 
 		// Use G = 9
 		auto Gx = make_unique<unsigned char[]>(32); 
-		Gx[0] = 0x09;// 9 followed by all 0 (WARNING! LITTLE ENDIAN FORMAT!)
+		Gx[31] = 0x09;// 9 followed by all 0 (WARNING! LITTLE ENDIAN FORMAT!)
 		mbedtls_ecp_point G;
 		mbedtls_ecp_point_init(&G);
-		mbedtls_mpi_write_binary(&G.X, Gx.get(), 32);
+		mbedtls_mpi_read_binary(&G.X, Gx.get(), 32);
 		mbedtls_mpi_lset(&G.Z, 1); // not infinity
 
 		// Key generation
 		auto keypair = make_unique<mbedtls_ecp_keypair>();
 		ret = mbedtls_ecp_gen_keypair_base(&ecpGroup, &G, &keypair->d, &keypair->Q, mbedtls_ctr_drbg_random, &ctr_drbg);
+		//ret = mbedtls_ecp_gen_keypair(&ecpGroup, &keypair->d, &keypair->Q, mbedtls_ctr_drbg_random, &ctr_drbg);
 		if (ret != 0) {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
