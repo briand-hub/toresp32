@@ -26,6 +26,7 @@
 #include <sstream>
 #include <iomanip>
 #include <cstring>
+#include <algorithm>
 
 /* mbedTLS library for SSL / SHA / TLS / RSA */
 #include <mbedtls/ssl.h>
@@ -39,6 +40,10 @@
 #include <mbedtls/pk.h>
 #include <mbedtls/base64.h>
 #include <mbedtls/ecp.h>
+
+#ifdef MBEDTLS_HKDF_C
+#include <mbedtls/hkdf.h>
+#endif
 
 /* LibSodium found for Ed25519 signatures! It's on framework :-D */
 #include <sodium.h>
@@ -440,25 +445,34 @@ namespace Briand {
 		mbedtls_ecp_group_init(&ecpGroup);
 		mbedtls_ecp_group_load(&ecpGroup, MBEDTLS_ECP_DP_CURVE25519);
 
+		// This:
+		// char bb[32] = {0x00};
+		// unsigned long int bbs;
+		// mbedtls_mpi_write_string(&ecpGroup.G.X, 16, bb, 32, &bbs);
+		// printf("Gx = %s\n", bb);
+		// Gives output => Gx = 0x09 (big endian!)
+		// So default params ok!
+		// But that means also that mbedtls implementation works with REVERSE order!!
+
 		// Use G = 9
-		auto Gx = make_unique<unsigned char[]>(32); 
-		Gx[31] = 0x09;// 9 followed by all 0 (WARNING! LITTLE ENDIAN FORMAT!)
-		mbedtls_ecp_point G;
-		mbedtls_ecp_point_init(&G);
-		mbedtls_mpi_read_binary(&G.X, Gx.get(), 32);
-		mbedtls_mpi_lset(&G.Z, 1); // not infinity
+		// auto Gx = make_unique<unsigned char[]>(32); 
+		// Gx[31] = 0x09;// 9 followed by all 0 (WARNING! LITTLE ENDIAN FORMAT!)
+		// mbedtls_ecp_point G;
+		// mbedtls_ecp_point_init(&G);
+		// mbedtls_mpi_read_binary(&G.X, Gx.get(), 32);
+		// mbedtls_mpi_lset(&G.Z, 1); // not infinity
 
 		// Key generation
 		auto keypair = make_unique<mbedtls_ecp_keypair>();
-		ret = mbedtls_ecp_gen_keypair_base(&ecpGroup, &G, &keypair->d, &keypair->Q, mbedtls_ctr_drbg_random, &ctr_drbg);
-		//ret = mbedtls_ecp_gen_keypair(&ecpGroup, &keypair->d, &keypair->Q, mbedtls_ctr_drbg_random, &ctr_drbg);
+		//ret = mbedtls_ecp_gen_keypair_base(&ecpGroup, &G, &keypair->d, &keypair->Q, mbedtls_ctr_drbg_random, &ctr_drbg);
+		ret = mbedtls_ecp_gen_keypair(&ecpGroup, &keypair->d, &keypair->Q, mbedtls_ctr_drbg_random, &ctr_drbg);
 		if (ret != 0) {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
 			if (DEBUG) printf("[DEBUG] ECDH_Curve25519_GenKeys failed on generating keys: %s\n", reinterpret_cast<char*>(errBuf.get()));
 			// Free
-			mbedtls_ecp_point_free(&G);
+			//mbedtls_ecp_point_free(&G);
 			mbedtls_ecp_group_free(&ecpGroup);
 			mbedtls_ctr_drbg_free( &ctr_drbg );
 			mbedtls_entropy_free( &entropy );
@@ -471,6 +485,7 @@ namespace Briand {
 		auto keyBuf = make_unique<unsigned char[]>( keyBufSize );
 		mbedtls_mpi_write_binary(&keypair->d, keyBuf.get(), keyBufSize);
 		relay.CURVE25519_PRIVATE_KEY = BriandUtils::ArrayToVector(keyBuf, keyBufSize);
+		// The private key has no need to be reversed (my own use)
 
 		//unsigned long int oLen;
 		keyBufSize = mbedtls_mpi_size(&keypair->Q.X);
@@ -479,9 +494,14 @@ namespace Briand {
 		mbedtls_mpi_write_binary(&keypair->Q.X, keyBuf.get(), keyBufSize);
 		relay.CURVE25519_PUBLIC_KEY = BriandUtils::ArrayToVector(keyBuf, keyBufSize);
 
+		// The public key sent to server as tor specifies, must be in little-endian format.
+		// Mbedtls uses always big endian so must be reversed.
+		if (DEBUG) printf("[DEBUG] ECDH_Curve25519_GenKeys using mbedtls, reversing the key for little endian format.\n");
+		std::reverse(relay.CURVE25519_PUBLIC_KEY->begin(), relay.CURVE25519_PUBLIC_KEY->end());
+
 		// Free
 		mbedtls_ecp_keypair_free(keypair.get());
-		mbedtls_ecp_point_free(&G);
+		//mbedtls_ecp_point_free(&G);
 		mbedtls_ecp_group_free(&ecpGroup);
 		mbedtls_ctr_drbg_free( &ctr_drbg );
 		mbedtls_entropy_free( &entropy );
@@ -510,8 +530,23 @@ namespace Briand {
 		// Curve25519 group initialization parameters
 		mbedtls_ecp_group_load(&ecpGroup, MBEDTLS_ECP_DP_CURVE25519);
 
-		// Set private key
+		// This:
+		// char bb[32] = {0x00};
+		// unsigned long int bbs;
+		// mbedtls_mpi_write_string(&ecpGroup.G.X, 16, bb, 32, &bbs);
+		// printf("Gx = %s\n", bb);
+		// Gives output => Gx = 0x09 (big endian!)
+		// So default params ok!
+		// But that means also that mbedtls implementation works with REVERSE order!!
+
+		// WARNING: mbedtls uses big endian format for computation but the tor protocol
+		// exchanged keys are always in little endian so must be reversed!
+		// (too many time spent on understanding why never work)
+
+		// Set private key 
+		// no need to reverse!
 		tempBuffer = BriandUtils::VectorToArray(privateKey);
+
 		ret = mbedtls_mpi_read_binary(&private_key, tempBuffer.get(), privateKey->size());
 		tempBuffer.reset();
 		if (ret != 0) {
@@ -528,8 +563,14 @@ namespace Briand {
 		}
 
 		// Public key received (only X must be filled!)
-		tempBuffer = BriandUtils::VectorToArray(serverPublic);
+		// this must be reversed to compute secret
+		auto tempV = make_unique<vector<unsigned char>>();
+		tempV->insert(tempV->begin(), serverPublic->begin(), serverPublic->end());
+		std::reverse(tempV->begin(), tempV->end());
+
+		tempBuffer = BriandUtils::VectorToArray(tempV);
 		ret = mbedtls_mpi_read_binary(&server_public.X, tempBuffer.get(), serverPublic->size());
+		tempV.reset();
 		tempBuffer.reset();
 		if (ret != 0) {
 			// Error description
@@ -588,6 +629,9 @@ namespace Briand {
 		// Copy data
 		sharedSecret->insert(sharedSecret->begin(), tempBuffer.get(), tempBuffer.get() + sharedSecretSize); // safe!
 		tempBuffer.reset();
+
+		// Reverse data to little endian format
+		std::reverse(sharedSecret->begin(), sharedSecret->end());
 
 		return std::move(sharedSecret);
 	}
@@ -650,6 +694,10 @@ namespace Briand {
 		auto ntorKeyVec = BriandTorCryptoUtils::Base64Decode(*relay.descriptorNtorOnionKey.get());
 		auto fingerprintVector = BriandUtils::HexStringToVector(*relay.fingerprint.get(), "");
 
+		// WARNING: mbedtls uses big endian format for computation but the tor protocol
+		// exchanged keys are always in little endian so must be reversed!
+		// (too many time spent on understanding why never work)
+
 		/*
 			The server's handshake reply is:
 
@@ -710,6 +758,9 @@ namespace Briand {
 		secret_input->insert(secret_input->end(), tempVector->begin(), tempVector->end());
 		tempVector.reset();
 
+		// Reset ntor key to NBO
+		//std::reverse(ntorKeyVec->begin(), ntorKeyVec->end());
+
 		// Append the fingerprint (ID)
 		secret_input->insert(secret_input->end(), fingerprintVector->begin(), fingerprintVector->end());
 		// Append the ntorKey (B)
@@ -764,14 +815,13 @@ namespace Briand {
 
 		if (DEBUG) printf("[DEBUG] NtorHandshakeComplete Relay response to CREATE2/EXTEND2 verified (success).\n");
 	
-		return false;
-
 		/*
 			The client then checks Y is in G^* =======>>>> Both parties check that none of the EXP() operations produced the 
 			point at infinity. [NOTE: This is an adequate replacement for checking Y for group membership, if the group is curve25519.]
 		*/
 
 		// This is satisfied when Z is set to 1 (see ECDH_Curve25519_ComputeSharedSecret function body)
+		// Would throw error if infinity
 
 		/* 
 			Both parties now have a shared value for KEY_SEED.  They expand this
@@ -806,26 +856,32 @@ namespace Briand {
 		unsigned short DIGEST_LEN = 32; // TODO : did not found any reference to DIGEST_LEN size, suppose 32 with sha256
 		unsigned short EXTRACT_TOTAL_SIZE = HASH_LEN+HASH_LEN+KEY_LEN+KEY_LEN+DIGEST_LEN;
 
-		// Unfortunately ESP32 mbedtls has HKDF disabled.
-		// Could be enabled editing settings.h and esp_config.h but this is not
-		// recommended. So I wrote the function.
+		// Unfortunately ESP32 mbedtls could have HKDF disabled.
+		// Could be enabled with the menuconfig however i wrote a function if not activated to avoid
+		// compilation errors.
 		
-		// auto hkdfBuffer = BriandUtils::GetOneOldBuffer(EXTRACT_TOTAL_SIZE);
-		// #ifndef MBEDTLS_HKDF_C
-		// #define MBEDTLS_HKDF_C
-		// #endif
-		// #include <mbedtls/hkdf.h>
-		// mbedtls_hkdf(
-		// 	mbedtls_md_info_from_type(MBEDTLS_MD_SHA256),
-		// 	BriandUtils::VectorToArray(t_key).get(), t_key->size(), 
-		// 	BriandUtils::VectorToArray(secret_input).get(), secret_input->size(), 
-		// 	m_expand.get(), m_expand_size, 
-		// 	hkdfBuffer.get(), EXTRACT_TOTAL_SIZE
-		// );
-		// auto hkdfVector = BriandUtils::ArrayToVector(hkdfBuffer, EXTRACT_TOTAL_SIZE);		
+		#ifdef MBEDTLS_HKDF_C
+		
+		auto hkdfBuffer = BriandUtils::GetOneOldBuffer(EXTRACT_TOTAL_SIZE);
+
+		mbedtls_hkdf(
+			mbedtls_md_info_from_type(MBEDTLS_MD_SHA256),
+			BriandUtils::VectorToArray(t_key).get(), t_key->size(), 
+			BriandUtils::VectorToArray(secret_input).get(), secret_input->size(), 
+			BriandUtils::VectorToArray(m_expand).get(), m_expand->size(), 
+			hkdfBuffer.get(), EXTRACT_TOTAL_SIZE
+		);
+
+		auto hkdf = BriandUtils::ArrayToVector(hkdfBuffer, EXTRACT_TOTAL_SIZE);	
+		
+		#else
 
 		auto hkdf = BriandTorCryptoUtils::Get_HKDF(m_expand, relay.KEYSEED, EXTRACT_TOTAL_SIZE); 
 		
+		#endif
+
+		if (DEBUG) BriandUtils::PrintByteBuffer(*hkdf.get());
+
 		/*
 			When used in the ntor handshake, the first HASH_LEN bytes form the
 			forward digest Df; the next HASH_LEN form the backward digest Db; the

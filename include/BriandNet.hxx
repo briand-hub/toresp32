@@ -24,7 +24,8 @@
 
 #include <cJSON.h>
 
-#include <BriandIDFClients.hxx>
+#include <BriandIDFSocketClient.hxx>
+#include <BriandIDFSocketTlsClient.hxx>
 
 #include "BriandDefines.hxx"
 

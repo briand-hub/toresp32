@@ -20,7 +20,8 @@
 
 #include <cJSON.h>
 
-#include <BriandIDFClients.hxx>
+#include <BriandIDFSocketClient.hxx>
+#include <BriandIDFSocketTlsClient.hxx>
 
 #include <iostream>
 #include <memory>
@@ -132,8 +133,6 @@ namespace Briand
 				client->Disconnect();
 		}
 		
-		if (closeConnection) printf("\n\nCLOSE CONNECTION SET\n\n");
-
 		return std::move(output);
 	}
 

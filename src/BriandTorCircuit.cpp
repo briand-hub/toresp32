@@ -26,7 +26,7 @@
 #include <memory>
 #include <sstream>
 
-#include <BriandIDFClients.hxx>
+#include <BriandIDFSocketTlsClient.hxx>
 
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"

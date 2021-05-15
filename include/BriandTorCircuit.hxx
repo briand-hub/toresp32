@@ -21,7 +21,7 @@
 #include <iostream>
 #include <memory>
 
-#include <BriandIDFClients.hxx>
+#include <BriandIDFSocketTlsClient.hxx>
 
 #include "BriandTorDefinitions.hxx"
 #include "BriandTorRelay.hxx"

@@ -40,7 +40,8 @@
 /* Custom specific libraries */
 #include <BriandESPDevice.hxx>
 #include <BriandIDFWifiManager.hxx>
-#include <BriandIDFClients.hxx>
+#include <BriandIDFSocketClient.hxx>
+#include <BriandIDFSocketTlsClient.hxx>
 
 /* Project libraries */
 #include "BriandTorEsp32Config.hxx"

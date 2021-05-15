@@ -7,6 +7,11 @@
 * Simplify code in TorCircuit class
 * Authenticate cell? => Prepare stub method to authenticate client
 
+## 2021-05-15
+
+* Library upgrade and improvements
+* Re-testing CREATE2 failure
+
 ## 2021-05-08
 ## Switch to IDF complete
 RAM:   [=         ]  12.0% (used 39440 bytes from 327680 bytes)

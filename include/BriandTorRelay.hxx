@@ -64,20 +64,20 @@ namespace Briand {
 
 		// Descriptor's informations (ready after a FetchDescriptors() is called, empty if not present)
 
-		/* OR Onion key, BASE64 ENCODED */
+		/* OR Onion key, BASE64 ENCODED, LITTLE ENDIAN */
 		unique_ptr<string> descriptorNtorOnionKey;
 		
 		// Temporary Curve25519 keys for the handshake
 
-		/** A Curve25519 temporary public key */
+		/** A Curve25519 temporary public key, LITTLE ENDIAN */
 		unique_ptr<vector<unsigned char>> CURVE25519_PUBLIC_KEY;
-		/** A Curve25519 temporary private key */
+		/** A Curve25519 temporary private key, BIG ENDIAN */
 		unique_ptr<vector<unsigned char>> CURVE25519_PRIVATE_KEY;
 		
 
 		// KEY EXCHANGE FIELDS
 		
-		/** SERVER's PK received within CREATED2 or EXTENDED2 cell WARNING: will be used and then released so never use without check if nullptr! */
+		/** SERVER's PK received within CREATED2 or EXTENDED2 cell WARNING: will be used and then released so never use without check if nullptr! LITTLE ENDIAN */
 		unique_ptr<vector<unsigned char>> CREATED_EXTENDED_RESPONSE_SERVER_PK;
 		/** SERVER's AUTH received within CREATED2 or EXTENDED2 cell WARNING: will be used and then released so never use without check if nullptr! */
 		unique_ptr<vector<unsigned char>> CREATED_EXTENDED_RESPONSE_SERVER_AUTH;
