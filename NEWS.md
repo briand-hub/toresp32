@@ -11,6 +11,8 @@
 
 * Library upgrade and improvements
 * Re-testing CREATE2 failure
+* Solved CREATE2 (error due to mbedtls big-endian bytes instead of little-endian)
+* Added RELAY cell basic handling
 
 ## 2021-05-08
 ## Switch to IDF complete

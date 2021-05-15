@@ -73,8 +73,10 @@ namespace Briand {
 		}
 		else if (this->Command == Briand::BriandTorCellCommand::RELAY || this->Command == Briand::BriandTorCellCommand::RELAY_EARLY) {
 			// random pad
-			while (this->Payload->size() < this->PAYLOAD_LEN)
-				this->Payload->push_back( Briand::BriandUtils::GetRandomByte() );
+			//while (this->Payload->size() < this->PAYLOAD_LEN)
+			//	this->Payload->push_back( Briand::BriandUtils::GetRandomByte() );
+
+			// Modified ! the padding for relay cells is done in the PrepareAsRelayCell method
 		}
 		else {
 			// May...?
@@ -653,6 +655,157 @@ namespace Briand {
 		if (DEBUG) printf("[DEBUG] CREATE2 cell built with success.\n");
 
 		return true;
+	}
+
+	bool BriandTorCell::BuildAsEXTEND2(BriandTorRelay& relay) {
+		// payload clearing if previously used
+		this->ClearPayload();
+
+		// The contents of EXTEND2 are the same as CREATE2, with more header data.
+		if (!this->BuildAsCREATE2(relay)) {
+			printf("[DEBUG] EXTEND2 Relay cell failed construction because CREATE2 contents in failure!\n");
+			return false;
+		}
+
+		/*
+			An EXTEND2 cell's relay payload contains:
+
+			NSPEC      (Number of link specifiers)     [1 byte]
+				NSPEC times:
+				LSTYPE (Link specifier type)           [1 byte]
+				LSLEN  (Link specifier length)         [1 byte]
+				LSPEC  (Link specifier)                [LSLEN bytes]
+
+			==> the rest is the same as CREATE2
+
+			HTYPE      (Client Handshake Type)         [2 bytes]
+			HLEN       (Client Handshake Data Len)     [2 bytes]
+			HDATA      (Client Handshake Data)         [HLEN bytes]
+		*/
+
+		// reset command
+		this->Command = BriandTorCellCommand::RELAY;
+
+		// header to prepend
+		auto extend2Header = make_unique<vector<unsigned char>>();
+
+		// One link specifier (first address)
+		extend2Header->push_back(0x01);
+		
+		// [00] TLS-over-TCP, IPv4 address - A four-byte IPv4 address plus two-byte ORPort
+      	// [01] TLS-over-TCP, IPv6 address - A sixteen-byte IPv6 address plus two-byte ORPort
+      	// [02] Legacy identity - A 20-byte SHA1 identity fingerprint. At most one may be listed.
+      	// [03] Ed25519 identity - A 32-byte Ed25519 identity fingerprint. At most one may be listed.
+
+		extend2Header->push_back(0x00); // LSTYPE
+		extend2Header->push_back(0x06); // LSLEN 4 bytes ip + 2 bytes port
+		
+		struct in_addr relay_ip;
+		inet_aton(relay.address->c_str(), &relay_ip);
+
+		// Append OR IPv4
+		extend2Header->push_back( static_cast<unsigned char>( (relay_ip.s_addr & 0x000000FF) >> 0 ));
+		extend2Header->push_back( static_cast<unsigned char>( (relay_ip.s_addr & 0x0000FF00) >> 8 ));
+		extend2Header->push_back( static_cast<unsigned char>( (relay_ip.s_addr & 0x00FF0000) >> 16 ));
+		extend2Header->push_back( static_cast<unsigned char>( (relay_ip.s_addr & 0xFF000000) >> 24 ));
+
+		// Append OR Port
+		extend2Header->push_back( static_cast<unsigned char>( (relay.port & 0xFF00) >> 8 ) );
+		extend2Header->push_back( static_cast<unsigned char>( (relay.port & 0x00FF) >> 0 ) );
+
+		//
+		// TODO : add more identifiers if available
+		// 
+
+		// Prepend header bytes
+		this->Payload->insert(this->Payload->begin(), extend2Header->begin(), extend2Header->end());
+
+		// Encrypt with the relay's 
+
+
+		if (DEBUG) printf("[DEBUG] EXTEND2 cell built with success.\n");
+
+		return true;
+	}
+
+	unsigned short BriandTorCell::GetStreamID() {
+		return this->StreamID;
+	}
+
+	void BriandTorCell::PrepareAsRelayCell(const BriandTorCellRelayCommand& command, const unsigned short& streamID) {
+		
+		// Assume payload ready and encrypted with the ApplyOnionSkin method
+
+		/*
+			Relay command           [1 byte]
+			'Recognized'            [2 bytes]
+			StreamID                [2 bytes]
+			Digest                  [4 bytes]
+			Length                  [2 bytes]
+			Data                    [Length bytes]
+			Padding                 [PAYLOAD_LEN - 11 - Length bytes]
+		*/
+		
+		auto relayCellHeader = make_unique<vector<unsigned char>>();
+
+		// Relay command
+		relayCellHeader->push_back(command);
+
+		/*
+			The 'recognized' field is used as a simple indication that the cell
+			is still encrypted. It is an optimization to avoid calculating
+			expensive digests for every cell. When sending cells, the unencrypted
+			'recognized' MUST be set to zero
+		*/
+
+		relayCellHeader->push_back(0x00);
+		relayCellHeader->push_back(0x00);
+
+		/*
+			All RELAY cells pertaining to the same tunneled stream have the same
+   			stream ID.  StreamIDs are chosen arbitrarily by the OP.  No stream
+   			may have a StreamID of zero.
+		*/
+
+		relayCellHeader->push_back(static_cast<unsigned char>( (streamID & 0xFF00) >> 8 ));
+		relayCellHeader->push_back(static_cast<unsigned char>( (streamID & 0x00FF) >> 0 ));
+
+		// Get the real length of the current encrypted payload because digest must be done
+		// also on the padding bytes.
+		unsigned short payloadLen = this->Payload->size();
+
+		// Pad now the payload, adding random bytes till PAYLOAD_LEN minus the 11 header bytes
+		/*
+			Implementations SHOULD fill this field with four zero-valued bytes, followed by as many
+			random bytes as will fit.  (If there are fewer than 4 bytes for padding,
+			then they should all be filled with zero.
+		*/
+
+		while (this->Payload->size() < this->PAYLOAD_LEN - 11 && this->Payload->size() < payloadLen + 4)
+			this->Payload->push_back(0x00);
+		
+		while (this->Payload->size() < this->PAYLOAD_LEN - 11 - 4)
+			this->Payload->push_back( Briand::BriandUtils::GetRandomByte() );
+
+		// Digest : no particular function specified, so assuming SHA1
+		/*
+		*/
+
+		//
+		// TODO
+		//
+
+		// Length
+		relayCellHeader->push_back(static_cast<unsigned char>( (payloadLen & 0xFF00) >> 8 ));
+		relayCellHeader->push_back(static_cast<unsigned char>( (payloadLen & 0x00FF) >> 0 ));
+
+		// Prepend the header to payload
+		this->Payload->insert(this->Payload->begin(), relayCellHeader->begin(), relayCellHeader->end());
+
+		// Check the size (should be exactly PAYLOAD_LEN)
+		if (this->Payload->size() != this->PAYLOAD_LEN) {
+			if (VERBOSE) printf("[ERR] PrepareAsRelayCell error: the payload is %d bytes insted of %d.\n", this->Payload->size(), this->PAYLOAD_LEN);
+		}
 	}
 
 }

@@ -277,6 +277,7 @@ namespace Briand {
 		tempCell.reset();
 
 		// After authentication....
+
 		//
 		// TODO ?
 		// 
@@ -589,10 +590,6 @@ namespace Briand {
 		if (DEBUG) printf("[DEBUG] EXTEND2 with Exit success. All done!!\n");
 
 		if (DEBUG) this->PrintCircuitInfo();
-
-		//
-		// TODO
-		//
 
 		// Circuit is now OK!
 

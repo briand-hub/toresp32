@@ -28,7 +28,7 @@ using namespace std;
 
 namespace Briand {
 
-	// Flags of a Tor relay
+	/** Flags of a Tor relay */
 	enum BriandTorRelayFlag : unsigned short {
 		AUTHORITY		= 1 << 0,
 		BADEXIT			= 1 << 1,
@@ -44,7 +44,7 @@ namespace Briand {
 		VALID			= 1 << 11
 	};
 
-	// A Guard node must have this flags
+	/** A Guard node must have this flags */
 	constexpr unsigned short TOR_FLAGS_GUARD_MUST_HAVE = 
 		Briand::BriandTorRelayFlag::GUARD |
 		Briand::BriandTorRelayFlag::FAST | 
@@ -52,7 +52,7 @@ namespace Briand {
 		Briand::BriandTorRelayFlag::VALID | 
 		Briand::BriandTorRelayFlag::V2DIR;
 
-	// An Exit node must have this flags
+	/** An Exit node must have this flags */
 	constexpr unsigned short TOR_FLAGS_EXIT_MUST_HAVE = 
 		Briand::BriandTorRelayFlag::EXIT |
 		Briand::BriandTorRelayFlag::FAST | 
@@ -60,16 +60,18 @@ namespace Briand {
 		Briand::BriandTorRelayFlag::VALID | 
 		Briand::BriandTorRelayFlag::V2DIR;
 	
-	// Any other node must have this flags
+	/** Any other node must have this flags */
 	constexpr unsigned short TOR_FLAGS_MIDDLE_MUST_HAVE = 
 		Briand::BriandTorRelayFlag::FAST | 
 		Briand::BriandTorRelayFlag::STABLE | 
 		Briand::BriandTorRelayFlag::VALID | 
 		Briand::BriandTorRelayFlag::V2DIR;
 
-	// Cell commands (unsigned int = 4 bytes in link protocol 4+ or 2 bytes in link protocol version 3-)
+	/** Cell commands (unsigned int = 4 bytes in link protocol 4+ or 2 bytes in link protocol version 3-) */
 	enum BriandTorCellCommand : unsigned int {
+		
 		// Fixed size cells commands
+
 		PADDING = 0 ,				// PADDING     (Padding)                 (See Sec 7.2)
         CREATE = 1 ,				// CREATE      (Create a circuit)        (See Sec 5.1)
 		CREATED = 2 , 				// CREATED     (Acknowledge create)      (See Sec 5.1)
@@ -83,7 +85,7 @@ namespace Briand {
 		CREATED2 = 11 , 			// CREATED2   (Extended CREATED cell)    (See Sec 5.1)
 		PADDING_NEGOTIATE = 12 , 	// PADDING_NEGOTIATE   (Padding negotiation)    (See Sec 7.2)
 
-		//Variable-length command values are:
+		// Variable-length command values are:
 
 		VERSIONS = 7 , 				// VERSIONS    (Negotiate proto version) (See Sec 4)
 		VPADDING = 128 , 			// VPADDING  (Variable-length padding) (See Sec 7.2)
@@ -93,7 +95,7 @@ namespace Briand {
 		AUTHORIZE = 132  			// AUTHORIZE (Client authorization)    (Not yet used)
 	};
 	
-	/* ED25519 certificate types (CERT_TYPE field). HAS NOTHING TO DO WITH CERTS CELL TYPES! */
+	/** ED25519 certificate types (CERT_TYPE field). HAS NOTHING TO DO WITH CERTS CELL TYPES! */
 	enum BriandTorEd25519CerType : unsigned char {
 		/* [00],[01],[02],[03] - Reserved to avoid conflict with types used in CERTS cells.*/
 		/* [07] - Reserved for RSA identity cross-certification; (see section 2.3 above, and tor-spec.txt section 4.2)*/
@@ -108,6 +110,7 @@ namespace Briand {
 		ntor_extra_encryption_key_corss_certifies_descriptor_key = 0xB
 	};
 
+	/** Circuit destroy reason */
 	enum BriandTorDestroyReason : unsigned char {
 		NONE = 0, 				// -- NONE            (No reason given.)
 		PROTOCOL = 1, 			// -- PROTOCOL        (Tor protocol violation.)
@@ -123,4 +126,30 @@ namespace Briand {
 		DESTROYED = 11, 		// -- DESTROYED       (The circuit was destroyed w/o client TRUNCATE)
 		NOSUCHSERVICE = 12, 	// -- NOSUCHSERVICE   (Request for unknown hidden service)
 	};
+
+	/** RELAY Cell commands */
+	enum BriandTorCellRelayCommand : unsigned char {
+		RELAY_BEGIN = 1, 		// 1 -- RELAY_BEGIN     [forward]
+		RELAY_DATA = 2, 		// 2 -- RELAY_DATA      [forward or backward]
+		RELAY_END = 3, 			// 3 -- RELAY_END       [forward or backward]
+		RELAY_CONNECTED = 4, 	// 4 -- RELAY_CONNECTED [backward]
+		RELAY_SENDME = 5, 		// 5 -- RELAY_SENDME    [forward or backward] [sometimes control]
+		RELAY_EXTEND = 6, 		// 6 -- RELAY_EXTEND    [forward]             [control]
+		RELAY_EXTENDED = 7, 	// 7 -- RELAY_EXTENDED  [backward]            [control]
+		RELAY_TRUNCATE = 8, 	// 8 -- RELAY_TRUNCATE  [forward]             [control]
+		RELAY_TRUNCATED = 9, 	// 9 -- RELAY_TRUNCATED [backward]            [control]
+		RELAY_DROP = 10, 		// 10 -- RELAY_DROP      [forward or backward] [control]
+		RELAY_RESOLVE = 11, 	// 11 -- RELAY_RESOLVE   [forward]
+		RELAY_RESOLVED = 12, 	// 12 -- RELAY_RESOLVED  [backward]
+		RELAY_BEGIN_DIR = 13, 	// 13 -- RELAY_BEGIN_DIR [forward]
+		RELAY_EXTEND2 = 14, 	// 14 -- RELAY_EXTEND2   [forward]             [control]
+		RELAY_EXTENDED2 = 15 	// 15 -- RELAY_EXTENDED2 [backward]            [control]
+
+		// 32..40 -- Used for hidden services; see rend-spec-{v2,v3}.txt.
+
+        // 41..42 -- Used for circuit padding; see Section 3 of padding-spec.txt.
+	};
+
+	
+        
 }

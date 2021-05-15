@@ -40,25 +40,31 @@ namespace Briand {
 	class BriandTorCell {
 		protected:
 		
+		/** Flag, true if this is a variable len cell */
 		bool isVariableLengthCell;
+		/** The cell's link protocol version */
 		unsigned short linkProtocolVersion;
+		/** Cell total size in bytes */
 		unsigned long cellTotalSizeBytes;
 
-		// CircID is 4 bytes in link protocol 4+ , 2 otherwise
-		// The first VERSIONS cell, and any cells sent before the first VERSIONS cell, always have CIRCID_LEN == 2 for backward compatibility.
+		/** CircID is 4 bytes in link protocol 4+ , 2 otherwise
+		 * The first VERSIONS cell, and any cells sent before the first VERSIONS cell, always have CIRCID_LEN == 2 for backward compatibility. 
+		*/
 		unsigned int CircID;
 
+		/** The cell command */
 		Briand::BriandTorCellCommand Command;
 
-		// The length in case of variable cells will be calculated from vector (length occupy 2 bytes)
+		/* The length in case of variable cells will be calculated from vector (length occupy 2 bytes) */
 		unique_ptr<vector<unsigned char>> Payload;
 
-		// Apr 2021: The longest allowable cell payload, in bytes. (509)
-		const short PAYLOAD_LEN = 509; 						
+		/* Apr 2021: The longest allowable cell payload, in bytes. (509) */
+		const short PAYLOAD_LEN = 509; 
 
-		/**
-		 * Pads the payload (if needed)
-		*/
+		/* In a relay cell, it is the Stream ID */
+		unsigned short StreamID; 					
+
+		/** Pads the payload (if needed) */
 		void PadPayload();
 
 		public:
@@ -185,6 +191,41 @@ namespace Briand {
 		 * @return true if success, false instead.
 		*/
 		bool BuildAsCREATE2(BriandTorRelay& relay);
+
+		/**
+		 * Method builds this cell as a fresh EXTEND2 to extend a created circuit with the specified relay. 
+		 * Constructor must have been called with right link protocol version, CircID and command. 
+		 * Relay will have it's ECDH context initialized after this function (if a previous one was initialize, will be lost!)
+		 * @param relay The destination node
+		 * @return true if success, false instead.
+		*/
+		bool BuildAsEXTEND2(BriandTorRelay& relay);
+
+		/**
+		 * Method applies the onion skin (AES128CTR) to the cell's payload with the given key.
+		 * @param relay The destination node
+		*/
+		void ApplyOnionSkin(const unique_ptr<vector<unsigned char>>& key);
+
+		/**
+		 * Method peels out the onion skin (AES128CTR) to the cell's payload with the given key.
+		 * @param relay The destination node
+		*/
+		void PeelOnionSkin(const unique_ptr<vector<unsigned char>>& key);
+
+		/** 
+		 * Obtain the cell's StreamID 
+		 * @return the stream ID
+		*/
+		unsigned short GetStreamID();
+
+		/** 
+		 * Prepare this as a RELAY cell header for sending a relay cell, based on the current cell->Payload that MUST be ready end encrypted with 
+		 * the ApplyOnionSkin method BUT NOT PADDED (in order to calculate correct size). Padding will be done inside this method.
+		 * @param command The relay command
+		 * @param streamID The Stream ID, 
+		*/
+		void PrepareAsRelayCell(const BriandTorCellRelayCommand& command, const unsigned short& streamID);
 	};
 
 	/*
