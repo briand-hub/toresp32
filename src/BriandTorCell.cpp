@@ -657,12 +657,12 @@ namespace Briand {
 		return true;
 	}
 
-	bool BriandTorCell::BuildAsEXTEND2(BriandTorRelay& relay) {
+	bool BriandTorCell::BuildAsEXTEND2(BriandTorRelay& extendWithRelay) {
 		// payload clearing if previously used
 		this->ClearPayload();
 
 		// The contents of EXTEND2 are the same as CREATE2, with more header data.
-		if (!this->BuildAsCREATE2(relay)) {
+		if (!this->BuildAsCREATE2(extendWithRelay)) {
 			printf("[DEBUG] EXTEND2 Relay cell failed construction because CREATE2 contents in failure!\n");
 			return false;
 		}
@@ -701,7 +701,7 @@ namespace Briand {
 		extend2Header->push_back(0x06); // LSLEN 4 bytes ip + 2 bytes port
 		
 		struct in_addr relay_ip;
-		inet_aton(relay.address->c_str(), &relay_ip);
+		inet_aton(extendWithRelay.address->c_str(), &relay_ip);
 
 		// Append OR IPv4
 		extend2Header->push_back( static_cast<unsigned char>( (relay_ip.s_addr & 0x000000FF) >> 0 ));
@@ -710,8 +710,8 @@ namespace Briand {
 		extend2Header->push_back( static_cast<unsigned char>( (relay_ip.s_addr & 0xFF000000) >> 24 ));
 
 		// Append OR Port
-		extend2Header->push_back( static_cast<unsigned char>( (relay.port & 0xFF00) >> 8 ) );
-		extend2Header->push_back( static_cast<unsigned char>( (relay.port & 0x00FF) >> 0 ) );
+		extend2Header->push_back( static_cast<unsigned char>( (extendWithRelay.port & 0xFF00) >> 8 ) );
+		extend2Header->push_back( static_cast<unsigned char>( (extendWithRelay.port & 0x00FF) >> 0 ) );
 
 		//
 		// TODO : add more identifiers if available
@@ -719,9 +719,6 @@ namespace Briand {
 
 		// Prepend header bytes
 		this->Payload->insert(this->Payload->begin(), extend2Header->begin(), extend2Header->end());
-
-		// Encrypt with the relay's 
-
 
 		if (DEBUG) printf("[DEBUG] EXTEND2 cell built with success.\n");
 
@@ -734,7 +731,7 @@ namespace Briand {
 
 	void BriandTorCell::PrepareAsRelayCell(const BriandTorCellRelayCommand& command, const unsigned short& streamID) {
 		
-		// Assume payload ready and encrypted with the ApplyOnionSkin method
+		// Assume payload ready
 
 		/*
 			Relay command           [1 byte]
@@ -784,16 +781,28 @@ namespace Briand {
 		while (this->Payload->size() < this->PAYLOAD_LEN - 11 && this->Payload->size() < payloadLen + 4)
 			this->Payload->push_back(0x00);
 		
-		while (this->Payload->size() < this->PAYLOAD_LEN - 11 - 4)
+		while (this->Payload->size() < this->PAYLOAD_LEN - 11)
 			this->Payload->push_back( Briand::BriandUtils::GetRandomByte() );
 
 		// Digest : no particular function specified, so assuming SHA1
+
 		/*
+			the 'digest' field is computed as
+			the first four bytes of the running digest of all the bytes that have
+			been destined for this hop of the circuit or originated from this hop
+			of the circuit, seeded from Df or Db respectively (obtained in
+			section 5.2 above), and including this RELAY cell's entire payload
+			(taken with the digest field set to zero).  Note that these digests
+			_do_ include the padding bytes at the end of the cell, not only those up
+			to "Len".
 		*/
 
-		//
-		// TODO
-		//
+		// First: set digest field to zero (4 bytes)
+
+		relayCellHeader->push_back(0x00);
+		relayCellHeader->push_back(0x00);
+		relayCellHeader->push_back(0x00);
+		relayCellHeader->push_back(0x00);
 
 		// Length
 		relayCellHeader->push_back(static_cast<unsigned char>( (payloadLen & 0xFF00) >> 8 ));
@@ -806,6 +815,27 @@ namespace Briand {
 		if (this->Payload->size() != this->PAYLOAD_LEN) {
 			if (VERBOSE) printf("[ERR] PrepareAsRelayCell error: the payload is %d bytes insted of %d.\n", this->Payload->size(), this->PAYLOAD_LEN);
 		}
+
+		// Calculate the digest
+		auto digest = BriandTorCryptoUtils::GetDigest_SHA1(this->Payload);
+		if (DEBUG) {
+			printf("[DEBUG] PrepareAsRelayCell digest is: ");
+			BriandUtils::PrintByteBuffer(*digest.get());
+		}
+		
+		// Save the first 4 bytes to digest field
+		for (char i = 5; i < 9; i++)
+			this->Payload->at(i) = digest->at(i);
+	}
+
+	void BriandTorCell::ApplyOnionSkin(const unique_ptr<vector<unsigned char>>& key) {
+		// All payload => encrypt AES128CTR
+		BriandTorCryptoUtils::AES128CTR_Encrypt(this->Payload, key);
+	}
+
+	void BriandTorCell::PeelOnionSkin(const unique_ptr<vector<unsigned char>>& key) {
+		// All payload => decrypt AES128CTR
+		BriandTorCryptoUtils::AES128CTR_Decrypt(this->Payload, key);
 	}
 
 }

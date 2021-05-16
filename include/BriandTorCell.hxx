@@ -195,21 +195,22 @@ namespace Briand {
 		/**
 		 * Method builds this cell as a fresh EXTEND2 to extend a created circuit with the specified relay. 
 		 * Constructor must have been called with right link protocol version, CircID and command. 
-		 * Relay will have it's ECDH context initialized after this function (if a previous one was initialize, will be lost!)
-		 * @param relay The destination node
+		 * Relay will have it's ECDH context initialized after this function (if a previous one was initialize, will be lost!).
+		 * After calling this method, ApplyOnionSkin must be called.
+		 * @param extendWithRelay The destination node to extend the circuit to
 		 * @return true if success, false instead.
 		*/
-		bool BuildAsEXTEND2(BriandTorRelay& relay);
+		bool BuildAsEXTEND2(BriandTorRelay& extendWithRelay);
 
 		/**
 		 * Method applies the onion skin (AES128CTR) to the cell's payload with the given key.
-		 * @param relay The destination node
+		 * @param key Encryption key
 		*/
 		void ApplyOnionSkin(const unique_ptr<vector<unsigned char>>& key);
 
 		/**
 		 * Method peels out the onion skin (AES128CTR) to the cell's payload with the given key.
-		 * @param relay The destination node
+		 * @param key Decryption key
 		*/
 		void PeelOnionSkin(const unique_ptr<vector<unsigned char>>& key);
 
@@ -220,10 +221,10 @@ namespace Briand {
 		unsigned short GetStreamID();
 
 		/** 
-		 * Prepare this as a RELAY cell header for sending a relay cell, based on the current cell->Payload that MUST be ready end encrypted with 
-		 * the ApplyOnionSkin method BUT NOT PADDED (in order to calculate correct size). Padding will be done inside this method.
+		 * Prepare this as a RELAY cell header for sending a relay cell, based on the current cell->Payload that MUST be ready (not encrypted)  
+		 * BUT NOT PADDED (in order to calculate correct size). Padding will be done inside this method.
 		 * @param command The relay command
-		 * @param streamID The Stream ID, 
+		 * @param streamID The Stream ID
 		*/
 		void PrepareAsRelayCell(const BriandTorCellRelayCommand& command, const unsigned short& streamID);
 	};

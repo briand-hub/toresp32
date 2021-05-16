@@ -116,6 +116,24 @@ namespace Briand {
 		*/
 		static bool NtorHandshakeComplete(BriandTorRelay& relay);
 
+		/**
+		 * Method encrypt AES 128 CTR mode (all-zero IV/nonce)
+		 * @param content The content
+		 * @param key The key
+		 * @return Pointer to encrypted content
+		*/
+		static unique_ptr<vector<unsigned char>> AES128CTR_Encrypt(const unique_ptr<vector<unsigned char>>& content, const unique_ptr<vector<unsigned char>>& key);
+
+		/**
+		 * Method decrypt AES 128 CTR mode (all-zero IV/nonce)
+		 * @param content The content
+		 * @param key The key
+		 * @return Pointer to decrypted content
+		*/
+		static unique_ptr<vector<unsigned char>> AES128CTR_Decrypt(const unique_ptr<vector<unsigned char>>& content, const unique_ptr<vector<unsigned char>>& key);
+
+
+
 		/** WRONG METHOD
 		 * Method generates keypair and saves informations (keys and client to server vector) on given relay
 		 * @param relay The destination relay for handshake

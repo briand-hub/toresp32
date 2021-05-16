@@ -370,6 +370,92 @@ namespace Briand {
 	}
 
 	bool BriandTorCircuit::Extend2(bool exitNode) {
+		if (DEBUG) printf("[DEBUG] Sending EXTEND2 cell to guard.\n");
+
+		// EXTEND2 is a RELAY cell!
+
+		auto tempCell = make_unique<Briand::BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::RELAY);
+		
+		if (exitNode) {
+			if (!tempCell->BuildAsEXTEND2(*this->exitNode.get())) {
+				if (DEBUG) printf("[DEBUG] Failed on building cell EXTEND2 to exit.\n");
+				return false;
+			}
+		}
+		else {
+			if (!tempCell->BuildAsEXTEND2(*this->middleNode.get())) {
+				if (DEBUG) printf("[DEBUG] Failed on building cell EXTEND2 to middle.\n");
+				return false;
+			}
+		}
+
+		// Prepare a StreamID
+		unsigned short streamID = 0x0000;
+		do {
+			streamID += (BriandUtils::GetRandomByte() << 8);
+			streamID += (BriandUtils::GetRandomByte() << 0);
+		} while (streamID == 0x0000); // streamID zero is reserved
+
+		// After building the main contents, prepare it as a relay cell
+		tempCell->PrepareAsRelayCell(BriandTorCellRelayCommand::RELAY_EXTEND2, streamID);
+
+		if (DEBUG) {
+			printf("[DEBUG] EXTEND2 contents before encryption: ");
+			tempCell->PrintCellPayloadToSerial();
+		}
+
+		// Then encrypt
+		if (exitNode) {
+			// Encrypt with middle key
+			tempCell->ApplyOnionSkin(this->middleNode->KEY_Forward_Kf);
+			// Encrypt with guard key
+			tempCell->ApplyOnionSkin(this->guardNode->KEY_Forward_Kf);
+		}
+		else {
+			// Encrypt with guard key
+			tempCell->ApplyOnionSkin(this->guardNode->KEY_Forward_Kf);
+		}
+
+		if (DEBUG) printf("[DEBUG] EXTEND2 sent. Waiting for EXTENDED2.\n");
+		auto tempCellResponse = tempCell->SendCell(this->sClient, false);
+		tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
+		
+		if (!tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION)) {
+			if (VERBOSE) printf("[ERR] Error, response cell had invalid bytes (failed to build from buffer).\n");
+			this->Cleanup();
+			return false;
+		}
+		
+		// If a DESTROY given, tell me why
+		if (tempCell->GetCommand() == BriandTorCellCommand::DESTROY) {
+			if (VERBOSE) printf("[ERR] Error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
+			this->Cleanup();
+			return false;
+		}
+
+		if (tempCell->GetCommand() != BriandTorCellCommand::RELAY) {
+			if (VERBOSE) printf("[ERR] Error, response contains %s cell instead of RELAY. Failure.\n", BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
+			this->Cleanup();
+			return false;
+		}
+
+		if (DEBUG) printf("[DEBUG] Got RELAY cell, payload:");
+		if (DEBUG) tempCell->PrintCellPayloadToSerial();
+
+		// TODO : cell payload header trimming ??
+
+		// Finish the handshake!
+		if (!this->guardNode->FinishHandshake(tempCell->GetPayload())) {
+			if (VERBOSE) printf("[ERR] Error on concluding handshake!\n");
+			// From now... always destroy
+			this->TearDown();
+			this->Cleanup();
+			return false;
+		}
+
+		// Free buffers
+		tempCell.reset();
+		tempCellResponse.reset();
 
 		return true;
 	}

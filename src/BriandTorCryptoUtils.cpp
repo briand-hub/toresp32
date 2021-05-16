@@ -45,6 +45,11 @@
 #include <mbedtls/hkdf.h>
 #endif
 
+// HW Accelleration by ESP32 cryptographic hardware
+// #include <mbedtls/aes.h> gives linker error!
+#include <esp32/aes.h>
+
+
 /* LibSodium found for Ed25519 signatures! It's on framework :-D */
 #include <sodium.h>
 
@@ -934,4 +939,56 @@ namespace Briand {
 
 		return true;
 	}
+
+	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::AES128CTR_Encrypt(const unique_ptr<vector<unsigned char>>& content, const unique_ptr<vector<unsigned char>>& key) {
+		constexpr unsigned short BLOCK_SIZE_BYTES = 16;
+			
+		unsigned int INPUT_SIZE = content->size();
+		unsigned char iv[BLOCK_SIZE_BYTES] = { 0x00 }; // zero-init IV
+		unsigned int nonce_size = 0;
+		unsigned char nonce_counter[BLOCK_SIZE_BYTES] = { 0x00 };
+		auto outBuffer = make_unique<unsigned char[]>(INPUT_SIZE);
+
+		esp_aes_context aes_context;
+
+		// Init AES
+		esp_aes_init(&aes_context);
+		
+		// Set ENC key, first param context pointer, second the key, third the key-len in BITS
+		esp_aes_setkey(&aes_context, key->data(), key->size() * 8);
+		
+		// Encrypt (only CBC mode makes 16-bytes per round, CTR has not this problem with input)
+		esp_aes_crypt_ctr(&aes_context, INPUT_SIZE, &nonce_size, nonce_counter, iv, content->data(), outBuffer.get());
+
+		// Free context
+		esp_aes_free(&aes_context);
+
+		return std::move( BriandUtils::ArrayToVector(outBuffer, INPUT_SIZE) );
+	}
+
+	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::AES128CTR_Decrypt(const unique_ptr<vector<unsigned char>>& content, const unique_ptr<vector<unsigned char>>& key) {
+		constexpr unsigned short BLOCK_SIZE_BYTES = 16;
+			
+		unsigned char iv[BLOCK_SIZE_BYTES] = { 0x00 };			// zero-init IV
+		size_t nonce_size = 0;
+		unsigned char nonce_counter[BLOCK_SIZE_BYTES] = { 0x00 };
+		auto outBuffer = make_unique<unsigned char[]>(content->size());
+
+		esp_aes_context aes_context;
+
+		// Init AES
+		esp_aes_init(&aes_context);
+		
+		// Set ENC key, first param context pointer, second the key, third the key-len in BITS
+		esp_aes_setkey(&aes_context, key->data(), key->size() * 8);
+
+		// Encrypt (only CBC mode makes 16-bytes per round, CTR has not this problem with input)
+		esp_aes_crypt_ctr(&aes_context, content->size(), &nonce_size, nonce_counter, iv, content->data(), outBuffer.get());
+
+		// Free context
+		esp_aes_free(&aes_context);
+
+		return std::move( BriandUtils::ArrayToVector(outBuffer, content->size()) );
+	}
+
 }
