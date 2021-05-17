@@ -18,9 +18,6 @@
 
 #include "BriandTorCryptoUtils.hxx"
 
-
-
-
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -151,6 +148,8 @@ namespace Briand {
 
 		return std::move(digest);
 	}
+
+
 
 	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::GetDigest_HMAC_SHA256(const unique_ptr<vector<unsigned char>>& input, const unique_ptr<vector<unsigned char>>& key) {	
 		// Using mbedtls
