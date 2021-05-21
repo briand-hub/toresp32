@@ -225,8 +225,9 @@ namespace Briand {
 		 * BUT NOT PADDED (in order to calculate correct size). Padding will be done inside this method.
 		 * @param command The relay command
 		 * @param streamID The Stream ID
+		 * @param digestForward The forward digest of the destination relay
 		*/
-		void PrepareAsRelayCell(const BriandTorCellRelayCommand& command, const unsigned short& streamID);
+		void PrepareAsRelayCell(const BriandTorCellRelayCommand& command, const unsigned short& streamID, const unique_ptr<vector<unsigned char>>& digestForward);
 	};
 
 	/*

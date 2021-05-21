@@ -1,9 +1,10 @@
 # Development status
 
 ## Next steps
-* Switch to IDF framework for better performance, memory and libraries.
-* Add last_working_directory auth as static
-* Find a way to get a small-size official consensus from directories (and remove ArduinoJson library)
+
+* Resolve EXTEND2 failures
+* Change the "old" buffer-copy to vector->data() to optimize memory usage
+* Find a way to get a small-size official consensus from directories
 * Simplify code in TorCircuit class
 * Authenticate cell? => Prepare stub method to authenticate client
 
@@ -13,6 +14,8 @@
 * Re-testing CREATE2 failure
 * Solved CREATE2 (error due to mbedtls big-endian bytes instead of little-endian)
 * Added RELAY cell basic handling
+* Added last_working_directory auth as static
+* Updated NTOR handshake digest fields error
 
 ## 2021-05-08
 ## Switch to IDF complete
@@ -36,11 +39,11 @@ Flash: [======    ]  61.7% (used 1293890 bytes from 2097152 bytes)
 ## 2021-05-02
 ### SWITCH TO IDF Framework
 - [x] platformio.ini modifications
-* Enabled mbedtls hkdf
-* Partition table
-* Code changes from Serial. to standard printf / cout
-* Rewrite JSON uing framework cJSON
-* Rewrite
+- [x] Enabled mbedtls hkdf
+- [x] Partition table
+- [x] Code changes from Serial. to standard printf / cout
+- [x] Rewrite JSON uing framework cJSON
+- [x] Rewrite
 
 ## 2021-05-01
 * Base64 fix for the omitted '='/'==' ending in ntor key, causing handshake failures

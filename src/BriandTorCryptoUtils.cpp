@@ -149,7 +149,66 @@ namespace Briand {
 		return std::move(digest);
 	}
 
+	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::GetRelayCellDigest(BriandTorRelay& relay, const unique_ptr<vector<unsigned char>>& relayCellPayload, const bool& direction) {
+		// Using mbedtls
 
+		auto mdInfo = mbedtls_md_info_from_type(MBEDTLS_MD_SHA1);
+
+		auto hashedMessageRaw = BriandUtils::GetOneOldBuffer(mdInfo->size);
+
+		if (DEBUG) printf("[DEBUG] RELAY CELL DIGEST Raw message to encode: ");
+		BriandUtils::PrintByteBuffer(*relayCellPayload.get());
+
+		if (direction) {
+			if (DEBUG) printf("[DEBUG] RELAY CELL DIGEST Seed to use (FORWARD): ");
+			BriandUtils::PrintByteBuffer(*relay.KEY_ForwardDigest_Df.get());
+		}
+		else {
+			if (DEBUG) printf("[DEBUG] RELAY CELL DIGEST Seed to use (BACKWARD): ");
+			BriandUtils::PrintByteBuffer(*relay.KEY_BackwardDigest_Db.get());
+		}
+
+		// Using mbedtls_md() not working as expected!!
+
+		auto mdCtx = make_unique<mbedtls_md_context_t>();
+
+		mbedtls_md_setup(mdCtx.get(), mdInfo, 0);
+		mbedtls_md_starts(mdCtx.get());
+		
+		// First: add seed
+		if (direction) {
+			mbedtls_md_update(mdCtx.get(), relay.KEY_ForwardDigest_Df->data(), relay.KEY_ForwardDigest_Df->size());
+		}
+		else {
+			mbedtls_md_update(mdCtx.get(), relay.KEY_BackwardDigest_Db->data(), relay.KEY_BackwardDigest_Db->size());
+		}
+				
+		// Then add input bytes
+		mbedtls_md_update(mdCtx.get(), relayCellPayload->data(), relayCellPayload->size());
+
+		// Finalize
+		mbedtls_md_finish(mdCtx.get(), hashedMessageRaw.get());
+
+		if (DEBUG) printf("[DEBUG] SHA1 Raw output: ");
+		BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size, mdInfo->size);
+
+		auto digest = BriandUtils::ArrayToVector(hashedMessageRaw, mdInfo->size);
+
+		// Free (MUST!)
+		mbedtls_md_free(mdCtx.get());
+
+		// Save the new fields
+		if (direction) {
+			relay.KEY_ForwardDigest_Df->clear();
+			relay.KEY_ForwardDigest_Df->insert(relay.KEY_ForwardDigest_Df->begin(), digest->begin(), digest->end());
+		}
+		else {
+			relay.KEY_BackwardDigest_Db->clear();
+			relay.KEY_BackwardDigest_Db->insert(relay.KEY_BackwardDigest_Db->begin(), digest->begin(), digest->end());
+		}
+
+		return std::move(digest);
+	}
 
 	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::GetDigest_HMAC_SHA256(const unique_ptr<vector<unsigned char>>& input, const unique_ptr<vector<unsigned char>>& key) {	
 		// Using mbedtls
@@ -884,7 +943,10 @@ namespace Briand {
 		
 		#endif
 
-		if (DEBUG) BriandUtils::PrintByteBuffer(*hkdf.get());
+		if (DEBUG) {
+			printf("[DEBUG] HKDF expansion for keys: ");
+			BriandUtils::PrintByteBuffer(*hkdf.get());
+		}
 
 		/*
 			When used in the ntor handshake, the first HASH_LEN bytes form the
@@ -908,29 +970,51 @@ namespace Briand {
 		auth_input.reset();
 		auth_verify.reset();
 
-	   	tempVector = make_unique<vector<unsigned char>>();
-
-		tempVector->insert(tempVector->begin(), hkdf->begin(), hkdf->begin() + HASH_LEN);
+		// This field is updated with SHA1 hash when relay cells are sent but not finalized itself!
+	   	relay.KEY_ForwardDigest_Df = make_unique<vector<unsigned char>>();
+		relay.KEY_ForwardDigest_Df->insert(relay.KEY_ForwardDigest_Df->begin(), hkdf->begin(), hkdf->begin() + HASH_LEN);
 		hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
-		relay.KEY_ForwardDigest_Df = GetDigest_SHA1(tempVector);
-		tempVector->clear();
 
-		tempVector->insert(tempVector->begin(), hkdf->begin(), hkdf->begin() + HASH_LEN);
+		if (DEBUG) {
+			printf("[DEBUG] Relay digest forward: ");
+			BriandUtils::PrintByteBuffer(*relay.KEY_ForwardDigest_Df.get());
+		}
+
+		// This field is updated with SHA1 hash when relay cells are received but not finalized itself!
+		relay.KEY_BackwardDigest_Db = make_unique<vector<unsigned char>>();
+		relay.KEY_BackwardDigest_Db->insert(tempVector->begin(), hkdf->begin(), hkdf->begin() + HASH_LEN);
 		hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
-		relay.KEY_BackwardDigest_Db = GetDigest_SHA1(tempVector);
-		tempVector->clear();
-		tempVector.reset();
+		
+		if (DEBUG) {
+			printf("[DEBUG] Relay digest backward: ");
+			BriandUtils::PrintByteBuffer(*relay.KEY_BackwardDigest_Db.get());
+		}
 
 		relay.KEY_Forward_Kf = make_unique<vector<unsigned char>>();
 		relay.KEY_Forward_Kf->insert(relay.KEY_Forward_Kf->begin(), hkdf->begin(), hkdf->begin() + KEY_LEN);
 		hkdf->erase(hkdf->begin(), hkdf->begin() + KEY_LEN);
 
+		if (DEBUG) {
+			printf("[DEBUG] KEY forward: ");
+			BriandUtils::PrintByteBuffer(*relay.KEY_Forward_Kf.get());
+		}
+
 		relay.KEY_Backward_Kb = make_unique<vector<unsigned char>>();
 		relay.KEY_Backward_Kb->insert(relay.KEY_Backward_Kb->begin(), hkdf->begin(), hkdf->begin() + KEY_LEN);
 		hkdf->erase(hkdf->begin(), hkdf->begin() + KEY_LEN);
 
+		if (DEBUG) {
+			printf("[DEBUG] KEY backward: ");
+			BriandUtils::PrintByteBuffer(*relay.KEY_Backward_Kb.get());
+		}
+
 		relay.KEY_HiddenService_Nonce = make_unique<vector<unsigned char>>();
 		relay.KEY_HiddenService_Nonce->insert(relay.KEY_HiddenService_Nonce->begin(), hkdf->begin(), hkdf->begin() + DIGEST_LEN);
+
+		if (DEBUG) {
+			printf("[DEBUG] HS nonce: ");
+			BriandUtils::PrintByteBuffer(*relay.KEY_HiddenService_Nonce.get());
+		}
 
 		hkdf.reset();
 		

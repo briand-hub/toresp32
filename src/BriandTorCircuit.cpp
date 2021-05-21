@@ -159,6 +159,7 @@ namespace Briand {
 
 		// link version 4 at least please!!!
 		tempCell->AppendTwoBytesToPayload(0x0004);
+		tempCell->AppendTwoBytesToPayload(0x0005);
 
 		tempCellResponse = tempCell->SendCell(this->sClient, false);
 		tempCell.reset();
@@ -372,9 +373,9 @@ namespace Briand {
 	bool BriandTorCircuit::Extend2(bool exitNode) {
 		if (DEBUG) printf("[DEBUG] Sending EXTEND2 cell to guard.\n");
 
-		// EXTEND2 is a RELAY cell!
+		// EXTEND2 is a RELAY cell! (RELAY_EARLY since link protocol v2)
 
-		auto tempCell = make_unique<Briand::BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::RELAY);
+		auto tempCell = make_unique<Briand::BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::RELAY_EARLY);
 		
 		if (exitNode) {
 			if (!tempCell->BuildAsEXTEND2(*this->exitNode.get())) {
@@ -389,15 +390,23 @@ namespace Briand {
 			}
 		}
 
-		// Prepare a StreamID
+		// Prepare a StreamID of all zeros (relay commands with [control] use all-zero streamid!)
 		unsigned short streamID = 0x0000;
-		do {
-			streamID += (BriandUtils::GetRandomByte() << 8);
-			streamID += (BriandUtils::GetRandomByte() << 0);
-		} while (streamID == 0x0000); // streamID zero is reserved
+
+		// do {
+		// 	streamID += (BriandUtils::GetRandomByte() << 8);
+		// 	streamID += (BriandUtils::GetRandomByte() << 0);
+		// } while (streamID == 0x0000); 
+
+		if (DEBUG) printf("[DEBUG] StreamID is: %04X\n", streamID);
 
 		// After building the main contents, prepare it as a relay cell
-		tempCell->PrepareAsRelayCell(BriandTorCellRelayCommand::RELAY_EXTEND2, streamID);
+		if (exitNode) {
+			tempCell->PrepareAsRelayCell(BriandTorCellRelayCommand::RELAY_EXTEND2, streamID, this->middleNode->KEY_ForwardDigest_Df);
+		}
+		else {
+			tempCell->PrepareAsRelayCell(BriandTorCellRelayCommand::RELAY_EXTEND2, streamID, this->guardNode->KEY_ForwardDigest_Df);
+		}
 
 		if (DEBUG) {
 			printf("[DEBUG] EXTEND2 contents before encryption: ");
@@ -408,12 +417,15 @@ namespace Briand {
 		if (exitNode) {
 			// Encrypt with middle key
 			tempCell->ApplyOnionSkin(this->middleNode->KEY_Forward_Kf);
+			if (DEBUG) printf("[DEBUG] Applied MIDDLE onion skin.\n");
 			// Encrypt with guard key
 			tempCell->ApplyOnionSkin(this->guardNode->KEY_Forward_Kf);
+			if (DEBUG) printf("[DEBUG] Applied GUARD onion skin.\n");
 		}
 		else {
 			// Encrypt with guard key
 			tempCell->ApplyOnionSkin(this->guardNode->KEY_Forward_Kf);
+			if (DEBUG) printf("[DEBUG] Applied GUARD onion skin.\n");
 		}
 
 		if (DEBUG) printf("[DEBUG] EXTEND2 sent. Waiting for EXTENDED2.\n");
@@ -442,12 +454,24 @@ namespace Briand {
 		if (DEBUG) printf("[DEBUG] Got RELAY cell, payload:");
 		if (DEBUG) tempCell->PrintCellPayloadToSerial();
 
-		// TODO : cell payload header trimming ??
+	
+		// Decrypt payload
+		if (exitNode) {
+			tempCell->PeelOnionSkin(this->middleNode->KEY_Backward_Kb);
+			if (DEBUG) printf("[DEBUG] Removed MIDDLE onion skin.\n");
+			tempCell->PeelOnionSkin(this->guardNode->KEY_Backward_Kb);
+			if (DEBUG) printf("[DEBUG] Removed GUARD onion skin.\n");
+		}
+		else {
+			tempCell->PeelOnionSkin(this->guardNode->KEY_Backward_Kb);
+			if (DEBUG) printf("[DEBUG] Removed GUARD onion skin.\n");
+		}
 
 		// Finish the handshake!
+		/* The payload of an EXTENDED2 cell is the same as the payload of a CREATED2 cell */
 		if (!this->guardNode->FinishHandshake(tempCell->GetPayload())) {
 			if (VERBOSE) printf("[ERR] Error on concluding handshake!\n");
-			// From now... always destroy
+			// Always destroy if fails
 			this->TearDown();
 			this->Cleanup();
 			return false;

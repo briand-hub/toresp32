@@ -684,18 +684,21 @@ namespace Briand {
 		*/
 
 		// reset command
-		this->Command = BriandTorCellCommand::RELAY;
+		
+		/* 	
+			When speaking v2 of the link protocol or later, clients MUST only send
+   			EXTEND/EXTEND2 cells inside RELAY_EARLY cells
+		*/
+
+		this->Command = BriandTorCellCommand::RELAY_EARLY;
 
 		// header to prepend
 		auto extend2Header = make_unique<vector<unsigned char>>();
 
-		// One link specifier (first address)
-		extend2Header->push_back(0x01);
+		// No. of link specifier 
+		extend2Header->push_back(0x02);
 		
 		// [00] TLS-over-TCP, IPv4 address - A four-byte IPv4 address plus two-byte ORPort
-      	// [01] TLS-over-TCP, IPv6 address - A sixteen-byte IPv6 address plus two-byte ORPort
-      	// [02] Legacy identity - A 20-byte SHA1 identity fingerprint. At most one may be listed.
-      	// [03] Ed25519 identity - A 32-byte Ed25519 identity fingerprint. At most one may be listed.
 
 		extend2Header->push_back(0x00); // LSTYPE
 		extend2Header->push_back(0x06); // LSLEN 4 bytes ip + 2 bytes port
@@ -713,9 +716,21 @@ namespace Briand {
 		extend2Header->push_back( static_cast<unsigned char>( (extendWithRelay.port & 0xFF00) >> 8 ) );
 		extend2Header->push_back( static_cast<unsigned char>( (extendWithRelay.port & 0x00FF) >> 0 ) );
 
+		// [02] Legacy identity - A 20-byte SHA1 identity fingerprint. At most one may be listed.
+		
+		extend2Header->push_back(0x02); // LSTYPE
+		extend2Header->push_back(0x20); // LSLEN 20 bytes
+		auto fingerprintBytes = BriandUtils::HexStringToVector(*extendWithRelay.fingerprint.get(), "");
+		extend2Header->insert(extend2Header->end(), fingerprintBytes->begin(), fingerprintBytes->end());
+				
 		//
 		// TODO : add more identifiers if available
 		// 
+
+		// [03] Ed25519 identity - A 32-byte Ed25519 identity fingerprint. At most one may be listed.
+
+		// [01] TLS-over-TCP, IPv6 address - A sixteen-byte IPv6 address plus two-byte ORPort
+
 
 		// Prepend header bytes
 		this->Payload->insert(this->Payload->begin(), extend2Header->begin(), extend2Header->end());
@@ -729,7 +744,7 @@ namespace Briand {
 		return this->StreamID;
 	}
 
-	void BriandTorCell::PrepareAsRelayCell(const BriandTorCellRelayCommand& command, const unsigned short& streamID) {
+	void BriandTorCell::PrepareAsRelayCell(const BriandTorCellRelayCommand& command, const unsigned short& streamID, const unique_ptr<vector<unsigned char>>& digestForward) {
 		
 		// Assume payload ready
 
@@ -784,7 +799,7 @@ namespace Briand {
 		while (this->Payload->size() < this->PAYLOAD_LEN - 11)
 			this->Payload->push_back( Briand::BriandUtils::GetRandomByte() );
 
-		// Digest : no particular function specified, so assuming SHA1
+		// Digest : no particular function specified, so assuming SHA1 but seeded version
 
 		/*
 			the 'digest' field is computed as
@@ -817,25 +832,30 @@ namespace Briand {
 		}
 
 		// Calculate the digest
-		auto digest = BriandTorCryptoUtils::GetDigest_SHA1(this->Payload);
+		auto digest = BriandTorCryptoUtils::GetDigest_Seeded_SHA1(this->Payload, digestForward);
+		
+		// no relay to save info there...... !!!!!!!!
+		// TODO !!!
+		auto digest = BriandTorCryptoUtils::GetRelayCellDigest()
+		
 		if (DEBUG) {
 			printf("[DEBUG] PrepareAsRelayCell digest is: ");
 			BriandUtils::PrintByteBuffer(*digest.get());
 		}
 		
 		// Save the first 4 bytes to digest field
-		for (char i = 5; i < 9; i++)
-			this->Payload->at(i) = digest->at(i);
+		for (char i = 0; i < 4; i++)
+			this->Payload->at(i + 5) = digest->at(i);
 	}
 
 	void BriandTorCell::ApplyOnionSkin(const unique_ptr<vector<unsigned char>>& key) {
-		// All payload => encrypt AES128CTR
-		BriandTorCryptoUtils::AES128CTR_Encrypt(this->Payload, key);
+		// Encrypt all payload with AES128CTR
+		this->Payload = BriandTorCryptoUtils::AES128CTR_Encrypt(this->Payload, key);
 	}
 
 	void BriandTorCell::PeelOnionSkin(const unique_ptr<vector<unsigned char>>& key) {
-		// All payload => decrypt AES128CTR
-		BriandTorCryptoUtils::AES128CTR_Decrypt(this->Payload, key);
+		// Decrypt all payload with AES128CTR
+		this->Payload = BriandTorCryptoUtils::AES128CTR_Decrypt(this->Payload, key);
 	}
 
 }
