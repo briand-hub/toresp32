@@ -67,8 +67,10 @@ namespace Briand {
 		auto hashedMessageRaw = BriandUtils::GetOneOldBuffer(mdInfo->size);
 		auto inputRaw = BriandUtils::VectorToArray(input);
 
-		if (DEBUG) printf("[DEBUG] SHA256 Raw message to encode: ");
-		BriandUtils::PrintOldStyleByteBuffer(inputRaw.get(), input->size(), input->size(), input->size());
+		if (DEBUG) {
+			printf("[DEBUG] SHA256 Raw message to encode: ");
+			BriandUtils::PrintOldStyleByteBuffer(inputRaw.get(), input->size(), input->size(), input->size());
+		} 
 		
 		// Using mbedtls_md() not working as expected!!
 
@@ -93,8 +95,10 @@ namespace Briand {
 		// however not calling will leak heap!
 		// solution found: use unique_ptr , always working! Thanks C++
 		
-		if (DEBUG) printf("[DEBUG] SHA256 Raw output: ");
-		BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size, mdInfo->size);
+		if (DEBUG) {
+			printf("[DEBUG] SHA256 Raw output: ");
+			BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size, mdInfo->size);
+		} 
 
 		auto digest = BriandUtils::ArrayToVector(hashedMessageRaw, mdInfo->size);
 
@@ -112,8 +116,10 @@ namespace Briand {
 		auto hashedMessageRaw = BriandUtils::GetOneOldBuffer(mdInfo->size);
 		auto inputRaw = BriandUtils::VectorToArray(input);
 
-		if (DEBUG) printf("[DEBUG] SHA1 Raw message to encode: ");
-		BriandUtils::PrintOldStyleByteBuffer(inputRaw.get(), input->size(), input->size(), input->size());
+		if (DEBUG) {
+			printf("[DEBUG] SHA1 Raw message to encode: ");
+			BriandUtils::PrintOldStyleByteBuffer(inputRaw.get(), input->size(), input->size(), input->size());
+		} 
 		
 		// Using mbedtls_md() not working as expected!!
 
@@ -138,8 +144,10 @@ namespace Briand {
 		// however not calling will leak heap!
 		// solution found: use unique_ptr , always working! Thanks C++
 		
-		if (DEBUG) printf("[DEBUG] SHA1 Raw output: ");
-		BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size, mdInfo->size);
+		if (DEBUG) {
+			printf("[DEBUG] SHA1 Raw output: ");
+			BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size, mdInfo->size);
+		} 
 
 		auto digest = BriandUtils::ArrayToVector(hashedMessageRaw, mdInfo->size);
 
@@ -149,26 +157,19 @@ namespace Briand {
 		return std::move(digest);
 	}
 
-	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::GetRelayCellDigest(BriandTorRelay& relay, const unique_ptr<vector<unsigned char>>& relayCellPayload, const bool& direction) {
+	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::GetRelayCellDigest(unique_ptr<vector<unsigned char>>& relayCurrentDigest, const unique_ptr<vector<unsigned char>>& relayCellPayload) {
 		// Using mbedtls
 
 		auto mdInfo = mbedtls_md_info_from_type(MBEDTLS_MD_SHA1);
 
 		auto hashedMessageRaw = BriandUtils::GetOneOldBuffer(mdInfo->size);
 
-		if (DEBUG) printf("[DEBUG] RELAY CELL DIGEST Raw message to encode: ");
-		BriandUtils::PrintByteBuffer(*relayCellPayload.get());
-
-		if (direction) {
-			if (DEBUG) printf("[DEBUG] RELAY CELL DIGEST Seed to use (FORWARD): ");
-			BriandUtils::PrintByteBuffer(*relay.KEY_ForwardDigest_Df.get());
-		}
-		else {
-			if (DEBUG) printf("[DEBUG] RELAY CELL DIGEST Seed to use (BACKWARD): ");
-			BriandUtils::PrintByteBuffer(*relay.KEY_BackwardDigest_Db.get());
-		}
-
-		// Using mbedtls_md() not working as expected!!
+		if (DEBUG) {
+			printf("[DEBUG] RELAY CELL DIGEST Raw message to encode: ");
+			BriandUtils::PrintByteBuffer(*relayCellPayload.get());
+			if (DEBUG) printf("[DEBUG] RELAY CELL DIGEST Seed to use: ");
+			BriandUtils::PrintByteBuffer(*relayCurrentDigest.get());
+		} 
 
 		auto mdCtx = make_unique<mbedtls_md_context_t>();
 
@@ -176,12 +177,7 @@ namespace Briand {
 		mbedtls_md_starts(mdCtx.get());
 		
 		// First: add seed
-		if (direction) {
-			mbedtls_md_update(mdCtx.get(), relay.KEY_ForwardDigest_Df->data(), relay.KEY_ForwardDigest_Df->size());
-		}
-		else {
-			mbedtls_md_update(mdCtx.get(), relay.KEY_BackwardDigest_Db->data(), relay.KEY_BackwardDigest_Db->size());
-		}
+		mbedtls_md_update(mdCtx.get(), relayCurrentDigest->data(), relayCurrentDigest->size());
 				
 		// Then add input bytes
 		mbedtls_md_update(mdCtx.get(), relayCellPayload->data(), relayCellPayload->size());
@@ -189,23 +185,19 @@ namespace Briand {
 		// Finalize
 		mbedtls_md_finish(mdCtx.get(), hashedMessageRaw.get());
 
-		if (DEBUG) printf("[DEBUG] SHA1 Raw output: ");
-		BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size, mdInfo->size);
+		if (DEBUG) {
+			printf("[DEBUG] RELAY CELL DIGEST Raw output: ");
+			BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size, mdInfo->size);
+		} 
 
 		auto digest = BriandUtils::ArrayToVector(hashedMessageRaw, mdInfo->size);
 
 		// Free (MUST!)
 		mbedtls_md_free(mdCtx.get());
 
-		// Save the new fields
-		if (direction) {
-			relay.KEY_ForwardDigest_Df->clear();
-			relay.KEY_ForwardDigest_Df->insert(relay.KEY_ForwardDigest_Df->begin(), digest->begin(), digest->end());
-		}
-		else {
-			relay.KEY_BackwardDigest_Db->clear();
-			relay.KEY_BackwardDigest_Db->insert(relay.KEY_BackwardDigest_Db->begin(), digest->begin(), digest->end());
-		}
+		// Save the new digest
+		relayCurrentDigest->clear();
+		relayCurrentDigest->insert(relayCurrentDigest->begin(), digest->begin(), digest->end());
 
 		return std::move(digest);
 	}
@@ -982,7 +974,7 @@ namespace Briand {
 
 		// This field is updated with SHA1 hash when relay cells are received but not finalized itself!
 		relay.KEY_BackwardDigest_Db = make_unique<vector<unsigned char>>();
-		relay.KEY_BackwardDigest_Db->insert(tempVector->begin(), hkdf->begin(), hkdf->begin() + HASH_LEN);
+		relay.KEY_BackwardDigest_Db->insert(relay.KEY_BackwardDigest_Db->begin(), hkdf->begin(), hkdf->begin() + HASH_LEN);
 		hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
 		
 		if (DEBUG) {

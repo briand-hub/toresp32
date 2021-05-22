@@ -744,7 +744,7 @@ namespace Briand {
 		return this->StreamID;
 	}
 
-	void BriandTorCell::PrepareAsRelayCell(const BriandTorCellRelayCommand& command, const unsigned short& streamID, const unique_ptr<vector<unsigned char>>& digestForward) {
+	void BriandTorCell::PrepareAsRelayCell(const BriandTorCellRelayCommand& command, const unsigned short& streamID, unique_ptr<vector<unsigned char>>& digestForward) {
 		
 		// Assume payload ready
 
@@ -831,12 +831,8 @@ namespace Briand {
 			if (VERBOSE) printf("[ERR] PrepareAsRelayCell error: the payload is %d bytes insted of %d.\n", this->Payload->size(), this->PAYLOAD_LEN);
 		}
 
-		// Calculate the digest
-		auto digest = BriandTorCryptoUtils::GetDigest_Seeded_SHA1(this->Payload, digestForward);
-		
-		// no relay to save info there...... !!!!!!!!
-		// TODO !!!
-		auto digest = BriandTorCryptoUtils::GetRelayCellDigest()
+		// Calculate the digest and update relay's digest forward field
+		auto digest = BriandTorCryptoUtils::GetRelayCellDigest(digestForward, this->Payload);
 		
 		if (DEBUG) {
 			printf("[DEBUG] PrepareAsRelayCell digest is: ");

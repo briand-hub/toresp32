@@ -403,9 +403,17 @@ namespace Briand {
 		// After building the main contents, prepare it as a relay cell
 		if (exitNode) {
 			tempCell->PrepareAsRelayCell(BriandTorCellRelayCommand::RELAY_EXTEND2, streamID, this->middleNode->KEY_ForwardDigest_Df);
+			if (DEBUG) {
+				printf("[DEBUG] Df updated for middle node: ");
+				BriandUtils::PrintByteBuffer(*this->middleNode->KEY_ForwardDigest_Df.get());
+			}
 		}
 		else {
 			tempCell->PrepareAsRelayCell(BriandTorCellRelayCommand::RELAY_EXTEND2, streamID, this->guardNode->KEY_ForwardDigest_Df);
+			if (DEBUG) {
+				printf("[DEBUG] Df updated for guard node: ");
+				BriandUtils::PrintByteBuffer(*this->guardNode->KEY_ForwardDigest_Df.get());
+			}
 		}
 
 		if (DEBUG) {
@@ -428,7 +436,7 @@ namespace Briand {
 			if (DEBUG) printf("[DEBUG] Applied GUARD onion skin.\n");
 		}
 
-		if (DEBUG) printf("[DEBUG] EXTEND2 sent. Waiting for EXTENDED2.\n");
+		if (DEBUG) printf("[DEBUG] EXTEND2 is going to be sent. Waiting for EXTENDED2.\n");
 		auto tempCellResponse = tempCell->SendCell(this->sClient, false);
 		tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
 		
