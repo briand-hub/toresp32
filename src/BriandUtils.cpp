@@ -349,6 +349,26 @@ namespace Briand
 		return string("UNKNOWN");
 	}
 
+	string BriandUtils::BriandTorRelayCellCommandToString(const Briand::BriandTorCellRelayCommand& command) {
+		if (command == Briand::BriandTorCellRelayCommand::RELAY_BEGIN) return string("RELAY_BEGIN");
+		if (command == Briand::BriandTorCellRelayCommand::RELAY_BEGIN_DIR) return string("RELAY_BEGIN_DIR");
+		if (command == Briand::BriandTorCellRelayCommand::RELAY_CONNECTED) return string("RELAY_CONNECTED");
+		if (command == Briand::BriandTorCellRelayCommand::RELAY_DATA) return string("RELAY_DATA");
+		if (command == Briand::BriandTorCellRelayCommand::RELAY_DROP) return string("RELAY_DROP");
+		if (command == Briand::BriandTorCellRelayCommand::RELAY_END) return string("RELAY_END");
+		if (command == Briand::BriandTorCellRelayCommand::RELAY_EXTEND2) return string("RELAY_EXTEND2");
+		if (command == Briand::BriandTorCellRelayCommand::RELAY_EXTEND) return string("RELAY_EXTEND");
+		if (command == Briand::BriandTorCellRelayCommand::RELAY_EXTENDED2) return string("RELAY_EXTENDED2");
+		if (command == Briand::BriandTorCellRelayCommand::RELAY_EXTENDED) return string("RELAY_EXTENDED");
+		if (command == Briand::BriandTorCellRelayCommand::RELAY_RESOLVE) return string("RELAY_RESOLVE");
+		if (command == Briand::BriandTorCellRelayCommand::RELAY_RESOLVED) return string("RELAY_RESOLVED");
+		if (command == Briand::BriandTorCellRelayCommand::RELAY_SENDME) return string("RELAY_SENDME");
+		if (command == Briand::BriandTorCellRelayCommand::RELAY_TRUNCATE) return string("RELAY_TRUNCATE");
+		if (command == Briand::BriandTorCellRelayCommand::RELAY_TRUNCATED) return string("RELAY_TRUNCATED");
+
+		return string("UNKNOWN");
+	}
+
 	unique_ptr<unsigned char[]> BriandUtils::GetOneOldBuffer(const unsigned int& size) {
 		auto buf = make_unique<unsigned char[]>(size);
 		// init to zero

@@ -719,7 +719,7 @@ namespace Briand {
 		// [02] Legacy identity - A 20-byte SHA1 identity fingerprint. At most one may be listed.
 		
 		extend2Header->push_back(0x02); // LSTYPE
-		extend2Header->push_back(0x20); // LSLEN 20 bytes
+		extend2Header->push_back(0x14); // LSLEN 20 bytes (=0x14 in hex :-P)
 		auto fingerprintBytes = BriandUtils::HexStringToVector(*extendWithRelay.fingerprint.get(), "");
 		extend2Header->insert(extend2Header->end(), fingerprintBytes->begin(), fingerprintBytes->end());
 				
@@ -744,7 +744,11 @@ namespace Briand {
 		return this->StreamID;
 	}
 
-	void BriandTorCell::PrepareAsRelayCell(const BriandTorCellRelayCommand& command, const unsigned short& streamID, unique_ptr<vector<unsigned char>>& digestForward) {
+	BriandTorCellRelayCommand BriandTorCell::GetRelayCommand() {
+		return this->RelayCommand;
+	}
+
+	void BriandTorCell::PrepareAsRelayCell(const BriandTorCellRelayCommand& command, const unsigned short& streamID, unique_ptr<mbedtls_md_context_t>& digestForward) {
 		
 		// Assume payload ready
 
@@ -757,6 +761,12 @@ namespace Briand {
 			Data                    [Length bytes]
 			Padding                 [PAYLOAD_LEN - 11 - Length bytes]
 		*/
+
+		// Set default values
+		this->StreamID = streamID;
+		this->Recognized = 0x0000;
+		this->RelayCommand = command;
+		this->Digest = 0x00000000;
 		
 		auto relayCellHeader = make_unique<vector<unsigned char>>();
 
@@ -779,8 +789,8 @@ namespace Briand {
    			may have a StreamID of zero.
 		*/
 
-		relayCellHeader->push_back(static_cast<unsigned char>( (streamID & 0xFF00) >> 8 ));
-		relayCellHeader->push_back(static_cast<unsigned char>( (streamID & 0x00FF) >> 0 ));
+		relayCellHeader->push_back(static_cast<unsigned char>( (this->StreamID & 0xFF00) >> 8 ));
+		relayCellHeader->push_back(static_cast<unsigned char>( (this->StreamID & 0x00FF) >> 0 ));
 
 		// Get the real length of the current encrypted payload because digest must be done
 		// also on the padding bytes.
@@ -840,8 +850,16 @@ namespace Briand {
 		}
 		
 		// Save the first 4 bytes to digest field
-		for (char i = 0; i < 4; i++)
+		for (char i = 0; i < 4; i++) {
 			this->Payload->at(i + 5) = digest->at(i);
+			this->Digest += static_cast<unsigned int>( digest->at(i) << (8*i));
+		}
+		
+		if (DEBUG) {
+			printf("[DEBUG] PrepareAsRelayCell digest is: ");
+			BriandUtils::PrintByteBuffer(*digest.get());
+			printf("[DEBUG] Relay cell saved digest: %08X\n", this->Digest);
+		}
 	}
 
 	void BriandTorCell::ApplyOnionSkin(const unique_ptr<vector<unsigned char>>& key) {
@@ -854,4 +872,92 @@ namespace Briand {
 		this->Payload = BriandTorCryptoUtils::AES128CTR_Decrypt(this->Payload, key);
 	}
 
+	bool BriandTorCell::BuildRelayCellFromPayload(unique_ptr<mbedtls_md_context_t>& digestBackward) {
+		// Set defaults
+		this->StreamID = 0x0000;
+		this->Recognized = 0x0000;
+		this->RelayCommand = BriandTorCellRelayCommand::RELAY_END;
+		this->Digest = 0x00000000;
+
+		// Check if RELAY or RELAY_EARLY command
+		if (this->Command != BriandTorCellCommand::RELAY && this->Command != BriandTorCellCommand::RELAY_EARLY) {
+			if (DEBUG) printf("[DEBUG] Cell is not a RELAY cell! Command is %s\n", Briand::BriandUtils::BriandTorCellCommandToString(this->Command).c_str() );
+			return false;
+		}
+
+		// A RELAY cell PAYLOAD contains:
+
+		/*
+			Relay command           [1 byte]
+			'Recognized'            [2 bytes]
+			StreamID                [2 bytes]
+			Digest                  [4 bytes]
+			Length                  [2 bytes]
+			Data                    [Length bytes]
+			Padding                 [PAYLOAD_LEN - 11 - Length bytes]
+		*/
+
+		// Check if enough payload size
+		if (this->Payload->size() < 11) {
+			if (DEBUG) printf("[DEBUG] RELAY Cell has too poor bytes.\n");
+			return false;
+		}
+
+		// Get the relay command
+		this->RelayCommand = static_cast<BriandTorCellRelayCommand>( this->Payload->at(0) );
+		cellTotalSizeBytes -= 1;
+		this->Payload->erase(this->Payload->begin());
+		if (DEBUG) printf("[DEBUG] RELAY Cell command is %s\n", BriandUtils::BriandTorRelayCellCommandToString(this->RelayCommand).c_str());
+
+		// Get the recognized field
+		this->Recognized = static_cast<unsigned short>( this->Payload->at(0) << 8 );
+		this->Recognized += static_cast<unsigned short>( this->Payload->at(1) );
+		this->Payload->erase(this->Payload->begin(), this->Payload->begin() + 2);
+		cellTotalSizeBytes -= 2;
+		if (DEBUG) printf("[DEBUG] RELAY Cell recognized: %04X\n", this->Recognized );
+
+		// Get the streamid field
+		this->StreamID = static_cast<unsigned short>( this->Payload->at(0) << 8 );
+		this->StreamID += static_cast<unsigned short>( this->Payload->at(1) );
+		this->Payload->erase(this->Payload->begin(), this->Payload->begin() + 2);
+		cellTotalSizeBytes -= 2;
+		if (DEBUG) printf("[DEBUG] RELAY Cell StreamID: %04X\n", this->StreamID);
+
+		// Get the Digest field
+		this->Digest = static_cast<unsigned int>( this->Payload->at(0) << 24 );
+		this->Digest += static_cast<unsigned int>( this->Payload->at(1) << 16 );
+		this->Digest += static_cast<unsigned int>( this->Payload->at(2) << 8 );
+		this->Digest += static_cast<unsigned int>( this->Payload->at(3) );
+		this->Payload->erase(this->Payload->begin(), this->Payload->begin() + 4);
+		cellTotalSizeBytes -= 4;
+		if (DEBUG) printf("[DEBUG] RELAY Cell Digest: %08X\n", this->Digest);
+		
+		//
+		// TODO: verify digest and update backward digest
+		//
+
+		// Get the length field
+		unsigned short payloadLength = 0x0000;
+		payloadLength = static_cast<unsigned short>( this->Payload->at(0) << 8 );
+		payloadLength += static_cast<unsigned short>( this->Payload->at(1) );
+		this->Payload->erase(this->Payload->begin(), this->Payload->begin() + 2);
+		cellTotalSizeBytes -= 2;
+		if (DEBUG) printf("[DEBUG] RELAY Cell real payload Length: %04X\n", payloadLength);
+
+		// check if enough size for payload
+		if (this->Payload->size() < payloadLength) {
+			if (DEBUG) printf("[DEBUG] RELAY Cell real payload length is of %u bytes but buffer has only %d\n", payloadLength, this->Payload->size());
+			return false;
+		}
+
+		cellTotalSizeBytes -= this->Payload->size();
+
+		// REAL Payload, exclude padding bytes.
+		this->Payload->erase(this->Payload->begin() + payloadLength, this->Payload->end());
+		if (DEBUG) printf("[DEBUG] RELAY real Payload size is now %d bytes.\n", this->Payload->size());
+
+		cellTotalSizeBytes += this->Payload->size();
+
+		return true;
+	}
 }

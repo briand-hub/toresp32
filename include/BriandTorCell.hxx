@@ -47,7 +47,8 @@ namespace Briand {
 		/** Cell total size in bytes */
 		unsigned long cellTotalSizeBytes;
 
-		/** CircID is 4 bytes in link protocol 4+ , 2 otherwise
+		/** 
+		 * CircID is 4 bytes in link protocol 4+ , 2 otherwise
 		 * The first VERSIONS cell, and any cells sent before the first VERSIONS cell, always have CIRCID_LEN == 2 for backward compatibility. 
 		*/
 		unsigned int CircID;
@@ -61,8 +62,18 @@ namespace Briand {
 		/* Apr 2021: The longest allowable cell payload, in bytes. (509) */
 		const short PAYLOAD_LEN = 509; 
 
-		/* In a relay cell, it is the Stream ID */
-		unsigned short StreamID; 					
+		/* RELAY cell Command */
+		BriandTorCellRelayCommand RelayCommand;
+
+		/* RELAY cell Stream ID */
+		unsigned short StreamID;
+
+		/* RELAY cell Recognized */
+		unsigned short Recognized;
+
+		/* RELAY cell Digest (first 4 bytes) */
+		unsigned int Digest;
+
 
 		/** Pads the payload (if needed) */
 		void PadPayload();
@@ -139,9 +150,23 @@ namespace Briand {
 		bool BuildFromBuffer(unique_ptr<vector<unsigned char>>& buffer, const unsigned char& link_protocol_version);
 
 		/**
+		 * Method must be called after BuildFromBuffer and rebuilds RELAY cell informations starting from the payload received. 
+		 * Payload must be previously decrypted with PeelOnionSkin method. After calling this method the Payload field will contain
+		 * only the real payload data. Also padding bytes will be deleted.
+		 * @param digestBackward The backward digest (will be updated)
+		 * @return true if success, false instead.
+		*/
+		bool BuildRelayCellFromPayload(unique_ptr<mbedtls_md_context_t>& digestBackward);
+
+		/**
 		 * @return Cell command
 		*/
 		Briand::BriandTorCellCommand GetCommand();
+
+		/**
+		 * @return RELAY Cell command
+		*/
+		Briand::BriandTorCellRelayCommand GetRelayCommand();
 
 		/**
 		 * @return Raw payload pointer reference (PAY(load) ATTENTION!)
@@ -227,7 +252,7 @@ namespace Briand {
 		 * @param streamID The Stream ID
 		 * @param digestForward The forward digest of the destination relay (will be updated)
 		*/
-		void PrepareAsRelayCell(const BriandTorCellRelayCommand& command, const unsigned short& streamID, unique_ptr<vector<unsigned char>>& digestForward);
+		void PrepareAsRelayCell(const BriandTorCellRelayCommand& command, const unsigned short& streamID, unique_ptr<mbedtls_md_context_t>& digestForward);
 	};
 
 	/*

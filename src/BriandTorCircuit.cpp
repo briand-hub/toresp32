@@ -403,17 +403,9 @@ namespace Briand {
 		// After building the main contents, prepare it as a relay cell
 		if (exitNode) {
 			tempCell->PrepareAsRelayCell(BriandTorCellRelayCommand::RELAY_EXTEND2, streamID, this->middleNode->KEY_ForwardDigest_Df);
-			if (DEBUG) {
-				printf("[DEBUG] Df updated for middle node: ");
-				BriandUtils::PrintByteBuffer(*this->middleNode->KEY_ForwardDigest_Df.get());
-			}
 		}
 		else {
 			tempCell->PrepareAsRelayCell(BriandTorCellRelayCommand::RELAY_EXTEND2, streamID, this->guardNode->KEY_ForwardDigest_Df);
-			if (DEBUG) {
-				printf("[DEBUG] Df updated for guard node: ");
-				BriandUtils::PrintByteBuffer(*this->guardNode->KEY_ForwardDigest_Df.get());
-			}
 		}
 
 		if (DEBUG) {
@@ -440,6 +432,8 @@ namespace Briand {
 		auto tempCellResponse = tempCell->SendCell(this->sClient, false);
 		tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
 		
+		// Build the basic cell
+
 		if (!tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION)) {
 			if (VERBOSE) printf("[ERR] Error, response cell had invalid bytes (failed to build from buffer).\n");
 			this->Cleanup();
@@ -462,28 +456,70 @@ namespace Briand {
 		if (DEBUG) printf("[DEBUG] Got RELAY cell, payload:");
 		if (DEBUG) tempCell->PrintCellPayloadToSerial();
 
-	
-		// Decrypt payload
+		// Decrypt payload of received cell
 		if (exitNode) {
-			tempCell->PeelOnionSkin(this->middleNode->KEY_Backward_Kb);
-			if (DEBUG) printf("[DEBUG] Removed MIDDLE onion skin.\n");
 			tempCell->PeelOnionSkin(this->guardNode->KEY_Backward_Kb);
-			if (DEBUG) printf("[DEBUG] Removed GUARD onion skin.\n");
+			if (DEBUG) {
+				printf("[DEBUG] Removed GUARD onion skin.\n");
+				printf("[DEBUG] RELAY cell payload after decryption: ");
+				tempCell->PrintCellPayloadToSerial();
+			} 
+			tempCell->PeelOnionSkin(this->middleNode->KEY_Backward_Kb);
+			if (DEBUG) {
+				printf("[DEBUG] Removed MIDDLE onion skin.\n");
+				printf("[DEBUG] RELAY cell payload after decryption: ");
+				tempCell->PrintCellPayloadToSerial();
+			} 
 		}
 		else {
 			tempCell->PeelOnionSkin(this->guardNode->KEY_Backward_Kb);
-			if (DEBUG) printf("[DEBUG] Removed GUARD onion skin.\n");
+			if (DEBUG) {
+				printf("[DEBUG] Removed GUARD onion skin.\n");
+				printf("[DEBUG] RELAY cell payload after decryption: ");
+				tempCell->PrintCellPayloadToSerial();
+			} 
+		}
+
+		// Adjust the payload and verify RELAY cell header
+		if (exitNode && !tempCell->BuildRelayCellFromPayload(this->middleNode->KEY_BackwardDigest_Db)) {
+			if (VERBOSE) printf("[ERR] Error on rebuilding RELAY cell informations from exit node, invalid cell.\n");
+			this->Cleanup();
+			return false;
+		}
+		else if (!tempCell->BuildRelayCellFromPayload(this->guardNode->KEY_BackwardDigest_Db)) {
+			if (VERBOSE) printf("[ERR] Error on rebuilding RELAY cell informations from middle node, invalid cell.\n");
+			this->Cleanup();
+			return false;
+		}
+
+		if (tempCell->GetRelayCommand() != BriandTorCellRelayCommand::RELAY_EXTENDED2) {
+			if (DEBUG) printf("[DEBUG] Expected EXTENDED2 but received %s\n", BriandUtils::BriandTorRelayCellCommandToString(tempCell->GetRelayCommand()).c_str());
+			this->Cleanup();
+			return false;
 		}
 
 		// Finish the handshake!
 		/* The payload of an EXTENDED2 cell is the same as the payload of a CREATED2 cell */
-		if (!this->guardNode->FinishHandshake(tempCell->GetPayload())) {
-			if (VERBOSE) printf("[ERR] Error on concluding handshake!\n");
-			// Always destroy if fails
-			this->TearDown();
-			this->Cleanup();
-			return false;
+		if (exitNode) {
+			if (!this->exitNode->FinishHandshake(tempCell->GetPayload())) {
+				if (VERBOSE) printf("[ERR] Error on concluding EXTENDED2 handshake with exit!\n");
+				// Always destroy if fails
+				this->TearDown();
+				this->Cleanup();
+				return false;
+			}
 		}
+		else {
+			if (!this->middleNode->FinishHandshake(tempCell->GetPayload())) {
+				if (VERBOSE) printf("[ERR] Error on concluding EXTENDED2 handshake with middle!\n");
+				// Always destroy if fails
+				this->TearDown();
+				this->Cleanup();
+				return false;
+			}
+		}
+
+		if (DEBUG) printf("[DEBUG] EXTENDED2 Success, circuit has now a new hop\n");
 
 		// Free buffers
 		tempCell.reset();

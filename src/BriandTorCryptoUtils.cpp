@@ -157,7 +157,7 @@ namespace Briand {
 		return std::move(digest);
 	}
 
-	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::GetRelayCellDigest(unique_ptr<vector<unsigned char>>& relayCurrentDigest, const unique_ptr<vector<unsigned char>>& relayCellPayload) {
+	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::GetRelayCellDigest(unique_ptr<mbedtls_md_context_t>& relayCurrentDigest, const unique_ptr<vector<unsigned char>>& relayCellPayload) {
 		// Using mbedtls
 
 		auto mdInfo = mbedtls_md_info_from_type(MBEDTLS_MD_SHA1);
@@ -167,23 +167,19 @@ namespace Briand {
 		if (DEBUG) {
 			printf("[DEBUG] RELAY CELL DIGEST Raw message to encode: ");
 			BriandUtils::PrintByteBuffer(*relayCellPayload.get());
-			if (DEBUG) printf("[DEBUG] RELAY CELL DIGEST Seed to use: ");
-			BriandUtils::PrintByteBuffer(*relayCurrentDigest.get());
 		} 
-
-		auto mdCtx = make_unique<mbedtls_md_context_t>();
-
-		mbedtls_md_setup(mdCtx.get(), mdInfo, 0);
-		mbedtls_md_starts(mdCtx.get());
-		
-		// First: add seed
-		mbedtls_md_update(mdCtx.get(), relayCurrentDigest->data(), relayCurrentDigest->size());
 				
-		// Then add input bytes
-		mbedtls_md_update(mdCtx.get(), relayCellPayload->data(), relayCellPayload->size());
+		// Update with input bytes
+		mbedtls_md_update(relayCurrentDigest.get(), relayCellPayload->data(), relayCellPayload->size());
 
-		// Finalize
-		mbedtls_md_finish(mdCtx.get(), hashedMessageRaw.get());
+		// Make a copy and finalize
+		auto mdCopy = make_unique<mbedtls_md_context_t>();
+		mbedtls_md_setup(mdCopy.get(), mdInfo, 0);
+		mbedtls_md_clone(mdCopy.get(), relayCurrentDigest.get());
+		mbedtls_md_finish(mdCopy.get(), hashedMessageRaw.get());
+
+		// Free (MUST!)
+		mbedtls_md_free(mdCopy.get());
 
 		if (DEBUG) {
 			printf("[DEBUG] RELAY CELL DIGEST Raw output: ");
@@ -191,13 +187,6 @@ namespace Briand {
 		} 
 
 		auto digest = BriandUtils::ArrayToVector(hashedMessageRaw, mdInfo->size);
-
-		// Free (MUST!)
-		mbedtls_md_free(mdCtx.get());
-
-		// Save the new digest
-		relayCurrentDigest->clear();
-		relayCurrentDigest->insert(relayCurrentDigest->begin(), digest->begin(), digest->end());
 
 		return std::move(digest);
 	}
@@ -904,7 +893,7 @@ namespace Briand {
 
 		// Clear and simple:
 
-		if (DEBUG) printf("[DEBUG] Generating keys with HKDF...");
+		if (DEBUG) printf("[DEBUG] Generating keys with HKDF.\n");
 
 		unsigned short KEY_LEN = 16;
 	   	unsigned short HASH_LEN = 20;
@@ -963,24 +952,28 @@ namespace Briand {
 		auth_verify.reset();
 
 		// This field is updated with SHA1 hash when relay cells are sent but not finalized itself!
-	   	relay.KEY_ForwardDigest_Df = make_unique<vector<unsigned char>>();
-		relay.KEY_ForwardDigest_Df->insert(relay.KEY_ForwardDigest_Df->begin(), hkdf->begin(), hkdf->begin() + HASH_LEN);
-		hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
+	   	relay.KEY_ForwardDigest_Df = make_unique<mbedtls_md_context_t>();
+		mbedtls_md_setup(relay.KEY_ForwardDigest_Df.get(), mbedtls_md_info_from_type(MBEDTLS_MD_SHA1), 0);
+		mbedtls_md_update(relay.KEY_ForwardDigest_Df.get(), hkdf->data(), HASH_LEN);
 
 		if (DEBUG) {
-			printf("[DEBUG] Relay digest forward: ");
-			BriandUtils::PrintByteBuffer(*relay.KEY_ForwardDigest_Df.get());
+			printf("[DEBUG] Relay digest forward seed: ");
+			BriandUtils::PrintByteBuffer(*hkdf.get(), 0, HASH_LEN);
 		}
+
+		hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
 
 		// This field is updated with SHA1 hash when relay cells are received but not finalized itself!
-		relay.KEY_BackwardDigest_Db = make_unique<vector<unsigned char>>();
-		relay.KEY_BackwardDigest_Db->insert(relay.KEY_BackwardDigest_Db->begin(), hkdf->begin(), hkdf->begin() + HASH_LEN);
-		hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
-		
+		relay.KEY_BackwardDigest_Db = make_unique<mbedtls_md_context_t>();
+		mbedtls_md_setup(relay.KEY_BackwardDigest_Db.get(), mbedtls_md_info_from_type(MBEDTLS_MD_SHA1), 0);
+		mbedtls_md_update(relay.KEY_BackwardDigest_Db.get(), hkdf->data(), HASH_LEN);
+
 		if (DEBUG) {
-			printf("[DEBUG] Relay digest backward: ");
-			BriandUtils::PrintByteBuffer(*relay.KEY_BackwardDigest_Db.get());
+			printf("[DEBUG] Relay digest backward seed: ");
+			BriandUtils::PrintByteBuffer(*hkdf.get(), 0, HASH_LEN);
 		}
+
+		hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
 
 		relay.KEY_Forward_Kf = make_unique<vector<unsigned char>>();
 		relay.KEY_Forward_Kf->insert(relay.KEY_Forward_Kf->begin(), hkdf->begin(), hkdf->begin() + KEY_LEN);
@@ -1010,7 +1003,7 @@ namespace Briand {
 
 		hkdf.reset();
 		
-		if (DEBUG) printf("done!\n");
+		if (DEBUG) printf("[DEBUG] All done!\n");
 
 		return true;
 	}

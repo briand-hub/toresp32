@@ -105,8 +105,16 @@ namespace Briand
 		/**
 		 * Convert a command to a readable string
 		 * @param command Cell command 
+		 * @return string of command
 		*/
 		static string BriandTorCellCommandToString(const Briand::BriandTorCellCommand& command);
+
+		/**
+		 * Convert a RELAY command to a readable string
+		 * @param command Relay Cell command 
+		 * @return string of command
+		*/
+		static string BriandTorRelayCellCommandToString(const Briand::BriandTorCellRelayCommand& command);
 
 		/**
 		 * Method return a pointer to an old-style buffer, initialized all to zero

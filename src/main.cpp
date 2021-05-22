@@ -246,6 +246,11 @@ void TorEsp32Setup() {
 	STA_HOSTNAME->append( Briand::BriandUtils::GetRandomHostName().get() );
 	AP_HOSTNAME->append( Briand::BriandUtils::GetRandomHostName().get() );
 	
+	// High processor frequency
+	if (VERBOSE) printf("[INFO] Setting CPU speed to 240MHz\n");
+	Briand::BriandESPDevice::SetCpuFreqMHz(240);
+	if (VERBOSE) printf("[INFO] Current CPU speed is %lu MHz.\n", Briand::BriandESPDevice::GetCpuFreqMHz());
+
     // Print welcome
     printLogo();
 

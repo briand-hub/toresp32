@@ -2,11 +2,16 @@
 
 ## Next steps
 
-* Resolve EXTEND2 failures
+* EXTEND with exit not working
 * Change the "old" buffer-copy to vector->data() to optimize memory usage
 * Find a way to get a small-size official consensus from directories
 * Simplify code in TorCircuit class
 * Authenticate cell? => Prepare stub method to authenticate client
+
+## 2021-05-22
+
+* EXTEND2 working, success on building the first hop!
+* Resolved EXTEND2 failures due to a mistake on fingerprint length
 
 ## 2021-05-15
 

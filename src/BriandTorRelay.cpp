@@ -87,9 +87,17 @@ namespace Briand {
 		if(this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH != nullptr) this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH.reset();
 		if(this->KEYSEED != nullptr) this->KEYSEED.reset();
 		if(this->KEY_Backward_Kb != nullptr) this->KEY_Backward_Kb.reset();
-		if(this->KEY_BackwardDigest_Db != nullptr) this->KEY_BackwardDigest_Db.reset();
+		if(this->KEY_BackwardDigest_Db != nullptr) {
+			// mbedtls must free
+			mbedtls_md_free(this->KEY_BackwardDigest_Db.get());
+			this->KEY_BackwardDigest_Db.reset();
+		}
 		if(this->KEY_Forward_Kf != nullptr) this->KEY_Forward_Kf.reset();
-		if(this->KEY_ForwardDigest_Df != nullptr) this->KEY_ForwardDigest_Df.reset();
+		if(this->KEY_ForwardDigest_Df != nullptr) {
+			// mbedtls must free
+			mbedtls_md_free(this->KEY_ForwardDigest_Df.get());
+			this->KEY_ForwardDigest_Df.reset();
+		} 
 		if(this->KEY_HiddenService_Nonce != nullptr) this->KEY_HiddenService_Nonce.reset();
 	}
 
@@ -432,10 +440,10 @@ namespace Briand {
 			BriandUtils::PrintByteBuffer( *this->KEY_Forward_Kf.get() );
 			printf("[DEBUG] Backward key: ");
 			BriandUtils::PrintByteBuffer( *this->KEY_Backward_Kb.get() );
-			printf("[DEBUG] Forward digest: ");
-			BriandUtils::PrintByteBuffer( *this->KEY_ForwardDigest_Df.get() );
-			printf("[DEBUG] Backward digest: ");
-			BriandUtils::PrintByteBuffer( *this->KEY_BackwardDigest_Db.get() );
+			//printf("[DEBUG] Forward digest seed: ");
+			///BriandUtils::PrintByteBuffer( *this->KEY_ForwardDigest_Df.get() );
+			//printf("[DEBUG] Backward digest seed: ");
+			//BriandUtils::PrintByteBuffer( *this->KEY_BackwardDigest_Db.get() );
 			printf("[DEBUG] Hidden service nonce: ");
 			BriandUtils::PrintByteBuffer( *this->KEY_HiddenService_Nonce.get() );
 		}

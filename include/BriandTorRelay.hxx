@@ -24,6 +24,7 @@
 
 // Crypto library chosen
 #include <mbedtls/ecdh.h>
+#include <mbedtls/md.h>
 
 #include "BriandTorCertificates.hxx"
 
@@ -87,9 +88,9 @@ namespace Briand {
 		/** ENCRYPTION AND DECRYPTION KEYS (available after the handshake is completed) */
 
 		/** This is the Df (forward digest) extracted from the HKDF-SHA256 handshaked data in Create2 or Extend2. WARNING: nullptr until handshake completed. */
-		unique_ptr<vector<unsigned char>> KEY_ForwardDigest_Df;
+		unique_ptr<mbedtls_md_context_t> KEY_ForwardDigest_Df;
 		/** This is the Db (backward digest) extracted from the HKDF-SHA256 handshaked data in Create2 or Extend2. WARNING: nullptr until handshake completed. */
-		unique_ptr<vector<unsigned char>> KEY_BackwardDigest_Db;
+		unique_ptr<mbedtls_md_context_t> KEY_BackwardDigest_Db;
 		/** This is the Kf (forward AES key, for encryption) extracted from the HKDF-SHA256 handshaked data in Create2 or Extend2. WARNING: nullptr until handshake completed. */
 		unique_ptr<vector<unsigned char>> KEY_Forward_Kf;
 		/** This is the Kb (backward AES key, for decryption) extracted from the HKDF-SHA256 handshaked data in Create2 or Extend2. WARNING: nullptr until handshake completed. */
