@@ -744,6 +744,10 @@ namespace Briand {
 		return this->StreamID;
 	}
 
+	unsigned short BriandTorCell::GetRecognized() {
+		return this->Recognized;
+	}
+
 	BriandTorCellRelayCommand BriandTorCell::GetRelayCommand() {
 		return this->RelayCommand;
 	}
@@ -862,6 +866,7 @@ namespace Briand {
 		}
 	}
 
+	/*
 	void BriandTorCell::ApplyOnionSkin(const unique_ptr<vector<unsigned char>>& key) {
 		// Encrypt all payload with AES128CTR
 		this->Payload = BriandTorCryptoUtils::AES128CTR_Encrypt(this->Payload, key);
@@ -870,6 +875,61 @@ namespace Briand {
 	void BriandTorCell::PeelOnionSkin(const unique_ptr<vector<unsigned char>>& key) {
 		// Decrypt all payload with AES128CTR
 		this->Payload = BriandTorCryptoUtils::AES128CTR_Decrypt(this->Payload, key);
+	}
+	*/
+
+	void BriandTorCell::ApplyOnionSkin(BriandTorRelay& relay) {
+		if (relay.AES_Forward_Context == nullptr) {
+			relay.AES_Forward_Context = make_unique<esp_aes_context>();
+			relay.AES_Forward_IV = make_unique<vector<unsigned char>>();
+			relay.AES_Forward_IV->insert(relay.AES_Forward_IV->begin(), 16, 0x00);
+			relay.AES_Forward_Nonce = make_unique<vector<unsigned char>>();
+			relay.AES_Forward_Nonce->insert(relay.AES_Forward_Nonce->begin(), 16, 0x00);
+			relay.AES_Forward_NonceOffset = 0;
+			esp_aes_init(relay.AES_Forward_Context.get());
+			esp_aes_setkey(relay.AES_Forward_Context.get(), relay.KEY_Forward_Kf->data(), relay.KEY_Forward_Kf->size()*8);
+		}
+
+		const unsigned int SIZE = this->Payload->size();
+		auto outBuf = BriandUtils::GetOneOldBuffer(SIZE);
+		esp_aes_crypt_ctr(
+			relay.AES_Forward_Context.get(), 
+			SIZE, 
+			&relay.AES_Forward_NonceOffset, 
+			relay.AES_Forward_Nonce->data(),
+			relay.AES_Forward_IV->data(),
+			this->Payload->data(),
+			outBuf.get()
+		);
+
+		this->Payload = BriandUtils::ArrayToVector(outBuf, SIZE);
+	}
+
+	void BriandTorCell::PeelOnionSkin(BriandTorRelay& relay) {
+		if (relay.AES_Backward_Context == nullptr) {
+			relay.AES_Backward_Context = make_unique<esp_aes_context>();
+			relay.AES_Backward_IV = make_unique<vector<unsigned char>>();
+			relay.AES_Backward_IV->insert(relay.AES_Backward_IV->begin(), 16, 0x00);
+			relay.AES_Backward_Nonce = make_unique<vector<unsigned char>>();
+			relay.AES_Backward_Nonce->insert(relay.AES_Backward_Nonce->begin(), 16, 0x00);
+			relay.AES_Backward_NonceOffset = 0;
+			esp_aes_init(relay.AES_Backward_Context.get());
+			esp_aes_setkey(relay.AES_Backward_Context.get(), relay.KEY_Backward_Kb->data(), relay.KEY_Backward_Kb->size()*8);
+		}
+
+		const unsigned int SIZE = this->Payload->size();
+		auto outBuf = BriandUtils::GetOneOldBuffer(SIZE);
+		esp_aes_crypt_ctr(
+			relay.AES_Backward_Context.get(), 
+			SIZE, 
+			&relay.AES_Backward_NonceOffset, 
+			relay.AES_Backward_Nonce->data(),
+			relay.AES_Backward_IV->data(),
+			this->Payload->data(),
+			outBuf.get()
+		);
+
+		this->Payload = BriandUtils::ArrayToVector(outBuf, SIZE);
 	}
 
 	bool BriandTorCell::BuildRelayCellFromPayload(unique_ptr<mbedtls_md_context_t>& digestBackward) {

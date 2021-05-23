@@ -120,7 +120,7 @@ namespace Briand {
 		 * Method generates keypair and saves informations (keys and client to server vector) on given relay
 		 * @param relay The relay to conclude handshake with. WARNING: MUST have initialized the ECDH_CURVE25519_CONTEXT, ECDH_CURVE25519_CLIENT_TO_SERVER, 
 		 * CREATED_EXTENDED_RESPONSE_SERVER_PK and CREATED_EXTENDED_RESPONSE_SERVER_AUTH fields. Fields are NOT cleared after the work.
-		 * @return true if success, false instead. If everything is ok, fields KEY_***** are populated.
+		 * @return true if success, false instead. If everything is ok, fields KEY_* and AES_* are populated.
 		*/
 		static bool NtorHandshakeComplete(BriandTorRelay& relay);
 
@@ -130,7 +130,7 @@ namespace Briand {
 		 * @param key The key
 		 * @return Pointer to encrypted content
 		*/
-		static unique_ptr<vector<unsigned char>> AES128CTR_Encrypt(const unique_ptr<vector<unsigned char>>& content, const unique_ptr<vector<unsigned char>>& key);
+		//static unique_ptr<vector<unsigned char>> AES128CTR_Encrypt(const unique_ptr<vector<unsigned char>>& content, const unique_ptr<vector<unsigned char>>& key);
 
 		/**
 		 * Method decrypt AES 128 CTR mode (all-zero IV/nonce)
@@ -138,24 +138,7 @@ namespace Briand {
 		 * @param key The key
 		 * @return Pointer to decrypted content
 		*/
-		static unique_ptr<vector<unsigned char>> AES128CTR_Decrypt(const unique_ptr<vector<unsigned char>>& content, const unique_ptr<vector<unsigned char>>& key);
-
-
-
-		/** WRONG METHOD
-		 * Method generates keypair and saves informations (keys and client to server vector) on given relay
-		 * @param relay The destination relay for handshake
-		 * @return true if success, false instead
-		*/
-		/* WRONG METHOD static bool ECDH_CURVE25519_GenKeys(BriandTorRelay& relay); */
-
-		/** WRONG METHOD
-		 * Method computes the shared secret after an ECDH operation 
-		 * @param serverToClient The ECDH server's response
-		 * @param relay The relay that answered for handshake
-		 * @return Pointer to the shared secret vector (bytes), empty if fails.
-		*/
-		/* WRONG METHOD  static unique_ptr<vector<unsigned char>> ECDH_CURVE25519_ComputeShared(const unique_ptr<vector<unsigned char>>& serverToClient, const BriandTorRelay& relay); */
+		//static unique_ptr<vector<unsigned char>> AES128CTR_Decrypt(const unique_ptr<vector<unsigned char>>& content, const unique_ptr<vector<unsigned char>>& key); 
 
 	};
 }

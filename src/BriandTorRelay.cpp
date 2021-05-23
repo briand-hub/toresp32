@@ -66,6 +66,14 @@ namespace Briand {
 		this->KEY_Forward_Kf = nullptr;
 		this->KEY_ForwardDigest_Df = nullptr;
 		this->KEY_HiddenService_Nonce = nullptr;
+		this->AES_Forward_Context = nullptr;
+		this->AES_Forward_IV = nullptr;
+		this->AES_Forward_Nonce = nullptr;
+		this->AES_Forward_NonceOffset = 0;
+		this->AES_Backward_Context = nullptr;
+		this->AES_Backward_IV = nullptr;
+		this->AES_Backward_Nonce = nullptr;
+		this->AES_Backward_NonceOffset = 0;
 	}
 
 	BriandTorRelay::~BriandTorRelay() {
@@ -97,8 +105,20 @@ namespace Briand {
 			// mbedtls must free
 			mbedtls_md_free(this->KEY_ForwardDigest_Df.get());
 			this->KEY_ForwardDigest_Df.reset();
-		} 
+		}
 		if(this->KEY_HiddenService_Nonce != nullptr) this->KEY_HiddenService_Nonce.reset();
+		if (this->AES_Forward_Context != nullptr) {
+			esp_aes_free(this->AES_Forward_Context.get());
+			this->AES_Forward_Context.reset();
+		}
+		this->AES_Forward_IV.reset();
+		this->AES_Forward_Nonce.reset();
+		if (this->AES_Backward_Context != nullptr) {
+			esp_aes_free(this->AES_Backward_Context.get());
+			this->AES_Backward_Context.reset();
+		}
+		this->AES_Backward_IV.reset();
+		this->AES_Backward_Nonce.reset();
 	}
 
 	string BriandTorRelay::GetHost() {

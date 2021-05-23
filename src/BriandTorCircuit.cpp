@@ -380,23 +380,22 @@ namespace Briand {
 		if (exitNode) {
 			if (!tempCell->BuildAsEXTEND2(*this->exitNode.get())) {
 				if (DEBUG) printf("[DEBUG] Failed on building cell EXTEND2 to exit.\n");
+				this->TearDown();
+				this->Cleanup();
 				return false;
 			}
 		}
 		else {
 			if (!tempCell->BuildAsEXTEND2(*this->middleNode.get())) {
 				if (DEBUG) printf("[DEBUG] Failed on building cell EXTEND2 to middle.\n");
+				this->TearDown();
+				this->Cleanup();
 				return false;
 			}
 		}
 
 		// Prepare a StreamID of all zeros (relay commands with [control] use all-zero streamid!)
 		unsigned short streamID = 0x0000;
-
-		// do {
-		// 	streamID += (BriandUtils::GetRandomByte() << 8);
-		// 	streamID += (BriandUtils::GetRandomByte() << 0);
-		// } while (streamID == 0x0000); 
 
 		if (DEBUG) printf("[DEBUG] StreamID is: %04X\n", streamID);
 
@@ -416,16 +415,22 @@ namespace Briand {
 		// Then encrypt
 		if (exitNode) {
 			// Encrypt with middle key
-			tempCell->ApplyOnionSkin(this->middleNode->KEY_Forward_Kf);
-			if (DEBUG) printf("[DEBUG] Applied MIDDLE onion skin.\n");
+			//tempCell->ApplyOnionSkin(this->middleNode->KEY_Forward_Kf);
+			tempCell->ApplyOnionSkin(*this->middleNode.get());
+			if (DEBUG) printf("[DEBUG] Applied MIDDLE onion skin, encrypted contents: ");
+			tempCell->PrintCellPayloadToSerial();
 			// Encrypt with guard key
-			tempCell->ApplyOnionSkin(this->guardNode->KEY_Forward_Kf);
-			if (DEBUG) printf("[DEBUG] Applied GUARD onion skin.\n");
+			//tempCell->ApplyOnionSkin(this->guardNode->KEY_Forward_Kf);
+			tempCell->ApplyOnionSkin(*this->guardNode.get());
+			if (DEBUG) printf("[DEBUG] Applied GUARD onion skin, encrypted contents: ");
+			tempCell->PrintCellPayloadToSerial();
 		}
 		else {
 			// Encrypt with guard key
-			tempCell->ApplyOnionSkin(this->guardNode->KEY_Forward_Kf);
-			if (DEBUG) printf("[DEBUG] Applied GUARD onion skin.\n");
+			//tempCell->ApplyOnionSkin(this->guardNode->KEY_Forward_Kf);
+			tempCell->ApplyOnionSkin(*this->guardNode.get());
+			if (DEBUG) printf("[DEBUG] Applied GUARD onion skin, encrypted contents: ");
+			tempCell->PrintCellPayloadToSerial();
 		}
 
 		if (DEBUG) printf("[DEBUG] EXTEND2 is going to be sent. Waiting for EXTENDED2.\n");
@@ -436,6 +441,7 @@ namespace Briand {
 
 		if (!tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION)) {
 			if (VERBOSE) printf("[ERR] Error, response cell had invalid bytes (failed to build from buffer).\n");
+			this->TearDown();
 			this->Cleanup();
 			return false;
 		}
@@ -443,12 +449,14 @@ namespace Briand {
 		// If a DESTROY given, tell me why
 		if (tempCell->GetCommand() == BriandTorCellCommand::DESTROY) {
 			if (VERBOSE) printf("[ERR] Error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
+			this->TearDown();
 			this->Cleanup();
 			return false;
 		}
 
 		if (tempCell->GetCommand() != BriandTorCellCommand::RELAY) {
 			if (VERBOSE) printf("[ERR] Error, response contains %s cell instead of RELAY. Failure.\n", BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
+			this->TearDown();
 			this->Cleanup();
 			return false;
 		}
@@ -458,23 +466,48 @@ namespace Briand {
 
 		// Decrypt payload of received cell
 		if (exitNode) {
-			tempCell->PeelOnionSkin(this->guardNode->KEY_Backward_Kb);
+			//tempCell->PeelOnionSkin(this->guardNode->KEY_Backward_Kb);
+			tempCell->PeelOnionSkin(*this->guardNode.get());
 			if (DEBUG) {
-				printf("[DEBUG] Removed GUARD onion skin.\n");
+				printf("[DEBUG] Removed GUARD onion skin with Kb key: ");
+				BriandUtils::PrintByteBuffer(*this->guardNode->KEY_Backward_Kb.get());
 				printf("[DEBUG] RELAY cell payload after decryption: ");
 				tempCell->PrintCellPayloadToSerial();
 			} 
-			tempCell->PeelOnionSkin(this->middleNode->KEY_Backward_Kb);
+
+			// Check if the cell is recognized
+
+			if (tempCell->BuildRelayCellFromPayload(this->guardNode->KEY_BackwardDigest_Db) && tempCell->GetRecognized() == 0x0000) {
+				// Have been recognized, if this is true here, an error occoured...
+				BriandTorCellRelayCommand unexpectedCmd = tempCell->GetRelayCommand();
+				if (DEBUG) {
+					printf("[DEBUG] RELAY recognized at Guard, something wrong, cell relay command is: %s. Payload: ", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+					tempCell->PrintCellPayloadToSerial();
+				}
+
+				if (VERBOSE) printf("[ERR] Error on extending to exit node, received unexpected cell %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+				this->TearDown();
+				this->Cleanup();
+				return false;
+			}
+
+			// If not, then peel out the middle node skin
+
+			//tempCell->PeelOnionSkin(this->middleNode->KEY_Backward_Kb);
+			tempCell->PeelOnionSkin(*this->middleNode.get());
 			if (DEBUG) {
-				printf("[DEBUG] Removed MIDDLE onion skin.\n");
+				printf("[DEBUG] Removed MIDDLE onion skin with Kb key: ");
+				BriandUtils::PrintByteBuffer(*this->middleNode->KEY_Backward_Kb.get());
 				printf("[DEBUG] RELAY cell payload after decryption: ");
 				tempCell->PrintCellPayloadToSerial();
 			} 
 		}
 		else {
-			tempCell->PeelOnionSkin(this->guardNode->KEY_Backward_Kb);
+			//tempCell->PeelOnionSkin(this->guardNode->KEY_Backward_Kb);
+			tempCell->PeelOnionSkin(*this->guardNode.get());
 			if (DEBUG) {
-				printf("[DEBUG] Removed GUARD onion skin.\n");
+				printf("[DEBUG] Removed GUARD onion skin with Kb key: ");
+				BriandUtils::PrintByteBuffer(*this->guardNode->KEY_Backward_Kb.get());
 				printf("[DEBUG] RELAY cell payload after decryption: ");
 				tempCell->PrintCellPayloadToSerial();
 			} 
@@ -483,17 +516,20 @@ namespace Briand {
 		// Adjust the payload and verify RELAY cell header
 		if (exitNode && !tempCell->BuildRelayCellFromPayload(this->middleNode->KEY_BackwardDigest_Db)) {
 			if (VERBOSE) printf("[ERR] Error on rebuilding RELAY cell informations from exit node, invalid cell.\n");
+			this->TearDown();
 			this->Cleanup();
 			return false;
 		}
 		else if (!tempCell->BuildRelayCellFromPayload(this->guardNode->KEY_BackwardDigest_Db)) {
 			if (VERBOSE) printf("[ERR] Error on rebuilding RELAY cell informations from middle node, invalid cell.\n");
+			this->TearDown();
 			this->Cleanup();
 			return false;
 		}
 
 		if (tempCell->GetRelayCommand() != BriandTorCellRelayCommand::RELAY_EXTENDED2) {
 			if (DEBUG) printf("[DEBUG] Expected EXTENDED2 but received %s\n", BriandUtils::BriandTorRelayCellCommandToString(tempCell->GetRelayCommand()).c_str());
+			this->TearDown();
 			this->Cleanup();
 			return false;
 		}

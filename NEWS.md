@@ -2,7 +2,11 @@
 
 ## Next steps
 
+* !!! Implement a vector of nodes.
+
 * EXTEND with exit not working
+* Verify all digest and check updates
+
 * Change the "old" buffer-copy to vector->data() to optimize memory usage
 * Find a way to get a small-size official consensus from directories
 * Simplify code in TorCircuit class

@@ -1008,12 +1008,13 @@ namespace Briand {
 		return true;
 	}
 
+/*
 	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::AES128CTR_Encrypt(const unique_ptr<vector<unsigned char>>& content, const unique_ptr<vector<unsigned char>>& key) {
 		constexpr unsigned short BLOCK_SIZE_BYTES = 16;
 			
 		unsigned int INPUT_SIZE = content->size();
 		unsigned char iv[BLOCK_SIZE_BYTES] = { 0x00 }; // zero-init IV
-		unsigned int nonce_size = 0;
+		unsigned int nonce_offset = 0;
 		unsigned char nonce_counter[BLOCK_SIZE_BYTES] = { 0x00 };
 		auto outBuffer = make_unique<unsigned char[]>(INPUT_SIZE);
 
@@ -1024,9 +1025,9 @@ namespace Briand {
 		
 		// Set ENC key, first param context pointer, second the key, third the key-len in BITS
 		esp_aes_setkey(&aes_context, key->data(), key->size() * 8);
-		
+
 		// Encrypt (only CBC mode makes 16-bytes per round, CTR has not this problem with input)
-		esp_aes_crypt_ctr(&aes_context, INPUT_SIZE, &nonce_size, nonce_counter, iv, content->data(), outBuffer.get());
+		esp_aes_crypt_ctr(&aes_context, INPUT_SIZE, &nonce_offset, nonce_counter, iv, content->data(), outBuffer.get());
 
 		// Free context
 		esp_aes_free(&aes_context);
@@ -1038,7 +1039,7 @@ namespace Briand {
 		constexpr unsigned short BLOCK_SIZE_BYTES = 16;
 			
 		unsigned char iv[BLOCK_SIZE_BYTES] = { 0x00 };			// zero-init IV
-		size_t nonce_size = 0;
+		size_t nonce_offset = 0;
 		unsigned char nonce_counter[BLOCK_SIZE_BYTES] = { 0x00 };
 		auto outBuffer = make_unique<unsigned char[]>(content->size());
 
@@ -1050,8 +1051,8 @@ namespace Briand {
 		// Set ENC key, first param context pointer, second the key, third the key-len in BITS
 		esp_aes_setkey(&aes_context, key->data(), key->size() * 8);
 
-		// Encrypt (only CBC mode makes 16-bytes per round, CTR has not this problem with input)
-		esp_aes_crypt_ctr(&aes_context, content->size(), &nonce_size, nonce_counter, iv, content->data(), outBuffer.get());
+		// Decrypt (only CBC mode makes 16-bytes per round, CTR has not this problem with input)
+		esp_aes_crypt_ctr(&aes_context, content->size(), &nonce_offset, nonce_counter, iv, content->data(), outBuffer.get());
 
 		// Free context
 		esp_aes_free(&aes_context);
@@ -1059,4 +1060,5 @@ namespace Briand {
 		return std::move( BriandUtils::ArrayToVector(outBuffer, content->size()) );
 	}
 
+*/
 }

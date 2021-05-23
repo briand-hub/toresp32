@@ -231,19 +231,27 @@ namespace Briand {
 		 * Method applies the onion skin (AES128CTR) to the cell's payload with the given key.
 		 * @param key Encryption key
 		*/
-		void ApplyOnionSkin(const unique_ptr<vector<unsigned char>>& key);
+		//void ApplyOnionSkin(const unique_ptr<vector<unsigned char>>& key);
+		void ApplyOnionSkin(BriandTorRelay& relay);
 
 		/**
 		 * Method peels out the onion skin (AES128CTR) to the cell's payload with the given key.
 		 * @param key Decryption key
 		*/
-		void PeelOnionSkin(const unique_ptr<vector<unsigned char>>& key);
+		//void PeelOnionSkin(const unique_ptr<vector<unsigned char>>& key);
+		void PeelOnionSkin(BriandTorRelay& relay);
 
 		/** 
-		 * Obtain the cell's StreamID 
+		 * Returns the relay cell's StreamID 
 		 * @return the stream ID
 		*/
 		unsigned short GetStreamID();
+
+		/** 
+		 * Returns the relay cell's Recognized 
+		 * @return the stream ID
+		*/
+		unsigned short GetRecognized();
 
 		/** 
 		 * Prepare this as a RELAY cell header for sending a relay cell, based on the current cell->Payload that MUST be ready (not encrypted)  

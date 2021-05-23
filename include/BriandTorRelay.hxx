@@ -25,6 +25,7 @@
 // Crypto library chosen
 #include <mbedtls/ecdh.h>
 #include <mbedtls/md.h>
+#include <esp32/aes.h>
 
 #include "BriandTorCertificates.hxx"
 
@@ -85,7 +86,7 @@ namespace Briand {
 		/** KEYSEED calculated after receiving CREATED2 or EXTENDED2 cell WARNING: will be used and then released so never use without check if nullptr! */
 		unique_ptr<vector<unsigned char>> KEYSEED;
 
-		/** ENCRYPTION AND DECRYPTION KEYS (available after the handshake is completed) */
+		/** ENCRYPTION AND DECRYPTION STUFF (available after the handshake is completed) */
 
 		/** This is the Df (forward digest) extracted from the HKDF-SHA256 handshaked data in Create2 or Extend2. WARNING: nullptr until handshake completed. */
 		unique_ptr<mbedtls_md_context_t> KEY_ForwardDigest_Df;
@@ -97,6 +98,18 @@ namespace Briand {
 		unique_ptr<vector<unsigned char>> KEY_Backward_Kb;
 		/** This is a nonce used in HiddenServices in place of  extracted from the HKDF-SHA256 handshaked data in Create2 or Extend2. WARNING: nullptr until handshake completed. */
 		unique_ptr<vector<unsigned char>> KEY_HiddenService_Nonce;
+
+
+		unique_ptr<esp_aes_context> AES_Forward_Context;
+		unsigned int AES_Forward_NonceOffset;
+		unique_ptr<vector<unsigned char>> AES_Forward_IV;
+		unique_ptr<vector<unsigned char>> AES_Forward_Nonce;
+		
+		unique_ptr<esp_aes_context> AES_Backward_Context;
+		unsigned int AES_Backward_NonceOffset;
+		unique_ptr<vector<unsigned char>> AES_Backward_IV;
+		unique_ptr<vector<unsigned char>> AES_Backward_Nonce;
+
 
 		// ------------------------------
 
