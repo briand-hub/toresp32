@@ -866,70 +866,14 @@ namespace Briand {
 		}
 	}
 
-	/*
-	void BriandTorCell::ApplyOnionSkin(const unique_ptr<vector<unsigned char>>& key) {
-		// Encrypt all payload with AES128CTR
-		this->Payload = BriandTorCryptoUtils::AES128CTR_Encrypt(this->Payload, key);
-	}
-
-	void BriandTorCell::PeelOnionSkin(const unique_ptr<vector<unsigned char>>& key) {
-		// Decrypt all payload with AES128CTR
-		this->Payload = BriandTorCryptoUtils::AES128CTR_Decrypt(this->Payload, key);
-	}
-	*/
-
 	void BriandTorCell::ApplyOnionSkin(BriandTorRelay& relay) {
-		if (relay.AES_Forward_Context == nullptr) {
-			relay.AES_Forward_Context = make_unique<esp_aes_context>();
-			relay.AES_Forward_IV = make_unique<vector<unsigned char>>();
-			relay.AES_Forward_IV->insert(relay.AES_Forward_IV->begin(), 16, 0x00);
-			relay.AES_Forward_Nonce = make_unique<vector<unsigned char>>();
-			relay.AES_Forward_Nonce->insert(relay.AES_Forward_Nonce->begin(), 16, 0x00);
-			relay.AES_Forward_NonceOffset = 0;
-			esp_aes_init(relay.AES_Forward_Context.get());
-			esp_aes_setkey(relay.AES_Forward_Context.get(), relay.KEY_Forward_Kf->data(), relay.KEY_Forward_Kf->size()*8);
-		}
-
-		const unsigned int SIZE = this->Payload->size();
-		auto outBuf = BriandUtils::GetOneOldBuffer(SIZE);
-		esp_aes_crypt_ctr(
-			relay.AES_Forward_Context.get(), 
-			SIZE, 
-			&relay.AES_Forward_NonceOffset, 
-			relay.AES_Forward_Nonce->data(),
-			relay.AES_Forward_IV->data(),
-			this->Payload->data(),
-			outBuf.get()
-		);
-
-		this->Payload = BriandUtils::ArrayToVector(outBuf, SIZE);
+		// Encrypt all payload with AES128CTR
+		this->Payload = BriandTorCryptoUtils::AES128CTR_Encrypt(this->Payload, relay);
 	}
 
 	void BriandTorCell::PeelOnionSkin(BriandTorRelay& relay) {
-		if (relay.AES_Backward_Context == nullptr) {
-			relay.AES_Backward_Context = make_unique<esp_aes_context>();
-			relay.AES_Backward_IV = make_unique<vector<unsigned char>>();
-			relay.AES_Backward_IV->insert(relay.AES_Backward_IV->begin(), 16, 0x00);
-			relay.AES_Backward_Nonce = make_unique<vector<unsigned char>>();
-			relay.AES_Backward_Nonce->insert(relay.AES_Backward_Nonce->begin(), 16, 0x00);
-			relay.AES_Backward_NonceOffset = 0;
-			esp_aes_init(relay.AES_Backward_Context.get());
-			esp_aes_setkey(relay.AES_Backward_Context.get(), relay.KEY_Backward_Kb->data(), relay.KEY_Backward_Kb->size()*8);
-		}
-
-		const unsigned int SIZE = this->Payload->size();
-		auto outBuf = BriandUtils::GetOneOldBuffer(SIZE);
-		esp_aes_crypt_ctr(
-			relay.AES_Backward_Context.get(), 
-			SIZE, 
-			&relay.AES_Backward_NonceOffset, 
-			relay.AES_Backward_Nonce->data(),
-			relay.AES_Backward_IV->data(),
-			this->Payload->data(),
-			outBuf.get()
-		);
-
-		this->Payload = BriandUtils::ArrayToVector(outBuf, SIZE);
+		// Decrypt all payload with AES128CTR
+		this->Payload = BriandTorCryptoUtils::AES128CTR_Decrypt(this->Payload, relay);
 	}
 
 	bool BriandTorCell::BuildRelayCellFromPayload(unique_ptr<mbedtls_md_context_t>& digestBackward) {
@@ -965,59 +909,164 @@ namespace Briand {
 
 		// Get the relay command
 		this->RelayCommand = static_cast<BriandTorCellRelayCommand>( this->Payload->at(0) );
-		cellTotalSizeBytes -= 1;
-		this->Payload->erase(this->Payload->begin());
+
 		if (DEBUG) printf("[DEBUG] RELAY Cell command is %s\n", BriandUtils::BriandTorRelayCellCommandToString(this->RelayCommand).c_str());
 
 		// Get the recognized field
-		this->Recognized = static_cast<unsigned short>( this->Payload->at(0) << 8 );
-		this->Recognized += static_cast<unsigned short>( this->Payload->at(1) );
-		this->Payload->erase(this->Payload->begin(), this->Payload->begin() + 2);
-		cellTotalSizeBytes -= 2;
+		this->Recognized = static_cast<unsigned short>( this->Payload->at(1) << 8 );
+		this->Recognized += static_cast<unsigned short>( this->Payload->at(2) );
+
 		if (DEBUG) printf("[DEBUG] RELAY Cell recognized: %04X\n", this->Recognized );
 
 		// Get the streamid field
-		this->StreamID = static_cast<unsigned short>( this->Payload->at(0) << 8 );
-		this->StreamID += static_cast<unsigned short>( this->Payload->at(1) );
-		this->Payload->erase(this->Payload->begin(), this->Payload->begin() + 2);
-		cellTotalSizeBytes -= 2;
+		this->StreamID = static_cast<unsigned short>( this->Payload->at(3) << 8 );
+		this->StreamID += static_cast<unsigned short>( this->Payload->at(4) );
+
 		if (DEBUG) printf("[DEBUG] RELAY Cell StreamID: %04X\n", this->StreamID);
 
 		// Get the Digest field
-		this->Digest = static_cast<unsigned int>( this->Payload->at(0) << 24 );
-		this->Digest += static_cast<unsigned int>( this->Payload->at(1) << 16 );
-		this->Digest += static_cast<unsigned int>( this->Payload->at(2) << 8 );
-		this->Digest += static_cast<unsigned int>( this->Payload->at(3) );
-		this->Payload->erase(this->Payload->begin(), this->Payload->begin() + 4);
-		cellTotalSizeBytes -= 4;
+		this->Digest = static_cast<unsigned int>( this->Payload->at(5) << 24 );
+		this->Digest += static_cast<unsigned int>( this->Payload->at(6) << 16 );
+		this->Digest += static_cast<unsigned int>( this->Payload->at(7) << 8 );
+		this->Digest += static_cast<unsigned int>( this->Payload->at(8) );
+
 		if (DEBUG) printf("[DEBUG] RELAY Cell Digest: %08X\n", this->Digest);
 		
-		//
-		// TODO: verify digest and update backward digest
-		//
+		// Update the digest field to all zeros
+		for (unsigned char i=5; i<=8; i++)
+			this->Payload->at(i) = 0x00;
 
-		// Get the length field
-		unsigned short payloadLength = 0x0000;
-		payloadLength = static_cast<unsigned short>( this->Payload->at(0) << 8 );
-		payloadLength += static_cast<unsigned short>( this->Payload->at(1) );
-		this->Payload->erase(this->Payload->begin(), this->Payload->begin() + 2);
-		cellTotalSizeBytes -= 2;
-		if (DEBUG) printf("[DEBUG] RELAY Cell real payload Length: %04X\n", payloadLength);
+		// Calculate digest and update Backward digest
+		auto digest = BriandTorCryptoUtils::GetRelayCellDigest(digestBackward, this->Payload);
+		unsigned int calculatedDigest = 0x00000000;
+		calculatedDigest += static_cast<unsigned int>( digest->at(0) << 24 );
+		calculatedDigest += static_cast<unsigned int>( digest->at(1) << 16 );
+		calculatedDigest += static_cast<unsigned int>( digest->at(2) << 8 );
+		calculatedDigest += static_cast<unsigned int>( digest->at(3) );
 
-		// check if enough size for payload
-		if (this->Payload->size() < payloadLength) {
-			if (DEBUG) printf("[DEBUG] RELAY Cell real payload length is of %u bytes but buffer has only %d\n", payloadLength, this->Payload->size());
+		// Check the digest matching
+		if (this->Digest != calculatedDigest) {
+			if (DEBUG) printf("[DEBUG] Calculated backward digest %08X does not match cell backward digest %08X\n.", this->Digest, calculatedDigest);
 			return false;
 		}
 
-		cellTotalSizeBytes -= this->Payload->size();
+		// Get the length field
+		unsigned short payloadLength = 0x0000;
+		payloadLength = static_cast<unsigned short>( this->Payload->at(9) << 8 );
+		payloadLength += static_cast<unsigned short>( this->Payload->at(10) );
+
+		if (DEBUG) printf("[DEBUG] RELAY Cell real payload Length: %04X\n", payloadLength);
+
+		// check if enough size for payload
+		if (this->Payload->size() < payloadLength + 11) {
+			if (DEBUG) printf("[DEBUG] RELAY Cell real payload length is of %u bytes but buffer has only %d\n", payloadLength + 11, this->Payload->size());
+			return false;
+		}
+
+		// Remove header informations
+		this->Payload->erase(this->Payload->begin(), this->Payload->begin() + 11);
 
 		// REAL Payload, exclude padding bytes.
 		this->Payload->erase(this->Payload->begin() + payloadLength, this->Payload->end());
+		
 		if (DEBUG) printf("[DEBUG] RELAY real Payload size is now %d bytes.\n", this->Payload->size());
-
-		cellTotalSizeBytes += this->Payload->size();
 
 		return true;
 	}
+
+	bool BriandTorCell::IsRelayCellRecognized(const unsigned short& streamID, const unique_ptr<mbedtls_md_context_t>& digestBackward) {
+		// Check if RELAY or RELAY_EARLY command
+		if (this->Command != BriandTorCellCommand::RELAY && this->Command != BriandTorCellCommand::RELAY_EARLY) {
+			if (DEBUG) printf("[DEBUG] Cell is not a RELAY cell! Command is %s\n", Briand::BriandUtils::BriandTorCellCommandToString(this->Command).c_str() );
+			return false;
+		}
+
+		// A RELAY cell PAYLOAD contains:
+
+		/*
+			Relay command           [1 byte]
+			'Recognized'            [2 bytes]
+			StreamID                [2 bytes]
+			Digest                  [4 bytes]
+			Length                  [2 bytes]
+			Data                    [Length bytes]
+			Padding                 [PAYLOAD_LEN - 11 - Length bytes]
+		*/
+
+		// Check if enough payload size
+		if (this->Payload->size() < 11) {
+			if (DEBUG) printf("[DEBUG] RELAY Cell has too poor bytes.\n");
+			return false;
+		}
+
+		// Get the recognized field
+		unsigned short cellRecognized = 0x0000;
+		cellRecognized += static_cast<unsigned short>( this->Payload->at(1) << 8 );
+		cellRecognized += static_cast<unsigned short>( this->Payload->at(2) );
+
+		if (cellRecognized != 0) {
+			if (DEBUG) {
+				printf("[DEBUG] Cell is not recognized.\n");
+			}
+
+			return false;
+		}
+
+		// Get the streamID field
+		unsigned short cellStreamID = 0x0000;
+		cellStreamID += static_cast<unsigned short>( this->Payload->at(3) << 8 );
+		cellStreamID += static_cast<unsigned short>( this->Payload->at(4) );
+
+		if (cellStreamID != streamID) {
+			if (DEBUG) {
+				printf("[DEBUG] Cell StreamID does not match the expected one, unrecognized.\n");
+			}
+
+			return false;
+		}
+
+		// Get the digest field
+		unsigned int cellDigest = 0x00000000;
+		cellDigest += static_cast<unsigned int>( this->Payload->at(5) << 24 );
+		cellDigest += static_cast<unsigned int>( this->Payload->at(6) << 16 );
+		cellDigest += static_cast<unsigned int>( this->Payload->at(7) << 8 );
+		cellDigest += static_cast<unsigned int>( this->Payload->at(8) );
+
+		// Make a copy of the Payload
+		auto payloadCopy = make_unique<vector<unsigned char>>();
+		payloadCopy->insert(payloadCopy->begin(), this->Payload->begin(), this->Payload->end());
+		// but set the digest field to zero
+		for (unsigned char i=5; i<=8; i++)
+			payloadCopy->at(i) = 0x00;
+
+		// Make a copy of the backward digest and calculate it.
+		auto digestCopy = make_unique<mbedtls_md_context_t>();
+		mbedtls_md_setup(digestCopy.get(), digestBackward->md_info, 0);
+		mbedtls_md_clone(digestCopy.get(), digestBackward.get());
+
+		// Finish the digest
+		auto calculatedDigest = BriandTorCryptoUtils::GetRelayCellDigest(digestCopy, payloadCopy);
+		unsigned int cellCalculatedDigest = 0x00000000;
+		cellCalculatedDigest += static_cast<unsigned int>( calculatedDigest->at(0) << 24 );
+		cellCalculatedDigest += static_cast<unsigned int>( calculatedDigest->at(1) << 16 );
+		cellCalculatedDigest += static_cast<unsigned int>( calculatedDigest->at(2) << 8 );
+		cellCalculatedDigest += static_cast<unsigned int>( calculatedDigest->at(3) );
+		
+		// Free memory
+		mbedtls_md_free(digestCopy.get());
+		digestCopy.reset();
+		payloadCopy.reset();
+		calculatedDigest.reset();
+
+		if (cellCalculatedDigest != cellDigest) {
+			if (DEBUG) {
+				printf("[DEBUG] Cell backward calculated digest %08X does not match received backward digest %08X, unrecognized.\n", cellCalculatedDigest, cellDigest);
+			}
+
+			return false;
+		}
+
+		return true;
+	}
+
 }

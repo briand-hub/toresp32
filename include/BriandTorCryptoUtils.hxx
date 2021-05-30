@@ -125,20 +125,21 @@ namespace Briand {
 		static bool NtorHandshakeComplete(BriandTorRelay& relay);
 
 		/**
-		 * Method encrypt AES 128 CTR mode (all-zero IV/nonce)
+		 * Method encrypt AES 128 CTR mode going to the specified relay
 		 * @param content The content
-		 * @param key The key
+		 * @param relay The destination relay
 		 * @return Pointer to encrypted content
 		*/
 		//static unique_ptr<vector<unsigned char>> AES128CTR_Encrypt(const unique_ptr<vector<unsigned char>>& content, const unique_ptr<vector<unsigned char>>& key);
+		static unique_ptr<vector<unsigned char>> AES128CTR_Encrypt(const unique_ptr<vector<unsigned char>>& content, BriandTorRelay& relay);
 
 		/**
-		 * Method decrypt AES 128 CTR mode (all-zero IV/nonce)
+		 * Method decrypt AES 128 CTR mode coming from the specified relay
 		 * @param content The content
-		 * @param key The key
+		 * @param relay The source relay
 		 * @return Pointer to decrypted content
 		*/
-		//static unique_ptr<vector<unsigned char>> AES128CTR_Decrypt(const unique_ptr<vector<unsigned char>>& content, const unique_ptr<vector<unsigned char>>& key); 
+		static unique_ptr<vector<unsigned char>> AES128CTR_Decrypt(const unique_ptr<vector<unsigned char>>& content, BriandTorRelay& relay); 
 
 	};
 }

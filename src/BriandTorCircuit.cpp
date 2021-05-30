@@ -415,20 +415,17 @@ namespace Briand {
 		// Then encrypt
 		if (exitNode) {
 			// Encrypt with middle key
-			//tempCell->ApplyOnionSkin(this->middleNode->KEY_Forward_Kf);
-			tempCell->ApplyOnionSkin(*this->middleNode.get());
+			tempCell->ApplyOnionSkin(*this->middleNode);
 			if (DEBUG) printf("[DEBUG] Applied MIDDLE onion skin, encrypted contents: ");
 			tempCell->PrintCellPayloadToSerial();
-			// Encrypt with guard key
-			//tempCell->ApplyOnionSkin(this->guardNode->KEY_Forward_Kf);
-			tempCell->ApplyOnionSkin(*this->guardNode.get());
+			// Encrypt with guard keyù
+			tempCell->ApplyOnionSkin(*this->guardNode);
 			if (DEBUG) printf("[DEBUG] Applied GUARD onion skin, encrypted contents: ");
 			tempCell->PrintCellPayloadToSerial();
 		}
 		else {
 			// Encrypt with guard key
-			//tempCell->ApplyOnionSkin(this->guardNode->KEY_Forward_Kf);
-			tempCell->ApplyOnionSkin(*this->guardNode.get());
+			tempCell->ApplyOnionSkin(*this->guardNode);
 			if (DEBUG) printf("[DEBUG] Applied GUARD onion skin, encrypted contents: ");
 			tempCell->PrintCellPayloadToSerial();
 		}
@@ -466,8 +463,8 @@ namespace Briand {
 
 		// Decrypt payload of received cell
 		if (exitNode) {
-			//tempCell->PeelOnionSkin(this->guardNode->KEY_Backward_Kb);
-			tempCell->PeelOnionSkin(*this->guardNode.get());
+			tempCell->PeelOnionSkin(*this->guardNode);
+
 			if (DEBUG) {
 				printf("[DEBUG] Removed GUARD onion skin with Kb key: ");
 				BriandUtils::PrintByteBuffer(*this->guardNode->KEY_Backward_Kb.get());
@@ -477,8 +474,9 @@ namespace Briand {
 
 			// Check if the cell is recognized
 
-			if (tempCell->BuildRelayCellFromPayload(this->guardNode->KEY_BackwardDigest_Db) && tempCell->GetRecognized() == 0x0000) {
+			if (tempCell->IsRelayCellRecognized(0x0000, this->guardNode->KEY_BackwardDigest_Db)) {
 				// Have been recognized, if this is true here, an error occoured...
+				tempCell->BuildRelayCellFromPayload(this->guardNode->KEY_BackwardDigest_Db);
 				BriandTorCellRelayCommand unexpectedCmd = tempCell->GetRelayCommand();
 				if (DEBUG) {
 					printf("[DEBUG] RELAY recognized at Guard, something wrong, cell relay command is: %s. Payload: ", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
@@ -492,25 +490,44 @@ namespace Briand {
 			}
 
 			// If not, then peel out the middle node skin
+			
+			tempCell->PeelOnionSkin(*this->middleNode);
 
-			//tempCell->PeelOnionSkin(this->middleNode->KEY_Backward_Kb);
-			tempCell->PeelOnionSkin(*this->middleNode.get());
 			if (DEBUG) {
 				printf("[DEBUG] Removed MIDDLE onion skin with Kb key: ");
 				BriandUtils::PrintByteBuffer(*this->middleNode->KEY_Backward_Kb.get());
 				printf("[DEBUG] RELAY cell payload after decryption: ");
 				tempCell->PrintCellPayloadToSerial();
 			} 
+
+			// Check if cell is recognized 
+
+			if (!tempCell->IsRelayCellRecognized(0x0000, this->middleNode->KEY_BackwardDigest_Db)) {
+				if (DEBUG) printf("[DEBUG] Cell has not been recognized, failure.\n");
+				this->TearDown();
+				this->Cleanup();
+				return false;
+			}
 		}
 		else {
 			//tempCell->PeelOnionSkin(this->guardNode->KEY_Backward_Kb);
-			tempCell->PeelOnionSkin(*this->guardNode.get());
+			tempCell->PeelOnionSkin(*this->guardNode);
+
 			if (DEBUG) {
 				printf("[DEBUG] Removed GUARD onion skin with Kb key: ");
 				BriandUtils::PrintByteBuffer(*this->guardNode->KEY_Backward_Kb.get());
 				printf("[DEBUG] RELAY cell payload after decryption: ");
 				tempCell->PrintCellPayloadToSerial();
 			} 
+
+			// Check if cell is recognized 
+
+			if (!tempCell->IsRelayCellRecognized(0x0000, this->guardNode->KEY_BackwardDigest_Db)) {
+				if (DEBUG) printf("[DEBUG] Cell has not been recognized, failure.\n");
+				this->TearDown();
+				this->Cleanup();
+				return false;
+			}
 		}
 
 		// Adjust the payload and verify RELAY cell header
@@ -535,6 +552,7 @@ namespace Briand {
 		}
 
 		// Finish the handshake!
+
 		/* The payload of an EXTENDED2 cell is the same as the payload of a CREATED2 cell */
 		if (exitNode) {
 			if (!this->exitNode->FinishHandshake(tempCell->GetPayload())) {

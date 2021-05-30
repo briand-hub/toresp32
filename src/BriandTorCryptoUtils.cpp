@@ -1003,62 +1003,50 @@ namespace Briand {
 
 		hkdf.reset();
 		
+		// Setup AES context (keysize must be specified in bits)
+		esp_aes_init(relay.AES_ForwardContext.get());
+		esp_aes_setkey(relay.AES_ForwardContext.get(), relay.KEY_Forward_Kf->data(), relay.KEY_Forward_Kf->size() * 8);
+		esp_aes_init(relay.AES_BackwardContext.get());
+		esp_aes_setkey(relay.AES_BackwardContext.get(), relay.KEY_Backward_Kb->data(), relay.KEY_Backward_Kb->size() * 8);
+
 		if (DEBUG) printf("[DEBUG] All done!\n");
 
 		return true;
 	}
 
-/*
-	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::AES128CTR_Encrypt(const unique_ptr<vector<unsigned char>>& content, const unique_ptr<vector<unsigned char>>& key) {
-		constexpr unsigned short BLOCK_SIZE_BYTES = 16;
-			
-		unsigned int INPUT_SIZE = content->size();
-		unsigned char iv[BLOCK_SIZE_BYTES] = { 0x00 }; // zero-init IV
-		unsigned int nonce_offset = 0;
-		unsigned char nonce_counter[BLOCK_SIZE_BYTES] = { 0x00 };
-		auto outBuffer = make_unique<unsigned char[]>(INPUT_SIZE);
-
-		esp_aes_context aes_context;
-
-		// Init AES
-		esp_aes_init(&aes_context);
-		
-		// Set ENC key, first param context pointer, second the key, third the key-len in BITS
-		esp_aes_setkey(&aes_context, key->data(), key->size() * 8);
-
-		// Encrypt (only CBC mode makes 16-bytes per round, CTR has not this problem with input)
-		esp_aes_crypt_ctr(&aes_context, INPUT_SIZE, &nonce_offset, nonce_counter, iv, content->data(), outBuffer.get());
-
-		// Free context
-		esp_aes_free(&aes_context);
-
-		return std::move( BriandUtils::ArrayToVector(outBuffer, INPUT_SIZE) );
-	}
-
-	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::AES128CTR_Decrypt(const unique_ptr<vector<unsigned char>>& content, const unique_ptr<vector<unsigned char>>& key) {
-		constexpr unsigned short BLOCK_SIZE_BYTES = 16;
-			
-		unsigned char iv[BLOCK_SIZE_BYTES] = { 0x00 };			// zero-init IV
-		size_t nonce_offset = 0;
-		unsigned char nonce_counter[BLOCK_SIZE_BYTES] = { 0x00 };
+	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::AES128CTR_Encrypt(const unique_ptr<vector<unsigned char>>& content, BriandTorRelay& relay) {
 		auto outBuffer = make_unique<unsigned char[]>(content->size());
 
-		esp_aes_context aes_context;
-
-		// Init AES
-		esp_aes_init(&aes_context);
-		
-		// Set ENC key, first param context pointer, second the key, third the key-len in BITS
-		esp_aes_setkey(&aes_context, key->data(), key->size() * 8);
-
-		// Decrypt (only CBC mode makes 16-bytes per round, CTR has not this problem with input)
-		esp_aes_crypt_ctr(&aes_context, content->size(), &nonce_offset, nonce_counter, iv, content->data(), outBuffer.get());
-
-		// Free context
-		esp_aes_free(&aes_context);
+		// Encrypt (only CBC mode makes 16-bytes per round, CTR has not this problem with input)
+		esp_aes_crypt_ctr(
+			relay.AES_ForwardContext.get(), 
+			content->size(), 
+			&relay.AES_ForwardNonceOffset, 
+			relay.AES_ForwardNonceCounter, 
+			relay.AES_ForwardIV, 
+			content->data(), 
+			outBuffer.get()
+		);
 
 		return std::move( BriandUtils::ArrayToVector(outBuffer, content->size()) );
 	}
 
-*/
+	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::AES128CTR_Decrypt(const unique_ptr<vector<unsigned char>>& content, BriandTorRelay& relay) {
+		auto outBuffer = make_unique<unsigned char[]>(content->size());
+
+		// Decrypt (only CBC mode makes 16-bytes per round, CTR has not this problem with input)
+		esp_aes_crypt_ctr(
+			relay.AES_BackwardContext.get(), 
+			content->size(), 
+			&relay.AES_BackwardNonceOffset, 
+			relay.AES_BackwardNonceCounter, 
+			relay.AES_BackwardIV, 
+			content->data(), 
+			outBuffer.get()
+		);
+
+		return std::move( BriandUtils::ArrayToVector(outBuffer, content->size()) );
+	}
+
+
 }

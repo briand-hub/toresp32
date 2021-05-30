@@ -255,12 +255,20 @@ namespace Briand {
 
 		/** 
 		 * Prepare this as a RELAY cell header for sending a relay cell, based on the current cell->Payload that MUST be ready (not encrypted)  
-		 * BUT NOT PADDED (in order to calculate correct size). Padding will be done inside this method.
+		 * and NOT PADDED (in order to calculate correct size). Padding will be done inside this method.
 		 * @param command The relay command
 		 * @param streamID The Stream ID
 		 * @param digestForward The forward digest of the destination relay (will be updated)
 		*/
 		void PrepareAsRelayCell(const BriandTorCellRelayCommand& command, const unsigned short& streamID, unique_ptr<mbedtls_md_context_t>& digestForward);
+
+		/** 
+		 * Check if the cell is recognized after peeling out onion skins. Method will check if Recognized=0 and the digest matches.
+		 * @param streamID The expected streamid
+		 * @param digestBackward The backward digest (will NOT be updated)
+		 * @return true if success, false instead.
+		*/
+		bool IsRelayCellRecognized(const unsigned short& streamID, const unique_ptr<mbedtls_md_context_t>& digestBackward);
 	};
 
 	/*

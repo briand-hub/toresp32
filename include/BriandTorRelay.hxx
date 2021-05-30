@@ -99,17 +99,15 @@ namespace Briand {
 		/** This is a nonce used in HiddenServices in place of  extracted from the HKDF-SHA256 handshaked data in Create2 or Extend2. WARNING: nullptr until handshake completed. */
 		unique_ptr<vector<unsigned char>> KEY_HiddenService_Nonce;
 
+		unique_ptr<esp_aes_context> AES_ForwardContext;
+		unsigned char AES_ForwardNonceCounter[16] = {0x00};
+		unsigned int AES_ForwardNonceOffset = 0;
+		unsigned char AES_ForwardIV[16] = {0x00};
 
-		unique_ptr<esp_aes_context> AES_Forward_Context;
-		unsigned int AES_Forward_NonceOffset;
-		unique_ptr<vector<unsigned char>> AES_Forward_IV;
-		unique_ptr<vector<unsigned char>> AES_Forward_Nonce;
-		
-		unique_ptr<esp_aes_context> AES_Backward_Context;
-		unsigned int AES_Backward_NonceOffset;
-		unique_ptr<vector<unsigned char>> AES_Backward_IV;
-		unique_ptr<vector<unsigned char>> AES_Backward_Nonce;
-
+		unique_ptr<esp_aes_context> AES_BackwardContext;
+		unsigned char AES_BackwardNonceCounter[16] = {0x00};
+		unsigned int AES_BackwardNonceOffset = 0;
+		unsigned char AES_BackwardIV[16] = {0x00};
 
 		// ------------------------------
 

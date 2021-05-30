@@ -2,15 +2,17 @@
 
 ## Next steps
 
-* !!! Implement a vector of nodes.
-
 * EXTEND with exit not working
-* Verify all digest and check updates
-
+* Implement a vector of nodes.
+* Add CircID verification and other verification stuff
 * Change the "old" buffer-copy to vector->data() to optimize memory usage
 * Find a way to get a small-size official consensus from directories
 * Simplify code in TorCircuit class
 * Authenticate cell? => Prepare stub method to authenticate client
+
+## 2021-05-29
+* Backward digest verification and update
+* Added method to verify relay cell before building fields
 
 ## 2021-05-22
 
