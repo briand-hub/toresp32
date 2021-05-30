@@ -2,6 +2,7 @@
 Briand's project to turn an ESP32 into a Tor client "plug&amp;play"
 
 ## Development status
+05/2021 Switching to IDF Framework completed and obtained the first working circuit!
 04/2021 At the moment just a non-working draft!
 For news check always [NEWS FILE](NEWS.md)
 
