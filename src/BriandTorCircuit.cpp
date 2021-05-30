@@ -490,7 +490,7 @@ namespace Briand {
 			}
 
 			// If not, then peel out the middle node skin
-			
+
 			tempCell->PeelOnionSkin(*this->middleNode);
 
 			if (DEBUG) {
@@ -510,7 +510,6 @@ namespace Briand {
 			}
 		}
 		else {
-			//tempCell->PeelOnionSkin(this->guardNode->KEY_Backward_Kb);
 			tempCell->PeelOnionSkin(*this->guardNode);
 
 			if (DEBUG) {
@@ -530,14 +529,14 @@ namespace Briand {
 			}
 		}
 
-		// Adjust the payload and verify RELAY cell header
+		// Verification passed, now build cell informations 
 		if (exitNode && !tempCell->BuildRelayCellFromPayload(this->middleNode->KEY_BackwardDigest_Db)) {
 			if (VERBOSE) printf("[ERR] Error on rebuilding RELAY cell informations from exit node, invalid cell.\n");
 			this->TearDown();
 			this->Cleanup();
 			return false;
 		}
-		else if (!tempCell->BuildRelayCellFromPayload(this->guardNode->KEY_BackwardDigest_Db)) {
+		if (!exitNode && !tempCell->BuildRelayCellFromPayload(this->guardNode->KEY_BackwardDigest_Db)) {
 			if (VERBOSE) printf("[ERR] Error on rebuilding RELAY cell informations from middle node, invalid cell.\n");
 			this->TearDown();
 			this->Cleanup();

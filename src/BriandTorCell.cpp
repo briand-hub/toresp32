@@ -946,7 +946,7 @@ namespace Briand {
 
 		// Check the digest matching
 		if (this->Digest != calculatedDigest) {
-			if (DEBUG) printf("[DEBUG] Calculated backward digest %08X does not match cell backward digest %08X\n.", this->Digest, calculatedDigest);
+			if (DEBUG) printf("[DEBUG] Calculated backward digest %08X does not match cell backward digest %08X.\n", this->Digest, calculatedDigest);
 			return false;
 		}
 
@@ -1039,24 +1039,29 @@ namespace Briand {
 		for (unsigned char i=5; i<=8; i++)
 			payloadCopy->at(i) = 0x00;
 
-		// Make a copy of the backward digest and calculate it.
+		// Make a copy of the backward digest and calculate the digest without updating the relay's one.
 		auto digestCopy = make_unique<mbedtls_md_context_t>();
+		auto outBuf = BriandUtils::GetOneOldBuffer(digestBackward->md_info->size);
+		mbedtls_md_init(digestCopy.get());
 		mbedtls_md_setup(digestCopy.get(), digestBackward->md_info, 0);
+		//mbedtls_md_starts(digestCopy.get());
 		mbedtls_md_clone(digestCopy.get(), digestBackward.get());
+		mbedtls_md_update(digestCopy.get(), payloadCopy->data(), payloadCopy->size());
+		mbedtls_md_finish(digestCopy.get(), outBuf.get());
+		mbedtls_md_free(digestCopy.get());
+
+		if (DEBUG) {
+			printf("[DEBUG] Calculated temporary cell digest for verification: ");
+			BriandUtils::PrintOldStyleByteBuffer(outBuf.get(), digestBackward->md_info->size, 0, 0);
+		}
 
 		// Finish the digest
-		auto calculatedDigest = BriandTorCryptoUtils::GetRelayCellDigest(digestCopy, payloadCopy);
+
 		unsigned int cellCalculatedDigest = 0x00000000;
-		cellCalculatedDigest += static_cast<unsigned int>( calculatedDigest->at(0) << 24 );
-		cellCalculatedDigest += static_cast<unsigned int>( calculatedDigest->at(1) << 16 );
-		cellCalculatedDigest += static_cast<unsigned int>( calculatedDigest->at(2) << 8 );
-		cellCalculatedDigest += static_cast<unsigned int>( calculatedDigest->at(3) );
-		
-		// Free memory
-		mbedtls_md_free(digestCopy.get());
-		digestCopy.reset();
-		payloadCopy.reset();
-		calculatedDigest.reset();
+		cellCalculatedDigest += static_cast<unsigned int>( outBuf[0] << 24 );
+		cellCalculatedDigest += static_cast<unsigned int>( outBuf[1] << 16 );
+		cellCalculatedDigest += static_cast<unsigned int>( outBuf[2] << 8 );
+		cellCalculatedDigest += static_cast<unsigned int>( outBuf[3] );
 
 		if (cellCalculatedDigest != cellDigest) {
 			if (DEBUG) {
@@ -1065,6 +1070,8 @@ namespace Briand {
 
 			return false;
 		}
+
+		if (DEBUG) printf("[DEBUG] Relay cell passed verification!\n");
 
 		return true;
 	}

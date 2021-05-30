@@ -65,35 +65,21 @@ namespace Briand {
 		auto mdInfo = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
 
 		auto hashedMessageRaw = BriandUtils::GetOneOldBuffer(mdInfo->size);
-		auto inputRaw = BriandUtils::VectorToArray(input);
 
 		if (DEBUG) {
 			printf("[DEBUG] SHA256 Raw message to encode: ");
-			BriandUtils::PrintOldStyleByteBuffer(inputRaw.get(), input->size(), input->size(), input->size());
+			BriandUtils::PrintByteBuffer(*input.get());
 		} 
 		
 		// Using mbedtls_md() not working as expected!!
 
-		auto mdCtx = make_unique<mbedtls_md_context_t>();
+		mbedtls_md_context_t mdCtx;
 
-		mbedtls_md_setup(mdCtx.get(), mdInfo, 0);
-		mbedtls_md_starts(mdCtx.get());
-		mbedtls_md_update(mdCtx.get(), inputRaw.get(), input->size());
-		mbedtls_md_finish(mdCtx.get(), hashedMessageRaw.get());
-
-		// HINT : using this:
-		// mbedtls_md_context_t mdCtx;
-		// mbedtls_md_setup(&mdCtx, mdInfo, 0);
-		// mbedtls_md_starts(&mdCtx);
-		// mbedtls_md_update(&mdCtx, inputRaw.get(), input->size());
-		// mbedtls_md_finish(&mdCtx, hashedMessageRaw.get());
-		// mbedtls_md_free(&mdCtx);
-
-		// will led to:
-		// free(): invalid pointer
-		// made by calling mbedtls_md_free(&mdCtx);
-		// however not calling will leak heap!
-		// solution found: use unique_ptr , always working! Thanks C++
+		mbedtls_md_init(&mdCtx);
+		mbedtls_md_setup(&mdCtx, mdInfo, 0);
+		mbedtls_md_starts(&mdCtx);
+		mbedtls_md_update(&mdCtx, input->data(), input->size());
+		mbedtls_md_finish(&mdCtx, hashedMessageRaw.get());
 		
 		if (DEBUG) {
 			printf("[DEBUG] SHA256 Raw output: ");
@@ -103,7 +89,7 @@ namespace Briand {
 		auto digest = BriandUtils::ArrayToVector(hashedMessageRaw, mdInfo->size);
 
 		// Free (MUST!)
-		mbedtls_md_free(mdCtx.get());
+		mbedtls_md_free(&mdCtx);
 
 		return std::move(digest);
 	}
@@ -112,38 +98,23 @@ namespace Briand {
 		// Using mbedtls
 
 		auto mdInfo = mbedtls_md_info_from_type(MBEDTLS_MD_SHA1);
-
 		auto hashedMessageRaw = BriandUtils::GetOneOldBuffer(mdInfo->size);
-		auto inputRaw = BriandUtils::VectorToArray(input);
 
 		if (DEBUG) {
 			printf("[DEBUG] SHA1 Raw message to encode: ");
-			BriandUtils::PrintOldStyleByteBuffer(inputRaw.get(), input->size(), input->size(), input->size());
+			BriandUtils::PrintByteBuffer(*input.get());
 		} 
 		
 		// Using mbedtls_md() not working as expected!!
 
-		auto mdCtx = make_unique<mbedtls_md_context_t>();
+		mbedtls_md_context_t mdCtx;
 
-		mbedtls_md_setup(mdCtx.get(), mdInfo, 0);
-		mbedtls_md_starts(mdCtx.get());
-		mbedtls_md_update(mdCtx.get(), inputRaw.get(), input->size());
-		mbedtls_md_finish(mdCtx.get(), hashedMessageRaw.get());
+		mbedtls_md_init(&mdCtx);
+		mbedtls_md_setup(&mdCtx, mdInfo, 0);
+		mbedtls_md_starts(&mdCtx);
+		mbedtls_md_update(&mdCtx, input->data(), input->size());
+		mbedtls_md_finish(&mdCtx, hashedMessageRaw.get());
 
-		// HINT : using this:
-		// mbedtls_md_context_t mdCtx;
-		// mbedtls_md_setup(&mdCtx, mdInfo, 0);
-		// mbedtls_md_starts(&mdCtx);
-		// mbedtls_md_update(&mdCtx, inputRaw.get(), input->size());
-		// mbedtls_md_finish(&mdCtx, hashedMessageRaw.get());
-		// mbedtls_md_free(&mdCtx);
-
-		// will led to:
-		// free(): invalid pointer
-		// made by calling mbedtls_md_free(&mdCtx);
-		// however not calling will leak heap!
-		// solution found: use unique_ptr , always working! Thanks C++
-		
 		if (DEBUG) {
 			printf("[DEBUG] SHA1 Raw output: ");
 			BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size, mdInfo->size);
@@ -152,7 +123,7 @@ namespace Briand {
 		auto digest = BriandUtils::ArrayToVector(hashedMessageRaw, mdInfo->size);
 
 		// Free (MUST!)
-		mbedtls_md_free(mdCtx.get());
+		mbedtls_md_free(&mdCtx);
 
 		return std::move(digest);
 	}
@@ -161,7 +132,6 @@ namespace Briand {
 		// Using mbedtls
 
 		auto mdInfo = mbedtls_md_info_from_type(MBEDTLS_MD_SHA1);
-
 		auto hashedMessageRaw = BriandUtils::GetOneOldBuffer(mdInfo->size);
 
 		if (DEBUG) {
@@ -173,13 +143,15 @@ namespace Briand {
 		mbedtls_md_update(relayCurrentDigest.get(), relayCellPayload->data(), relayCellPayload->size());
 
 		// Make a copy and finalize
-		auto mdCopy = make_unique<mbedtls_md_context_t>();
-		mbedtls_md_setup(mdCopy.get(), mdInfo, 0);
-		mbedtls_md_clone(mdCopy.get(), relayCurrentDigest.get());
-		mbedtls_md_finish(mdCopy.get(), hashedMessageRaw.get());
+		mbedtls_md_context_t mdCopy;
+		mbedtls_md_init(&mdCopy);
+		mbedtls_md_setup(&mdCopy, mdInfo, 0);
+		//mbedtls_md_starts(&mdCopy);
+		mbedtls_md_clone(&mdCopy, relayCurrentDigest.get());
+		mbedtls_md_finish(&mdCopy, hashedMessageRaw.get());
 
 		// Free (MUST!)
-		mbedtls_md_free(mdCopy.get());
+		mbedtls_md_free(&mdCopy);
 
 		if (DEBUG) {
 			printf("[DEBUG] RELAY CELL DIGEST Raw output: ");
@@ -953,7 +925,9 @@ namespace Briand {
 
 		// This field is updated with SHA1 hash when relay cells are sent but not finalized itself!
 	   	relay.KEY_ForwardDigest_Df = make_unique<mbedtls_md_context_t>();
+		mbedtls_md_init(relay.KEY_ForwardDigest_Df.get());
 		mbedtls_md_setup(relay.KEY_ForwardDigest_Df.get(), mbedtls_md_info_from_type(MBEDTLS_MD_SHA1), 0);
+		mbedtls_md_starts(relay.KEY_ForwardDigest_Df.get());
 		mbedtls_md_update(relay.KEY_ForwardDigest_Df.get(), hkdf->data(), HASH_LEN);
 
 		if (DEBUG) {
@@ -965,7 +939,9 @@ namespace Briand {
 
 		// This field is updated with SHA1 hash when relay cells are received but not finalized itself!
 		relay.KEY_BackwardDigest_Db = make_unique<mbedtls_md_context_t>();
+		mbedtls_md_init(relay.KEY_BackwardDigest_Db.get());
 		mbedtls_md_setup(relay.KEY_BackwardDigest_Db.get(), mbedtls_md_info_from_type(MBEDTLS_MD_SHA1), 0);
+		mbedtls_md_starts(relay.KEY_BackwardDigest_Db.get());
 		mbedtls_md_update(relay.KEY_BackwardDigest_Db.get(), hkdf->data(), HASH_LEN);
 
 		if (DEBUG) {

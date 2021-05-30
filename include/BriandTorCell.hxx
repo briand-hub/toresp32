@@ -22,6 +22,9 @@
 #include <memory>
 #include <vector>
 
+#include <mbedtls/md.h>
+#include <mbedtls/md_internal.h>
+
 #include <BriandIDFSocketTlsClient.hxx>
 
 #include "BriandDefines.hxx"

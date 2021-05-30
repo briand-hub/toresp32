@@ -1,8 +1,6 @@
 # Development status
 
 ## Next steps
-
-* EXTEND with exit not working
 * Implement a vector of nodes.
 * Add CircID verification and other verification stuff
 * Change the "old" buffer-copy to vector->data() to optimize memory usage
@@ -11,7 +9,10 @@
 * Authenticate cell? => Prepare stub method to authenticate client
 
 ## 2021-05-29
+* EXTEND with exit now working!! The problem was AES not keeping IV/Nonce not updated and wrong backard digest calculation.
+* Found problem with digest update, resolved
 * Backward digest verification and update
+* Digesting function bug/misuse correction adding mbedtls right methods
 * Added method to verify relay cell before building fields
 
 ## 2021-05-22
