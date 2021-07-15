@@ -192,8 +192,8 @@ namespace Briand
 			output.append(separator);
 		} 
 
-		if (output.length() > 0) 
-			output.pop_back(); // remove last separator
+		if (output.length() > 0)
+			output.resize(output.length() - separator.length()); // remove last separator
 
 		return output;
 	}

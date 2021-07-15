@@ -604,7 +604,7 @@ void executeCommand(string& cmd) {
 			printf("search-guard : if DEBUG active, search and display info for a guard node.\n");
 			printf("search-exit : if DEBUG active, search and display info for an exit node.\n");
 			printf("search-middle : if DEBUG active, search and display info for a middle node.\n");
-			printf("testcircuit : if DEBUG active, build and destroy a new circuit just for testing.\n");
+			printf("testcircuit : if DEBUG active, build a new circuit, resolve ifconfig.me IP then destroy just for testing.\n");
 			printf("heapleak : if DEBUG active, leaks the heap to test leak warning.\n");
 		}
 
@@ -710,6 +710,7 @@ void executeCommand(string& cmd) {
 		if (tempCircuit->BuildCircuit()) {
 			printf("SUCCESS! Cuircuit built!\n");
             tempCircuit->PrintCircuitInfo();
+			tempCircuit->TorResolve("ifconfig.me");
 		}
 		else 
 			printf("FAILED to build a circuit.\n");

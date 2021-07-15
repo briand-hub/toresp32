@@ -47,6 +47,7 @@ namespace Briand {
 				this->sClient->Disconnect();
 			this->sClient.reset();
 		}
+		this->CURRENT_STREAM_ID = 0;
 	}
 
 	bool BriandTorCircuit::FindAndPopulateRelay(const unsigned char& relayType) {
@@ -596,6 +597,7 @@ namespace Briand {
 
 		this->CIRCID = 0;
 		this->LINKPROTOCOLVERSION = 0;
+		this->CURRENT_STREAM_ID = 0;
 		
 		this->sClient = nullptr;
 	}
@@ -814,14 +816,165 @@ namespace Briand {
 		return true;
 	}
 
-	
+	bool BriandTorCircuit::IsCircuitReadyToStream() {
+		return this->isBuilt && !this->isClosed && !this->isClosing;
+	}
 
+	const in_addr& BriandTorCircuit::TorResolve(const string& hostname) {
+		in_addr resolved;
+		bzero(&resolved, sizeof(resolved));
 
-	// Stream functions
-	// MUST check if built / closed / closing ....
-	
+		if (!this->IsCircuitReadyToStream()) {
+			if (VERBOSE) printf("[ERR] TorResolve called but circuit is not build and ready to stream.\n");
+			return resolved;
+		}
 
+		/*
+			To find the address associated with a hostname, the OP sends a
+			RELAY_RESOLVE cell containing the hostname to be resolved with a NUL
+			terminating byte. (For a reverse lookup, the OP sends a RELAY_RESOLVE
+			cell containing an in-addr.arpa address.)
+		*/
 
+		if (DEBUG) printf("[DEBUG] Sending RELAY_RESOLVE cell for hostname <%s>.\n", hostname.c_str());
+
+		auto tempCell = make_unique<Briand::BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::RELAY);
+
+		this->CURRENT_STREAM_ID++;
+
+		for (const char& c: hostname) {
+			tempCell->AppendToPayload(static_cast<unsigned char>(c));
+		}
+		tempCell->AppendToPayload(0x00); // NUL terminating byte
+
+		tempCell->PrepareAsRelayCell(BriandTorCellRelayCommand::RELAY_RESOLVE, this->CURRENT_STREAM_ID, this->exitNode->KEY_ForwardDigest_Df);
+
+		// Encrypt with exit key
+		tempCell->ApplyOnionSkin(*this->exitNode);
+		// Encrypt with middle key
+		tempCell->ApplyOnionSkin(*this->middleNode);
+		// Encrypt with guard key
+		tempCell->ApplyOnionSkin(*this->guardNode);
+
+		if (DEBUG) printf("[DEBUG] RELAY_RESOLVE is going to be sent. Waiting for RELAY_RESOLVED.\n");
+		auto tempCellResponse = tempCell->SendCell(this->sClient, false);
+		tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
+		
+		// Peel out the guard skin
+		tempCell->PeelOnionSkin(*this->guardNode);
+		
+		// Check if the cell is recognized
+		if (tempCell->IsRelayCellRecognized(0x0000, this->guardNode->KEY_BackwardDigest_Db)) {
+			// Have been recognized, if this is true here, an error occoured...
+			tempCell->BuildRelayCellFromPayload(this->guardNode->KEY_BackwardDigest_Db);
+			BriandTorCellRelayCommand unexpectedCmd = tempCell->GetRelayCommand();
+			if (DEBUG) {
+				printf("[DEBUG] RELAY recognized at Guard, something wrong, cell relay command is: %s. Payload: ", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+				tempCell->PrintCellPayloadToSerial();
+			}
+
+			if (VERBOSE) printf("[ERR] Tor stream error, received unexpected cell from guard node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+
+			return resolved;
+		}
+		
+		// If not, then peel out the middle node skin
+		tempCell->PeelOnionSkin(*this->middleNode);
+		// Check if the cell is recognized
+		if (tempCell->IsRelayCellRecognized(0x0000, this->middleNode->KEY_BackwardDigest_Db)) {
+			// Have been recognized, if this is true here, an error occoured...
+			tempCell->BuildRelayCellFromPayload(this->middleNode->KEY_BackwardDigest_Db);
+			BriandTorCellRelayCommand unexpectedCmd = tempCell->GetRelayCommand();
+			if (DEBUG) {
+				printf("[DEBUG] RELAY recognized at Middle, something wrong, cell relay command is: %s. Payload: ", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+				tempCell->PrintCellPayloadToSerial();
+			}
+
+			if (VERBOSE) printf("[ERR] Tor stream error, received unexpected cell from middle node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+
+			return resolved;
+		}
+
+		// If not, then peel out the exit node skin
+		tempCell->PeelOnionSkin(*this->exitNode);
+
+		// Check if the cell is NOT recognized
+		if (!tempCell->IsRelayCellRecognized(0x0000, this->exitNode->KEY_BackwardDigest_Db)) {
+			// Have been recognized, if this is true here, an error occoured...
+			tempCell->BuildRelayCellFromPayload(this->exitNode->KEY_BackwardDigest_Db);
+			BriandTorCellRelayCommand unexpectedCmd = tempCell->GetRelayCommand();
+			if (DEBUG) {
+				printf("[DEBUG] RELAY NOT recognized at Exit, something wrong, cell relay command is: %s. Payload: ", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+				tempCell->PrintCellPayloadToSerial();
+			}
+
+			if (VERBOSE) printf("[ERR] Tor stream error, received unexpected cell from exit node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+
+			return resolved;
+		}
+		
+		// Here cell is recognized, build informations
+		if (!tempCell->BuildRelayCellFromPayload(this->exitNode->KEY_BackwardDigest_Db)) {
+			if (VERBOSE) printf("[ERR] Error on rebuilding RELAY cell informations from exit node, invalid cell.\n");
+			return resolved;
+		}
+
+		// Check if RELAY_RESOLVED
+		if (tempCell->GetRelayCommand() != BriandTorCellRelayCommand::RELAY_RESOLVED) {
+			if (VERBOSE) printf("[ERR] Tor resolve failed, received unexpected cell from exit node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(tempCell->GetRelayCommand()).c_str());
+			return resolved;
+		}
+
+		// Ok!
+
+		/*
+			The OR replies with a RELAY_RESOLVED cell containing any number of answers. Each answer is of the form:
+
+				Type   (1 octet)
+				Length (1 octet)
+				Value  (variable-width)
+				TTL    (4 octets)
+			"Length" is the length of the Value field.
+			"Type" is one of:
+
+				0x00 -- Hostname
+				0x04 -- IPv4 address
+				0x06 -- IPv6 address
+				0xF0 -- Error, transient
+				0xF1 -- Error, nontransient
+
+			IP addresses are given in network order.
+        	Hostnames are given in standard DNS order ("www.example.com") and not NUL-terminated.
+			The content of Errors is currently ignored.
+			For backward compatibility, if there are any IPv4 answers, one of those must be given as the first answer.
+		*/
+
+		// Only IPv4 supported at the moment.
+
+		unsigned short i = 0;
+		auto& response = tempCell->GetPayload();
+		
+		while (i < response->size()) {
+			unsigned char type = response->at(i);
+			if (type != 0x04) {
+				i += 1 + response->at(i+1) + 4;
+			}
+			else {
+				i += 1;
+				resolved.s_addr += response->at(i) << 24;
+				resolved.s_addr += response->at(i+1) << 16;
+				resolved.s_addr += response->at(i+2) << 8;
+				resolved.s_addr += response->at(i+3);
+				break;
+			}
+		}
+
+		if (DEBUG) {
+			printf("[DEBUG] Found IPv4 address: %04X\n", resolved.s_addr);
+		}
+
+		return resolved;
+	}
 
 	void BriandTorCircuit::TearDown(BriandTorDestroyReason reason /*  = BriandTorDestroyReason::NONE */) {
 		this->isClosing = true;

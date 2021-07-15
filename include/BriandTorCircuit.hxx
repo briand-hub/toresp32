@@ -48,6 +48,7 @@ namespace Briand {
 		// Tor specific
 		unsigned int CIRCID;					// the CIRCID of this circuit
 		unsigned short LINKPROTOCOLVERSION; 	// the version of this circuit
+		unsigned short CURRENT_STREAM_ID; 		// the current StreamID
 
 		unique_ptr<BriandIDFSocketTlsClient> sClient;	// Client used for communications
 
@@ -105,7 +106,19 @@ namespace Briand {
 
 		// Stream functions
 		// MUST check if built / closed / closing ....
-		
+
+		/**
+		 * Method returns true if circuit is ready for stream cells
+		 * @return true if circuit is built, ready, valid and not closing.
+		*/
+		bool IsCircuitReadyToStream();
+
+		/**
+		 * Resolves an hostname through TOR (only IPv4 at moment)
+		 * @param hostname the hostname to resolve
+		 * @return an in_addr struct with the resolved IP Address
+		*/
+		const in_addr& TorResolve(const string& hostname);
 
 		/**
 		 * Tears down the circuit. Also closes and resets the sClient!

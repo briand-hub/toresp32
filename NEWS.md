@@ -8,6 +8,11 @@
 * Simplify code in TorCircuit class
 * Authenticate cell? => Prepare stub method to authenticate client
 
+## 
+
+* Bug solved on onionoo URL separator
+
+
 ## 2021-05-29
 * EXTEND with exit now working!! The problem was AES not keeping IV/Nonce not updated and wrong backard digest calculation.
 * Found problem with digest update, resolved
