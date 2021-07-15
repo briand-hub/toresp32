@@ -22,7 +22,7 @@
 
 // HW Accelleration by ESP32 cryptographic hardware
 // #include <mbedtls/aes.h> gives linker error!
-#include <esp32/aes.h>
+#include <aes/esp_aes.h>
 
 #include "BriandDefines.hxx"
 #include "BriandUtils.hxx"

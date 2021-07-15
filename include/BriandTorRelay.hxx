@@ -25,7 +25,7 @@
 // Crypto library chosen
 #include <mbedtls/ecdh.h>
 #include <mbedtls/md.h>
-#include <esp32/aes.h>
+#include <aes/esp_aes.h>
 
 #include "BriandTorCertificates.hxx"
 

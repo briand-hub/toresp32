@@ -820,14 +820,147 @@ namespace Briand {
 		return this->isBuilt && !this->isClosed && !this->isClosing;
 	}
 
-	const in_addr& BriandTorCircuit::TorResolve(const string& hostname) {
-		in_addr resolved;
-		bzero(&resolved, sizeof(resolved));
+	unique_ptr<vector<unsigned char>> BriandTorCircuit::TorStream(const BriandTorCellRelayCommand& command, const unique_ptr<vector<unsigned char>>& requestPayload, const BriandTorCellRelayCommand& waitFor) {
+		unique_ptr<vector<unsigned char>> response = nullptr;
 
 		if (!this->IsCircuitReadyToStream()) {
-			if (VERBOSE) printf("[ERR] TorResolve called but circuit is not build and ready to stream.\n");
-			return resolved;
+			if (VERBOSE) printf("[ERR] TorStream called but circuit is not built and ready to stream.\n");
+			return response;
 		}
+
+		if (requestPayload == nullptr) {
+			if (VERBOSE) printf("[ERR] TorStream called with NULL request payload.\n");
+			return response;
+		}
+
+		// prepare the basic cell
+		auto tempCell = make_unique<Briand::BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::RELAY);
+		
+		// Increment streamid 
+		this->CURRENT_STREAM_ID++;
+
+		// Add the payload and prepare the cell
+		tempCell->AppendBytesToPayload(*requestPayload.get());
+		tempCell->PrepareAsRelayCell(command, this->CURRENT_STREAM_ID, this->exitNode->KEY_ForwardDigest_Df);
+
+		// Encrypt with exit key
+		tempCell->ApplyOnionSkin(*this->exitNode);
+		// Encrypt with middle key
+		tempCell->ApplyOnionSkin(*this->middleNode);
+		// Encrypt with guard key
+		tempCell->ApplyOnionSkin(*this->guardNode);
+
+		// Send cell but do not wait for a generic cell answer, this will be done inside this method.
+		tempCell->SendCell(this->sClient, false, false);
+
+		// Read the socket, as all RELAY/DESTROY/PADDING cells are fixed-length cells, this is easy...
+		this->sClient->SetReceivingBufferSize(514); 
+		
+		do {
+			auto tempData = this->sClient->ReadData(true);
+
+			// Build the basic cell from received data
+			auto tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
+
+			if (!tempCell->BuildFromBuffer(tempData, this->LINKPROTOCOLVERSION)) {
+				if (VERBOSE) printf("[ERR] TorStream error, response cell had invalid bytes (failed to build from buffer).\n");
+				return response;
+			}
+
+			// If a DESTROY given must tear down, tell me why
+			if (tempCell->GetCommand() == BriandTorCellCommand::DESTROY) {
+				if (VERBOSE) printf("[ERR] TorStream error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
+				this->TearDown();
+				this->Cleanup();
+				return response;
+			}
+
+			// If it is a RELAY cell, go on but if not, just ignore it.
+			if (tempCell->GetCommand() == BriandTorCellCommand::RELAY) {
+				// Cell recognization 
+
+				// Peel out the guard skin
+				tempCell->PeelOnionSkin(*this->guardNode.get());
+				
+				if (tempCell->IsRelayCellRecognized(this->CURRENT_STREAM_ID, this->guardNode->KEY_BackwardDigest_Db)) {
+					// If is recognized here, an error occoured.
+					tempCell->BuildRelayCellFromPayload(this->guardNode->KEY_BackwardDigest_Db);
+					BriandTorCellRelayCommand unexpectedCmd = tempCell->GetRelayCommand();
+					if (DEBUG) {
+						printf("[DEBUG] TorStream RELAY recognized at Guard, something wrong, cell relay command is: %s. Payload: ", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+						tempCell->PrintCellPayloadToSerial();
+					}
+
+					if (VERBOSE) printf("[ERR] TorStream error, received unexpected cell from guard node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+
+					return response;					
+				}
+
+				// Peel out the middle skin
+				tempCell->PeelOnionSkin(*this->middleNode.get());
+				
+				if (tempCell->IsRelayCellRecognized(this->CURRENT_STREAM_ID, this->middleNode->KEY_BackwardDigest_Db)) {
+					// If is recognized here, an error occoured.
+					tempCell->BuildRelayCellFromPayload(this->middleNode->KEY_BackwardDigest_Db);
+					BriandTorCellRelayCommand unexpectedCmd = tempCell->GetRelayCommand();
+					if (DEBUG) {
+						printf("[DEBUG] TorStream RELAY recognized at Middle, something wrong, cell relay command is: %s. Payload: ", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+						tempCell->PrintCellPayloadToSerial();
+					}
+
+					if (VERBOSE) printf("[ERR] TorStream error, received unexpected cell from middle node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+
+					return response;					
+				}
+
+				// Peel out the exit skin, now the cell MUST be recognized...
+				tempCell->PeelOnionSkin(*this->exitNode.get());
+
+				if (!tempCell->IsRelayCellRecognized(this->CURRENT_STREAM_ID, this->exitNode->KEY_BackwardDigest_Db)) {
+					// If is NOT recognized here, an error occoured.
+					if (DEBUG) {
+						printf("[DEBUG] TorStream RELAY NOT recognized at Exit, something wrong. Raw payload: ");
+						tempCell->PrintCellPayloadToSerial();
+					}
+
+					if (VERBOSE) printf("[ERR] TorStream error, unrecognized cell from exit node.\n");
+
+					return response;
+				}
+
+				// Here cell is recognized, build informations
+				if (!tempCell->BuildRelayCellFromPayload(this->exitNode->KEY_BackwardDigest_Db)) {
+					if (VERBOSE) printf("[ERR] TorStream error on rebuilding RELAY cell informations from exit node, invalid response cell.\n");
+					return response;
+				}
+
+				// Check if it is the expected command
+				if (tempCell->GetRelayCommand() != waitFor) {
+					if (DEBUG) {
+						printf("[ERR] TorStream failed, received unexpected cell from exit node: %s, payload: ", BriandUtils::BriandTorRelayCellCommandToString(tempCell->GetRelayCommand()).c_str());
+						tempCell->PrintCellPayloadToSerial();
+					}
+					else if (VERBOSE) 
+						printf("[ERR] Tor resolve failed, received unexpected cell from exit node: %s.", BriandUtils::BriandTorRelayCellCommandToString(tempCell->GetRelayCommand()).c_str());
+
+					return response;
+				}
+
+				// Take payload and return, that's all!
+				response = make_unique<vector<unsigned char>>();
+				response->insert(response->begin(), tempCell->GetPayload()->begin(), tempCell->GetPayload()->end());
+				return response;
+			}
+
+			tempData.reset();
+		} while (this->sClient->AvailableBytes() > 0);
+
+		return response;
+	}
+
+	const in_addr BriandTorCircuit::TorResolve(const string& hostname) {
+		in_addr resolved;
+		bzero(&resolved, sizeof(resolved));
 
 		/*
 			To find the address associated with a hostname, the OP sends a
@@ -838,94 +971,18 @@ namespace Briand {
 
 		if (DEBUG) printf("[DEBUG] Sending RELAY_RESOLVE cell for hostname <%s>.\n", hostname.c_str());
 
-		auto tempCell = make_unique<Briand::BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::RELAY);
-
-		this->CURRENT_STREAM_ID++;
+		auto requestPayload = make_unique<vector<unsigned char>>();
 
 		for (const char& c: hostname) {
-			tempCell->AppendToPayload(static_cast<unsigned char>(c));
+			requestPayload->push_back(static_cast<unsigned char>(c));
 		}
-		tempCell->AppendToPayload(0x00); // NUL terminating byte
+		requestPayload->push_back(0x00); // NUL terminating byte
 
-		tempCell->PrepareAsRelayCell(BriandTorCellRelayCommand::RELAY_RESOLVE, this->CURRENT_STREAM_ID, this->exitNode->KEY_ForwardDigest_Df);
-
-		// Encrypt with exit key
-		tempCell->ApplyOnionSkin(*this->exitNode);
-		// Encrypt with middle key
-		tempCell->ApplyOnionSkin(*this->middleNode);
-		// Encrypt with guard key
-		tempCell->ApplyOnionSkin(*this->guardNode);
-
-		if (DEBUG) printf("[DEBUG] RELAY_RESOLVE is going to be sent. Waiting for RELAY_RESOLVED.\n");
-		auto tempCellResponse = tempCell->SendCell(this->sClient, false);
-		tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
-		
-		// Peel out the guard skin
-		tempCell->PeelOnionSkin(*this->guardNode);
-		
-		// Check if the cell is recognized
-		if (tempCell->IsRelayCellRecognized(0x0000, this->guardNode->KEY_BackwardDigest_Db)) {
-			// Have been recognized, if this is true here, an error occoured...
-			tempCell->BuildRelayCellFromPayload(this->guardNode->KEY_BackwardDigest_Db);
-			BriandTorCellRelayCommand unexpectedCmd = tempCell->GetRelayCommand();
-			if (DEBUG) {
-				printf("[DEBUG] RELAY recognized at Guard, something wrong, cell relay command is: %s. Payload: ", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
-				tempCell->PrintCellPayloadToSerial();
-			}
-
-			if (VERBOSE) printf("[ERR] Tor stream error, received unexpected cell from guard node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
-
+		auto response = this->TorStream(BriandTorCellRelayCommand::RELAY_RESOLVE, requestPayload, BriandTorCellRelayCommand::RELAY_RESOLVED);
+		if (response == nullptr) {
+			if (VERBOSE) printf("[ERR] TorResolve error, failure on streaming tor request.\n");
 			return resolved;
 		}
-		
-		// If not, then peel out the middle node skin
-		tempCell->PeelOnionSkin(*this->middleNode);
-		// Check if the cell is recognized
-		if (tempCell->IsRelayCellRecognized(0x0000, this->middleNode->KEY_BackwardDigest_Db)) {
-			// Have been recognized, if this is true here, an error occoured...
-			tempCell->BuildRelayCellFromPayload(this->middleNode->KEY_BackwardDigest_Db);
-			BriandTorCellRelayCommand unexpectedCmd = tempCell->GetRelayCommand();
-			if (DEBUG) {
-				printf("[DEBUG] RELAY recognized at Middle, something wrong, cell relay command is: %s. Payload: ", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
-				tempCell->PrintCellPayloadToSerial();
-			}
-
-			if (VERBOSE) printf("[ERR] Tor stream error, received unexpected cell from middle node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
-
-			return resolved;
-		}
-
-		// If not, then peel out the exit node skin
-		tempCell->PeelOnionSkin(*this->exitNode);
-
-		// Check if the cell is NOT recognized
-		if (!tempCell->IsRelayCellRecognized(0x0000, this->exitNode->KEY_BackwardDigest_Db)) {
-			// Have been recognized, if this is true here, an error occoured...
-			tempCell->BuildRelayCellFromPayload(this->exitNode->KEY_BackwardDigest_Db);
-			BriandTorCellRelayCommand unexpectedCmd = tempCell->GetRelayCommand();
-			if (DEBUG) {
-				printf("[DEBUG] RELAY NOT recognized at Exit, something wrong, cell relay command is: %s. Payload: ", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
-				tempCell->PrintCellPayloadToSerial();
-			}
-
-			if (VERBOSE) printf("[ERR] Tor stream error, received unexpected cell from exit node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
-
-			return resolved;
-		}
-		
-		// Here cell is recognized, build informations
-		if (!tempCell->BuildRelayCellFromPayload(this->exitNode->KEY_BackwardDigest_Db)) {
-			if (VERBOSE) printf("[ERR] Error on rebuilding RELAY cell informations from exit node, invalid cell.\n");
-			return resolved;
-		}
-
-		// Check if RELAY_RESOLVED
-		if (tempCell->GetRelayCommand() != BriandTorCellRelayCommand::RELAY_RESOLVED) {
-			if (VERBOSE) printf("[ERR] Tor resolve failed, received unexpected cell from exit node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(tempCell->GetRelayCommand()).c_str());
-			return resolved;
-		}
-
-		// Ok!
 
 		/*
 			The OR replies with a RELAY_RESOLVED cell containing any number of answers. Each answer is of the form:
@@ -952,11 +1009,15 @@ namespace Briand {
 		// Only IPv4 supported at the moment.
 
 		unsigned short i = 0;
-		auto& response = tempCell->GetPayload();
 		
 		while (i < response->size()) {
 			unsigned char type = response->at(i);
-			if (type != 0x04) {
+			if (type == 0xF0 || type == 0xF1) {
+				// Error.
+				if (VERBOSE) printf("[ERR] TorResolve: host could not be resolved, error code = %02X\n", type);
+				return resolved;
+			}
+			else if (type != 0x04) {
 				i += 1 + response->at(i+1) + 4;
 			}
 			else {
