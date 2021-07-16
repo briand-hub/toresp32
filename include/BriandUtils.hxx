@@ -22,6 +22,8 @@
 #include <memory>
 #include <vector>
 
+#include <lwip/inet.h>
+
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
 
@@ -177,7 +179,7 @@ namespace Briand
 		 * @param preNonHex Prepend this string with a non-hex format (raw char to bytes)
 		 * @return Pointer to buffer (all null if input string not even size)
 		*/
-		static 	unique_ptr<unsigned char[]> HexStringToOldBuffer(const string& hexstring, unsigned int& size, const string& preNonhex, bool nullterm = false);
+		static unique_ptr<unsigned char[]> HexStringToOldBuffer(const string& hexstring, unsigned int& size, const string& preNonhex, bool nullterm = false);
 
 		/**
 		 * Prints file contents to serial output 
@@ -189,5 +191,18 @@ namespace Briand
 		*/
 		static void StringTrimAll(string& input, char c);
 
+		/**
+		 * Converts an IPv4 in_addr struct to readable format
+		 * @param ip in_addr (unsigned int) IP
+		 * @return IPv4 in string format (123.456.789.000)
+		*/
+		static string ipv4ToString(const in_addr& ip);
+
+		/**
+		 * Converts an IPv4 readable format to an in_addr struct
+		 * @param IPv4 in string format (123.456.789.000)
+		 * @return IPv4 in_addr (unsigned int) IP
+		*/
+		static in_addr ipv4FromString(const string& ip);
 	};
 }

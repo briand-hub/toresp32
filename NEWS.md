@@ -7,11 +7,14 @@
 * Find a way to get a small-size official consensus from directories
 * Simplify code in TorCircuit class
 * Authenticate cell? => Prepare stub method to authenticate client
+* Ignoring PADDING cells in SendCell responses
 
 ## 
 
 * Bug solved on onionoo URL separator
-
+* Wrote Stream method
+* Wrote TorResolve method
+* Wrote Circuits Manager class
 
 ## 2021-05-29
 * EXTEND with exit now working!! The problem was AES not keeping IV/Nonce not updated and wrong backard digest calculation.

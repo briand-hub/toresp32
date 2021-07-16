@@ -51,6 +51,7 @@
 #include "BriandTorRelay.hxx"
 #include "BriandTorCircuit.hxx"
 #include "BriandTorCryptoUtils.hxx"
+#include "BriandTorCircuitsManager.hxx"
 
 /* Startup tests */
 
@@ -78,6 +79,7 @@ unique_ptr<string> STA_PASSW = nullptr;
 unique_ptr<string> AP_ESSID = nullptr;
 unique_ptr<string> AP_PASSW = nullptr;
 unique_ptr<string> COMMAND = nullptr;
+unique_ptr<Briand::BriandTorCircuitsManager> CIRCUITS_MANAGER = nullptr;
 unsigned long long int COMMANDID = 0;
 unsigned int HEAP_LEAK_CHECK = 0;
 
@@ -455,9 +457,10 @@ void TorEsp32Main(void* taskArg) {
 			nextStep = 1000;
 		}
 		else if (nextStep == 1000) {
-			printf("[INFO] Creating TOR circuits\n");
+			printf("[INFO] Starting TOR Circuits Manager (may take some time, check help command).\n");
 			
-			// ... todo
+			CIRCUITS_MANAGER = make_unique<Briand::BriandTorCircuitsManager>(TOR_CIRCUITS_KEEPALIVE, TOR_CIRCUITS_MAX_TIME_S, TOR_CIRCUITS_MAX_REQUESTS);
+			CIRCUITS_MANAGER->Start();
 
 			nextStep = 10000;
 
@@ -596,6 +599,7 @@ void executeCommand(string& cmd) {
 		printf("apon : turn on AP interface (will keep intact hostname/essid/password).\n");
 		printf("torcache : print out the local node cache, all 3 files.\n");
         printf("torcache-refresh : refresh the tor cache.\n");
+		printf("torcircuits : print out the current tor circuit status.\n");
         printf("synctime : sync localtime time with NTP.\n");
 		printf("reboot : restart device.\n");
 
@@ -610,6 +614,10 @@ void executeCommand(string& cmd) {
 
 		printf("TOR TESTING-----------------------------------------------------------------------\n");
 		printf("ifconfig.me : Show **REAL** ifconfig.me information (NON-TOR REQUEST, REAL ADDRESS).\n");
+		printf("tor ifconfig.me : Show tor ifconfig.me information (TOR REQUEST).\n");
+
+		printf("TOR COMMANDS----------------------------------------------------------------------\n");
+		//printf("tor http get [url] : Show tor ifconfig.me information (TOR REQUEST).\n");
     }
     else if (cmd.compare("time") == 0) {
         printLocalTime();
@@ -725,7 +733,10 @@ void executeCommand(string& cmd) {
 		string info = Briand::BriandUtils::BriandIfConfigMe();
 		printf("\nInfo about your real identity:\n\n%s\n", info.c_str());
     }
-	
+	else if (cmd.compare("torcircuits") == 0) {
+		CIRCUITS_MANAGER->PrintCircuitsInfo();
+	}
+
 	// other commands implementation...
     else {
         printf("Unknown command.\n");

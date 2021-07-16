@@ -598,6 +598,7 @@ namespace Briand {
 		this->CIRCID = 0;
 		this->LINKPROTOCOLVERSION = 0;
 		this->CURRENT_STREAM_ID = 0;
+		this->IS_BUSY = false;
 		
 		this->sClient = nullptr;
 	}
@@ -641,7 +642,7 @@ namespace Briand {
 		this->isClean = false;
 		this->isClosed = true;
 		this->isClosing = false;
-		this->isCreating = false;
+		this->isCreating = true;
 		
 		// Prepare for search
 		this->relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
@@ -768,8 +769,6 @@ namespace Briand {
 			return false;
 		}
 
-		this->isCreating = true;
-
 		if (DEBUG) printf("[DEBUG] CREATE2 success. Extending to Middle node.\n");
 
 		// EXTEND2 to middle
@@ -821,15 +820,22 @@ namespace Briand {
 	}
 
 	unique_ptr<vector<unsigned char>> BriandTorCircuit::TorStream(const BriandTorCellRelayCommand& command, const unique_ptr<vector<unsigned char>>& requestPayload, const BriandTorCellRelayCommand& waitFor) {
+		if (!this->isClean) this->isClean = false;
+		
 		unique_ptr<vector<unsigned char>> response = nullptr;
+		this->IS_BUSY = true;
 
 		if (!this->IsCircuitReadyToStream()) {
 			if (VERBOSE) printf("[ERR] TorStream called but circuit is not built and ready to stream.\n");
+			this->IS_BUSY = false;
+
 			return response;
 		}
 
 		if (requestPayload == nullptr) {
 			if (VERBOSE) printf("[ERR] TorStream called with NULL request payload.\n");
+			this->IS_BUSY = false;
+
 			return response;
 		}
 
@@ -864,6 +870,8 @@ namespace Briand {
 
 			if (!tempCell->BuildFromBuffer(tempData, this->LINKPROTOCOLVERSION)) {
 				if (VERBOSE) printf("[ERR] TorStream error, response cell had invalid bytes (failed to build from buffer).\n");
+				this->IS_BUSY = false;
+
 				return response;
 			}
 
@@ -872,6 +880,8 @@ namespace Briand {
 				if (VERBOSE) printf("[ERR] TorStream error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
 				this->TearDown();
 				this->Cleanup();
+				this->IS_BUSY = false;
+
 				return response;
 			}
 
@@ -893,6 +903,8 @@ namespace Briand {
 
 					if (VERBOSE) printf("[ERR] TorStream error, received unexpected cell from guard node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
 
+					this->IS_BUSY = false;
+
 					return response;					
 				}
 
@@ -909,6 +921,8 @@ namespace Briand {
 					}
 
 					if (VERBOSE) printf("[ERR] TorStream error, received unexpected cell from middle node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+					
+					this->IS_BUSY = false;
 
 					return response;					
 				}
@@ -924,6 +938,8 @@ namespace Briand {
 					}
 
 					if (VERBOSE) printf("[ERR] TorStream error, unrecognized cell from exit node.\n");
+					
+					this->IS_BUSY = false;
 
 					return response;
 				}
@@ -931,6 +947,8 @@ namespace Briand {
 				// Here cell is recognized, build informations
 				if (!tempCell->BuildRelayCellFromPayload(this->exitNode->KEY_BackwardDigest_Db)) {
 					if (VERBOSE) printf("[ERR] TorStream error on rebuilding RELAY cell informations from exit node, invalid response cell.\n");
+					this->IS_BUSY = false;
+
 					return response;
 				}
 
@@ -943,17 +961,24 @@ namespace Briand {
 					else if (VERBOSE) 
 						printf("[ERR] Tor resolve failed, received unexpected cell from exit node: %s.", BriandUtils::BriandTorRelayCellCommandToString(tempCell->GetRelayCommand()).c_str());
 
+					this->IS_BUSY = false;
+
 					return response;
 				}
 
 				// Take payload and return, that's all!
 				response = make_unique<vector<unsigned char>>();
 				response->insert(response->begin(), tempCell->GetPayload()->begin(), tempCell->GetPayload()->end());
+
+				this->IS_BUSY = false;
+
 				return response;
 			}
 
 			tempData.reset();
 		} while (this->sClient->AvailableBytes() > 0);
+
+		this->IS_BUSY = false;
 
 		return response;
 	}
@@ -1031,7 +1056,7 @@ namespace Briand {
 		}
 
 		if (DEBUG) {
-			printf("[DEBUG] Found IPv4 address: %04X\n", resolved.s_addr);
+			printf("[DEBUG] Found IPv4 address: 0x%08X / %s\n", resolved.s_addr, BriandUtils::ipv4ToString(resolved).c_str());
 		}
 
 		return resolved;
@@ -1111,4 +1136,23 @@ namespace Briand {
 		}
 	}
 
+	bool BriandTorCircuit::IsCircuitBuilt() {
+		return this->isBuilt;
+	}
+
+	bool BriandTorCircuit::IsCircuitCreating() {
+		return this->isCreating;
+	}
+
+	bool BriandTorCircuit::IsCircuitClosingOrClosed() {
+		return this->isClosed || this->isClosing;
+	}
+
+	unsigned long int BriandTorCircuit::GetCreatedOn() {
+		return this->createdOn;
+	}
+
+	unsigned short BriandTorCircuit::GetCurrentStreamID() {
+		return this->CURRENT_STREAM_ID;
+	}
 }

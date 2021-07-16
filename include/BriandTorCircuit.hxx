@@ -39,7 +39,7 @@ namespace Briand {
 
 		unique_ptr<Briand::BriandTorRelaySearcher> relaySearcher;
 		bool isBuilt;						// has been built
-		bool isCreating;					// true after the success of a CREATE2
+		bool isCreating;					// true after calling BuildCircuit()
 		bool isClean; 						// not used for any traffic
 		bool isClosing;						// it is currently closing
 		bool isClosed;						// it is closed (call destroyer and free RAM!!)
@@ -48,7 +48,8 @@ namespace Briand {
 		// Tor specific
 		unsigned int CIRCID;					// the CIRCID of this circuit
 		unsigned short LINKPROTOCOLVERSION; 	// the version of this circuit
-		unsigned short CURRENT_STREAM_ID; 		// the current StreamID
+		unsigned short CURRENT_STREAM_ID; 		// the current StreamID (also used for N request used)
+		bool IS_BUSY;							// Flag (currently streaming)
 
 		unique_ptr<BriandIDFSocketTlsClient> sClient;	// Client used for communications
 
@@ -104,9 +105,6 @@ namespace Briand {
 		*/ 
 		bool BuildCircuit(bool forceTorCacheRefresh = false);
 
-		// Stream functions
-		// MUST check if built / closed / closing ....
-
 		/**
 		 * Method returns true if circuit is ready for stream cells
 		 * @return true if circuit is built, ready, valid and not closing.
@@ -139,5 +137,34 @@ namespace Briand {
 		/** Prints the circuit informations to serial. Verbose mode only */
 		void PrintCircuitInfo();
 
+		/**
+		 * Returns the relative flag
+		 * @return flag status
+		*/
+		bool IsCircuitBuilt();
+
+		/**
+		 * Returns the relative flag
+		 * @return flag status
+		*/
+		bool IsCircuitCreating();
+
+		/**
+		 * Returns the relative flags
+		 * @return flags status
+		*/
+		bool IsCircuitClosingOrClosed();
+
+		/**
+		 * Method returns unix timestamp since circuit creation
+		 * @return Unix timestamp since circuit readyness
+		*/
+		unsigned long int GetCreatedOn();
+
+		/**
+		 * Method returns number of streams used (current streamID)
+		 * @return Current StreamID
+		*/
+		unsigned short GetCurrentStreamID();
 	};
 }

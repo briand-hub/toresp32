@@ -25,6 +25,7 @@
 #include <iostream>
 #include <memory>
 #include <fstream>
+#include <sstream>
 #include <algorithm>
 
 #include "BriandDefines.hxx"
@@ -495,4 +496,15 @@ namespace Briand
 		input.erase(std::remove(input.begin(), input.end(), c),input.end());
 	}
 
+	string BriandUtils::ipv4ToString(const in_addr& ip) {
+		return string(ip4addr_ntoa( reinterpret_cast<const ip4_addr_t*>(&ip) ));
+	}
+
+	in_addr BriandUtils::ipv4FromString(const string& ip) {
+		in_addr temp;
+		bzero(&temp, sizeof(temp));
+		ip4addr_aton(ip.c_str(), reinterpret_cast<ip4_addr_t*>(&temp));
+
+		return temp;
+	}
 }

@@ -148,8 +148,5 @@ namespace Briand {
 		// 32..40 -- Used for hidden services; see rend-spec-{v2,v3}.txt.
 
         // 41..42 -- Used for circuit padding; see Section 3 of padding-spec.txt.
-	};
-
-	
-        
+	};        
 }

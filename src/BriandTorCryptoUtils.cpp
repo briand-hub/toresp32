@@ -44,7 +44,7 @@
 
 // HW Accelleration by ESP32 cryptographic hardware
 // #include <mbedtls/aes.h> gives linker error!
-#include <esp32/aes.h>
+#include <aes/esp_aes.h>
 
 
 /* LibSodium found for Ed25519 signatures! It's on framework :-D */
@@ -697,8 +697,8 @@ namespace Briand {
 
 		// The "|" operator is a simple concatenation of the bytes
 
-		constexpr unsigned int G_LENGTH = 32;
-		constexpr unsigned int H_LENGTH = 32;
+		//constexpr unsigned int G_LENGTH = 32;
+		//constexpr unsigned int H_LENGTH = 32;
 		string protoid_string = "ntor-curve25519-sha256-1";
 
 		// using mbedtls works better the old-buffer version ....
