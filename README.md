@@ -2,8 +2,11 @@
 Briand's project to turn an ESP32 into a Tor client "plug&amp;play"
 
 ## Development status
-05/2021 Switching to IDF Framework completed and obtained the first working circuit!
-04/2021 At the moment just a non-working draft!
+
+* 07/2021 Working with multiple circuits (managed asynchronously): connection, hostname resolution
+* 05/2021 Switching to IDF Framework completed and obtained the first working circuit!
+* 04/2021 At the moment just a non-working draft!
+
 For news check always [NEWS FILE](NEWS.md)
 
 ## Intro
@@ -43,7 +46,7 @@ Project is built with VSCode and PlatformIO on WEMOS LOLIND32 platform and Espre
 - [x] Support for simple filesystem (SPIFFS or LittleFS)
 - [x] Connection parameters could be saved in a configuration file (encrypted with 16 char password / AES-128)
 - [x] Add a vintage logo :-)
-- [ ] Study TOR protocol
+- [x] Study TOR protocol
 - [ ] ...
 
 ## Future ideas
