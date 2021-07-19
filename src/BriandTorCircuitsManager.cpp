@@ -27,28 +27,20 @@ using namespace std;
 
 namespace Briand
 {
-    unique_ptr<vector<unique_ptr<BriandTorCircuit>>> BriandTorCircuitsManager::CIRCUITS = nullptr;
-    unique_ptr<vector<unique_ptr<TaskHandle_t>>> BriandTorCircuitsManager::CIRCUITS_HND = nullptr;
+    unique_ptr<unique_ptr<BriandTorCircuit>[]> BriandTorCircuitsManager::CIRCUITS = nullptr;
     unsigned short BriandTorCircuitsManager::CIRCUIT_POOL_SIZE = 3;
-    unsigned short BriandTorCircuitsManager::CIRCUIT_MAX_TIME = 600;
+    unsigned short BriandTorCircuitsManager::CIRCUIT_MAX_TIME = 900;
     unsigned short BriandTorCircuitsManager::CIRCUIT_MAX_REQUESTS = 15;
 
-    BriandTorCircuitsManager::BriandTorCircuitsManager() {
-        this->CIRCUIT_POOL_SIZE = 3;
-        this->CIRCUIT_MAX_TIME = 10*60;
-        this->CIRCUIT_MAX_REQUESTS = 15;
-        this->CIRCUITS = make_unique<vector<unique_ptr<BriandTorCircuit>>>();
-        this->CIRCUITS_HND = make_unique<vector<unique_ptr<TaskHandle_t>>>();
-        this->CIRCUIT_LAST_USED = 0;
+    BriandTorCircuitsManager::BriandTorCircuitsManager() : BriandTorCircuitsManager(3, 15*60, 15) {
     }
 
     BriandTorCircuitsManager::BriandTorCircuitsManager(const unsigned short& poolSize, const unsigned short& maxTime, const unsigned short& maxRequests) {
         this->CIRCUIT_POOL_SIZE = poolSize;
         this->CIRCUIT_MAX_TIME = maxTime;
         this->CIRCUIT_MAX_REQUESTS = maxRequests;
-        this->CIRCUITS = make_unique<vector<unique_ptr<BriandTorCircuit>>>();
-        this->CIRCUITS_HND = make_unique<vector<unique_ptr<TaskHandle_t>>>();
-        this->CIRCUIT_LAST_USED = 0;
+        this->CIRCUITS = make_unique<unique_ptr<BriandTorCircuit>[]>(this->CIRCUIT_POOL_SIZE);
+        this->CIRCUIT_LAST_USED = -1;
     }
 
     BriandTorCircuitsManager::~BriandTorCircuitsManager() {
@@ -58,112 +50,131 @@ namespace Briand
 
     void BriandTorCircuitsManager::Start() {
         // If not empty, clear out the current circuit pool (useful if Stop() not called and want to re-Start the manager)
-        if (this->CIRCUITS->size() > 0) {
-            if (VERBOSE) printf("[INFO] Current circuit pool is not empty, Stopping and restarting.\n");
-            this->Stop();
-        }
+        this->Stop();
 
         // Create a new object for the allocated pool size.
-        for (unsigned short i = 0; i < this->CIRCUIT_POOL_SIZE; i++) {
-            this->CIRCUITS->push_back(std::move( make_unique<BriandTorCircuit>() ));
+        for (static unsigned short i = 0; i < this->CIRCUIT_POOL_SIZE; i++) {
+            this->CIRCUITS[i] = make_unique<BriandTorCircuit>();
+
+            // Save in the internal ID the index in this array
+            this->CIRCUITS[i]->internalID = i;
 
             // Start an async build task for each circuit.
-            auto curHnd = make_unique<TaskHandle_t>();
-            xTaskCreate(this->CircuitTask, "CircuitTask", 4096, &i, 500, curHnd.get());
-            this->CIRCUITS_HND->push_back(std::move(curHnd));
+            xTaskCreate(this->CircuitTask, "CircuitTask", this->TASK_STACK_SIZE, &(this->CIRCUITS[i]->internalID), 500, NULL);
         }
     }
 
     /*static*/ void BriandTorCircuitsManager::CircuitTask(void* circuitIndex) {
         // ESP-IDF task must never return 
         while (1) {
-            unsigned short cIndex = *(static_cast<unsigned short*>(circuitIndex));
+            unsigned short cIndex = *(reinterpret_cast<unsigned short*>(circuitIndex));
 
-            if (DEBUG) printf("[DEBUG] Invoked task for circuit #%ud.\n", cIndex);
+            if (DEBUG) printf("[DEBUG] Invoked task for circuit #%hu.\n", cIndex);
 
-            auto& circuit = BriandTorCircuitsManager::CIRCUITS->at(cIndex);
-            
-            if (circuit->IsCircuitCreating()) {
-                // Just wait
-                if (DEBUG) printf("[DEBUG] Circuit #%ud is creating, waiting.\n", cIndex);
+            // If this is an "orphan" task of a previous "killed" circuit, terminate.
+            if (BriandTorCircuitsManager::CIRCUITS[cIndex] == nullptr) {
+                if (DEBUG) printf("[DEBUG] Circuit #%hu is orphan, killing task.\n", cIndex);
+
+                // delete this task!
+                vTaskDelete(NULL);
             }
-            else if (circuit->IsCircuitClosingOrClosed()) {
-                // Get the handler (by moving)
-                auto hnd = std::move( BriandTorCircuitsManager::CIRCUITS_HND->at(cIndex) );
+            else {
+                auto& circuit = BriandTorCircuitsManager::CIRCUITS[cIndex];
+                
+                if (circuit->IsCircuitCreating()) {
+                    // Just wait
+                    if (DEBUG) printf("[DEBUG] Circuit #%hu is creating, waiting.\n", cIndex);
+                }
+                else if (circuit->IsCircuitClosingOrClosed()) {
+                    if (DEBUG) printf("[DEBUG] Circuit #%hu is closing/closed, removing from pool.\n", cIndex);
 
-                // Remove the handler
-                BriandTorCircuitsManager::CIRCUITS_HND->erase(BriandTorCircuitsManager::CIRCUITS_HND->begin() + cIndex);
+                    // Reset the pointer
+                    BriandTorCircuitsManager::CIRCUITS[cIndex].reset();
 
-                // Terminate this task!
-                vTaskDelete(*hnd.get());
+                    // Terminate this task
+                    vTaskDelete(NULL);
+                }
+                else if (!circuit->IsCircuitBuilt()) {
+                    if (DEBUG) printf("[DEBUG] Circuit #%hu needs to be built, building.\n", cIndex);
 
-                // hnd out of scope, automatically destroyed.
-            }
-            else if (!circuit->IsCircuitBuilt()) {
-                // Here circuit is not built nor in creating, so build it.
-                circuit->BuildCircuit(false);
-            }
-            else if(circuit->IsCircuitBuilt()) {
-                // Check if the circuit should be closed for elapsed time
-                if (circuit->GetCreatedOn() + BriandTorCircuitsManager::CIRCUIT_MAX_TIME >= BriandUtils::GetUnixTime()) {
-                    circuit->TearDown(Briand::BriandTorDestroyReason::FINISHED);
+                    // Here circuit is not built nor in creating, so build it.
+                    circuit->BuildCircuit(false);
+                }
+                else if(circuit->IsCircuitBuilt()) {
+                    if (BriandUtils::GetUnixTime() >= circuit->GetCreatedOn() + BriandTorCircuitsManager::CIRCUIT_MAX_TIME) {
+                        // The circuit should be closed for elapsed time
+                        if (DEBUG) printf("[DEBUG] Circuit #%hu has reached maximum life time, sending destroy.\n", cIndex);
+                        circuit->TearDown(Briand::BriandTorDestroyReason::FINISHED);
+                    }
+                    else if (circuit->GetCurrentStreamID() >= BriandTorCircuitsManager::CIRCUIT_MAX_REQUESTS) {
+                        // The circuit should be closed for maximum requests
+                        if (DEBUG) printf("[DEBUG] Circuit #%hu has reached maximum requests, sending destroy.\n", cIndex);
+                        circuit->TearDown(Briand::BriandTorDestroyReason::FINISHED);
+                    }
+                    else if (!circuit->IsCircuitBusy()) {
+                        // No problems                     
+                        // Send a PADDING to keep alive!
+                        if (DEBUG) printf("[DEBUG] Circuit #%hu is alive and not busy, sending PADDING.\n", cIndex);
+                        circuit->SendPadding();
+                    }
                 }
 
-                // Check if the circuit should be closed for maximum requests
-                if (circuit->GetCurrentStreamID() >= BriandTorCircuitsManager::CIRCUIT_MAX_REQUESTS) {
-                    circuit->TearDown(Briand::BriandTorDestroyReason::FINISHED);
+                // Check if there are the number of needed circuits built, if not add the needed
+                for (unsigned short i = 0; i < BriandTorCircuitsManager::CIRCUIT_POOL_SIZE; i++) {
+                    if (BriandTorCircuitsManager::CIRCUITS[i] == nullptr) {
+                        if (DEBUG) printf("[DEBUG] Adding a new circuit to pool as #%hu.\n", i);
+                        BriandTorCircuitsManager::CIRCUITS[i] = make_unique<BriandTorCircuit>();
+                        BriandTorCircuitsManager::CIRCUITS[i]->internalID = i;
+                        xTaskCreate(CircuitTask, "CircuitTask", BriandTorCircuitsManager::TASK_STACK_SIZE, &(BriandTorCircuitsManager::CIRCUITS[i]->internalID), 500, NULL);
+                    }
                 }
+
+                // Wait before next execution.
+                vTaskDelay(BriandTorCircuitsManager::TASK_WAIT_BEFORE_NEXT / portTICK_PERIOD_MS);
             }
-
-            //
-            // TODO : check if is convenient to handle here streams requests/commands
-            //
-
-            // Check if there are the number of needed circuits built, if not add the needed
-            for (unsigned short i = BriandTorCircuitsManager::CIRCUITS->size() - 1; i < BriandTorCircuitsManager::CIRCUIT_POOL_SIZE; i++) {
-                BriandTorCircuitsManager::CIRCUITS->push_back(std::move( make_unique<BriandTorCircuit>() ));
-                auto curHnd = make_unique<TaskHandle_t>();
-                xTaskCreate(CircuitTask, "CircuitTask", 8192, &i, 500, curHnd.get());
-                BriandTorCircuitsManager::CIRCUITS_HND->push_back(std::move(curHnd));
-            }
-
-            // Wait 10 seconds before next execution.
-            vTaskDelay(10000 / portTICK_PERIOD_MS);
         }
     }
 
     void BriandTorCircuitsManager::Stop() {
-        // Terminate any task handle
-        for (auto&& thnd : *this->CIRCUITS_HND) {
-            vTaskDelete(*thnd.get());
-            thnd.reset();
+        // Kill all circuits
+        for (unsigned short i=0; i<this->CIRCUIT_POOL_SIZE; i++) {
+            if (this->CIRCUITS[i] != nullptr) {
+                this->CIRCUITS[i].reset();
+            }
         }
-
-        // Destroy & Reset all circuits
-        this->CIRCUITS->clear();
     }
 
-    unique_ptr<BriandTorCircuit> BriandTorCircuitsManager::GetCircuit() {
+    BriandTorCircuit* BriandTorCircuitsManager::GetCircuit() {
+        for (unsigned short i = 0; i < BriandTorCircuitsManager::CIRCUIT_POOL_SIZE; i++) {
+            if (BriandTorCircuitsManager::CIRCUITS[i] != nullptr) {
+                auto& circuit = BriandTorCircuitsManager::CIRCUITS[i];
+                if (circuit->IsCircuitBuilt() && !circuit->IsCircuitBusy() && circuit->internalID != this->CIRCUIT_LAST_USED) {
+                    this->CIRCUIT_LAST_USED = circuit->internalID;
+                    return circuit.get();
+                }
+            }
+        }
+
         return nullptr;
     }
 
     void BriandTorCircuitsManager::PrintCircuitsInfo() {
-        printf("#  Status          Description\n");
+        printf("#\tStatus\t\tDescription\n");
         for (unsigned short i=0; i<this->CIRCUIT_POOL_SIZE; i++) {
             printf("%u\t", i);
-            if (this->CIRCUITS->size() <= i) {
+            if (this->CIRCUITS[i] == nullptr) {
                 printf("NONE\t\tNot instanced\n");
             }
             else {
-                auto& circuit = this->CIRCUITS->at(i);
-                if (circuit->IsCircuitClosingOrClosed()) 
-                    printf("Closing/Closed  ");
-                else if (circuit->IsCircuitBuilt())
-                    printf("Built           ");
+                auto& circuit = this->CIRCUITS[i];
+                if (circuit->IsCircuitBuilt())
+                    printf("Built\t\t");
                 else if (circuit->IsCircuitCreating())
-                    printf("Building...     ");
+                    printf("Building...\t");
+                else if (circuit->IsCircuitClosingOrClosed()) 
+                    printf("Closing/Closed\t");
                 else
-                    printf("Unknown         ");
+                    printf("Unknown\t\t");
 
                 printf("You <--> ");
 

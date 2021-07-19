@@ -598,7 +598,7 @@ namespace Briand {
 		this->CIRCID = 0;
 		this->LINKPROTOCOLVERSION = 0;
 		this->CURRENT_STREAM_ID = 0;
-		this->IS_BUSY = false;
+		this->isBusy = false;
 		
 		this->sClient = nullptr;
 	}
@@ -766,6 +766,8 @@ namespace Briand {
 
 		if (!stepDone) {
 			if (DEBUG) printf("[DEBUG] Failed to conclude CREATE2 with guard.\n");
+			this->isCreating = false;
+			this->TearDown();
 			return false;
 		}
 
@@ -823,18 +825,18 @@ namespace Briand {
 		if (!this->isClean) this->isClean = false;
 		
 		unique_ptr<vector<unsigned char>> response = nullptr;
-		this->IS_BUSY = true;
+		this->isBusy = true;
 
 		if (!this->IsCircuitReadyToStream()) {
 			if (VERBOSE) printf("[ERR] TorStream called but circuit is not built and ready to stream.\n");
-			this->IS_BUSY = false;
+			this->isBusy = false;
 
 			return response;
 		}
 
 		if (requestPayload == nullptr) {
 			if (VERBOSE) printf("[ERR] TorStream called with NULL request payload.\n");
-			this->IS_BUSY = false;
+			this->isBusy = false;
 
 			return response;
 		}
@@ -870,7 +872,7 @@ namespace Briand {
 
 			if (!tempCell->BuildFromBuffer(tempData, this->LINKPROTOCOLVERSION)) {
 				if (VERBOSE) printf("[ERR] TorStream error, response cell had invalid bytes (failed to build from buffer).\n");
-				this->IS_BUSY = false;
+				this->isBusy = false;
 
 				return response;
 			}
@@ -880,7 +882,7 @@ namespace Briand {
 				if (VERBOSE) printf("[ERR] TorStream error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
 				this->TearDown();
 				this->Cleanup();
-				this->IS_BUSY = false;
+				this->isBusy = false;
 
 				return response;
 			}
@@ -903,7 +905,7 @@ namespace Briand {
 
 					if (VERBOSE) printf("[ERR] TorStream error, received unexpected cell from guard node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
 
-					this->IS_BUSY = false;
+					this->isBusy = false;
 
 					return response;					
 				}
@@ -922,7 +924,7 @@ namespace Briand {
 
 					if (VERBOSE) printf("[ERR] TorStream error, received unexpected cell from middle node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
 					
-					this->IS_BUSY = false;
+					this->isBusy = false;
 
 					return response;					
 				}
@@ -939,7 +941,7 @@ namespace Briand {
 
 					if (VERBOSE) printf("[ERR] TorStream error, unrecognized cell from exit node.\n");
 					
-					this->IS_BUSY = false;
+					this->isBusy = false;
 
 					return response;
 				}
@@ -947,7 +949,7 @@ namespace Briand {
 				// Here cell is recognized, build informations
 				if (!tempCell->BuildRelayCellFromPayload(this->exitNode->KEY_BackwardDigest_Db)) {
 					if (VERBOSE) printf("[ERR] TorStream error on rebuilding RELAY cell informations from exit node, invalid response cell.\n");
-					this->IS_BUSY = false;
+					this->isBusy = false;
 
 					return response;
 				}
@@ -961,7 +963,7 @@ namespace Briand {
 					else if (VERBOSE) 
 						printf("[ERR] Tor resolve failed, received unexpected cell from exit node: %s.", BriandUtils::BriandTorRelayCellCommandToString(tempCell->GetRelayCommand()).c_str());
 
-					this->IS_BUSY = false;
+					this->isBusy = false;
 
 					return response;
 				}
@@ -970,7 +972,7 @@ namespace Briand {
 				response = make_unique<vector<unsigned char>>();
 				response->insert(response->begin(), tempCell->GetPayload()->begin(), tempCell->GetPayload()->end());
 
-				this->IS_BUSY = false;
+				this->isBusy = false;
 
 				return response;
 			}
@@ -978,7 +980,7 @@ namespace Briand {
 			tempData.reset();
 		} while (this->sClient->AvailableBytes() > 0);
 
-		this->IS_BUSY = false;
+		this->isBusy = false;
 
 		return response;
 	}
@@ -1062,6 +1064,17 @@ namespace Briand {
 		return resolved;
 	}
 
+	void BriandTorCircuit::SendPadding() {
+		if (this->isBuilt && !this->isBusy && !this->isClosed && !this->isClosing)  {
+			auto tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
+			auto noBuf = tempCell->SendCell(this->sClient, false, false);
+			if (DEBUG) printf("[DEBUG] PADDING cell sent through circuit.\n");
+		}
+		else if (DEBUG) {
+			printf("[DEBUG] SendPadding failed because circuit is not built/is busy/is closing or closed.\n");
+		}
+	}
+
 	void BriandTorCircuit::TearDown(BriandTorDestroyReason reason /*  = BriandTorDestroyReason::NONE */) {
 		this->isClosing = true;
 
@@ -1142,6 +1155,10 @@ namespace Briand {
 
 	bool BriandTorCircuit::IsCircuitCreating() {
 		return this->isCreating;
+	}
+
+	bool BriandTorCircuit::IsCircuitBusy() {
+		return this->isBusy;
 	}
 
 	bool BriandTorCircuit::IsCircuitClosingOrClosed() {

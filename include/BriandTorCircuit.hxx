@@ -43,13 +43,13 @@ namespace Briand {
 		bool isClean; 						// not used for any traffic
 		bool isClosing;						// it is currently closing
 		bool isClosed;						// it is closed (call destroyer and free RAM!!)
+		bool isBusy;						// Flag (currently streaming / doing something)
 		unsigned long int createdOn;		// create timestamp
 
 		// Tor specific
 		unsigned int CIRCID;					// the CIRCID of this circuit
 		unsigned short LINKPROTOCOLVERSION; 	// the version of this circuit
 		unsigned short CURRENT_STREAM_ID; 		// the current StreamID (also used for N request used)
-		bool IS_BUSY;							// Flag (currently streaming)
 
 		unique_ptr<BriandIDFSocketTlsClient> sClient;	// Client used for communications
 
@@ -90,8 +90,14 @@ namespace Briand {
 
 		public:
 		
+		/** An internal additional ID, use as you wish (used by CircuitsManager class) */
+		unsigned short internalID;
+
+		/** The guard node */
 		unique_ptr<Briand::BriandTorRelay> guardNode;
+		/** The middle node */
 		unique_ptr<Briand::BriandTorRelay> middleNode;
+		/** The exit node */
 		unique_ptr<Briand::BriandTorRelay> exitNode;
 
 		BriandTorCircuit();
@@ -129,6 +135,11 @@ namespace Briand {
 		const in_addr TorResolve(const string& hostname);
 
 		/**
+		 * Send a PADDING cell through circuit for keep-alive
+		*/
+		void SendPadding();
+
+		/**
 		 * Tears down the circuit. Also closes and resets the sClient!
 		 * @param reason the reason, however should be always set to zero (NONE) if client version to avoid version leaking.
 		*/
@@ -154,6 +165,12 @@ namespace Briand {
 		 * @return flags status
 		*/
 		bool IsCircuitClosingOrClosed();
+
+		/**
+		 * Returns the relative flag
+		 * @return flag status
+		*/
+		bool IsCircuitBusy();
 
 		/**
 		 * Method returns unix timestamp since circuit creation

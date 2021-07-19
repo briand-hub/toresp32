@@ -101,7 +101,7 @@ void app_main() {
 	TorEsp32Setup();
 
 	// Start application loop
-	xTaskCreate(TorEsp32Main, "TorEsp32", 8192, NULL, 5, NULL);
+	xTaskCreate(TorEsp32Main, "TorEsp32", 8192, NULL, 15, NULL);
 	// TODO: verify stack size
 }
 
@@ -614,10 +614,10 @@ void executeCommand(string& cmd) {
 
 		printf("TOR TESTING-----------------------------------------------------------------------\n");
 		printf("ifconfig.me : Show **REAL** ifconfig.me information (NON-TOR REQUEST, REAL ADDRESS).\n");
-		printf("tor ifconfig.me : Show tor ifconfig.me information (TOR REQUEST).\n");
+		printf("tortest : Make a TorResolve request for ifconfig.me then sends PADDING cells then another resolve.\n");
 
 		printf("TOR COMMANDS----------------------------------------------------------------------\n");
-		//printf("tor http get [url] : Show tor ifconfig.me information (TOR REQUEST).\n");
+		printf("tor http get [url] : Tor HTTP/GET request to url. Resulting response printed to console.\n");
     }
     else if (cmd.compare("time") == 0) {
         printLocalTime();
@@ -736,7 +736,26 @@ void executeCommand(string& cmd) {
 	else if (cmd.compare("torcircuits") == 0) {
 		CIRCUITS_MANAGER->PrintCircuitsInfo();
 	}
-
+	// TOR commands
+	else if (cmd.compare("tortest") == 0) {
+		auto circuit = CIRCUITS_MANAGER->GetCircuit();
+		if (circuit == nullptr) {
+			printf("No suitable circuit found.\n");
+		}
+		else {
+			printf("FISRT RESOLVED TO: %s\n", Briand::BriandUtils::ipv4ToString(circuit->TorResolve("ifconfig.me")).c_str());
+			circuit->SendPadding();
+			circuit->SendPadding();
+			circuit->SendPadding();
+			printf("SECOND RESOLVED TO: %s\n", Briand::BriandUtils::ipv4ToString(circuit->TorResolve("ifconfig.me")).c_str());
+		}
+	}
+	else if (cmd.substr(0, 13).compare("tor http get ") == 0) {
+		cmd.erase(cmd.begin(), cmd.begin() + 13);
+		//
+		// TODO
+		//
+	}
 	// other commands implementation...
     else {
         printf("Unknown command.\n");

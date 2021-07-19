@@ -20,7 +20,6 @@
 
 #include <iostream>
 #include <memory>
-#include <vector>
 
 #include "BriandTorCircuit.hxx"
 
@@ -34,11 +33,14 @@ namespace Briand {
     class BriandTorCircuitsManager {
 		protected:
 
-        /** The circuit pool */
-        static unique_ptr<vector<unique_ptr<BriandTorCircuit>>> CIRCUITS;
+        /** Task stack size in bytes, obtained by tests. If too low task will crash! */
+        static const unsigned short TASK_STACK_SIZE = 5120;
 
-        /** The circuit task handle pool */
-        static unique_ptr<vector<unique_ptr<TaskHandle_t>>> CIRCUITS_HND;
+        /** Task re-execution time, obtained by tests, in milliseconds. */
+        static const unsigned short TASK_WAIT_BEFORE_NEXT = 30*1000;
+
+        /** The circuit pool */
+        static unique_ptr<unique_ptr<BriandTorCircuit>[]> CIRCUITS;
 
         /** Last used circuit */
         unsigned short CIRCUIT_LAST_USED;
@@ -46,7 +48,7 @@ namespace Briand {
         /** Circuit pool size (default 3) */
         static unsigned short CIRCUIT_POOL_SIZE;
 
-        /** Maximum time in seconds to keep a circuit active before closing it (default 10 minutes) */
+        /** Maximum time in seconds to keep a circuit active before closing it (default 15 minutes) */
         static unsigned short CIRCUIT_MAX_TIME;
 
         /** Maximum number of requests to do with the same circuit (default 15 requests) before closing it */
@@ -54,7 +56,7 @@ namespace Briand {
 
         /**
          * This method is asynchronous and provides operations for a single circuit
-         * @param circuitIndex an unsigned short (circuit index), void* because of ESP-IDF requirement.
+         * @param circuitIndex an unsigned short (circuit index in the CIRCUITS vector), void* because of ESP-IDF requirement.
         */
        static void CircuitTask(void* circuitIndex);
 
@@ -90,9 +92,13 @@ namespace Briand {
 
         /**
          * This method returns a valid circuit to perform requests
-         * @return Pointer to the circuit, nullptr if no circuits available
+         * @return Raw pointer to the circuit (BE CAREFUL!!), nullptr if no circuits available
         */
-       unique_ptr<BriandTorCircuit> GetCircuit();
+       BriandTorCircuit* GetCircuit();
+
+        /** 
+         * 
+        */
 
        /**
         * Prints out the current circuits situation

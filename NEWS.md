@@ -7,9 +7,15 @@
 * Find a way to get a small-size official consensus from directories
 * Simplify code in TorCircuit class
 * Authenticate cell? => Prepare stub method to authenticate client
-* Ignoring PADDING cells in SendCell responses
+* General ignore PADDING cells in SendCell responses
+* Send DEBUG/VERBOSE messages to another tty/stderr
 
-## 
+## 2021-07-18
+
+* Tested Circuits Manager, working
+* Added test tor command and tested PADDING on built circuits, hostname resolution. All OK!
+
+## 2021-07-17
 
 * Bug solved on onionoo URL separator
 * Wrote Stream method
