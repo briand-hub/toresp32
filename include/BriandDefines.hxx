@@ -23,9 +23,10 @@
 #ifndef BRIANDDEFINES_H_ 
     #define BRIANDDEFINES_H_             
 
-    constexpr bool VERBOSE = true;							// show messages
-    constexpr bool DEBUG = true;							// show debug info (USE ONLY IN DEBUGGING, MUST BE SET TO false WHEN USING!)
+    //constexpr bool VERBOSE = true;						// show messages
+    //constexpr bool DEBUG = true;							// show debug info (USE ONLY IN DEBUGGING, MUST BE SET TO false WHEN USING!)
     //constexpr unsigned int SERIAL_BAUD_RATE = 115200;		// serial monitor/console baud rate (115200 default)
+    constexpr const char* LOGTAG = "toresp32";              // Custom ESP Tag for logging
     constexpr bool CHANGE_MAC_TO_RANDOM = true;				// choose if you want to change the MAC address to a random one for improved security
     constexpr unsigned short WIFI_CONNECTION_TIMEOUT = 30;  // timeout in seconds, expired with no wifi STA connection will reboot system
     constexpr unsigned char WIFI_HOSTNAME_LEN = 8;			// random hostname length for AP/STA
@@ -43,5 +44,19 @@
     constexpr unsigned short TOR_CIRCUITS_MAX_REQUESTS = 15; // After N requests the Tor circuit will be closed and changed.
     constexpr unsigned char TOR_NODES_CACHE_SIZE = 50;		// No. of Tor nodes, for each type (guard/exit/middle) to keep saved. (Avoid more than 50)
     constexpr unsigned char TOR_NODES_CACHE_VAL_H = 24;		// Hours since the chache of nodes is considered OLD and must be downloaded again
+
+    // Early declarations of ESP logging functions trick (see BriandEspLogging.cpp)
+    
+    /* This define, before including esp_log.h, allows log level higher than the settings in menuconfig  */
+    #define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
+
+    #include <esp_idf_version.h>
+    #include <esp_log.h>
+
+    void BRIAND_SET_LOG(esp_log_level_t);
+
+    #if ESP_IDF_VERSION <= ESP_IDF_VERSION_VAL(4, 3, 0)
+        esp_log_level_t esp_log_level_get(const char*);
+    #endif
 
 #endif /* BRIANDDEFINES_H_ */

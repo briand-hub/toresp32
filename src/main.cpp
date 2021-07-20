@@ -22,7 +22,6 @@
 #include <esp_system.h>
 #include <esp_wifi.h>
 #include <esp_event.h>
-#include <esp_log.h>
 #include <esp_int_wdt.h>
 #include <esp_task_wdt.h>
 #include <nvs_flash.h>
@@ -121,34 +120,41 @@ void TorEsp32Setup() {
 	// Common for error testing
 	esp_err_t ret;
 
+	// Disable default ESP log to Error only, set the log of this code to WARNING by default
+	printf("[INFO] Setting ESP default log level to none...\n");
+	esp_log_level_set("*", ESP_LOG_NONE);
+	printf("[INFO] Setting the TorEsp32 default log level to warning...\n");
+	esp_log_level_set(LOGTAG, ESP_LOG_WARN);
+	BRIAND_SET_LOG(ESP_LOG_WARN);
+
 	// Initialize the NVS
-	if (VERBOSE) printf("[INFO] Initializing NVS...");
+	printf("[INFO] Initializing NVS...");
 	ret = nvs_flash_init();
 	if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
 		ESP_ERROR_CHECK(nvs_flash_erase());
 		ret = nvs_flash_init();
 	}
 	ESP_ERROR_CHECK(ret);
-	if (VERBOSE) printf("done.\n");
+	printf("done.\n");
 
     // De-buffered serial communication
-	if (VERBOSE) printf("[INFO] Unbuffering stdout...");
+	printf("[INFO] Unbuffering stdout...");
 	setvbuf(stdout, NULL, _IONBF, 0);
-	if (VERBOSE) printf("done.\n");
-	if (VERBOSE) printf("[INFO] Unbuffering stdin...");
+	printf("done.\n");
+	printf("[INFO] Unbuffering stdin...");
 	setvbuf(stdin, NULL, _IONBF, 0);
-	if (VERBOSE) printf("done.\n");
+	printf("done.\n");
 
-    if (VERBOSE) printf("[INFO] Entering step %d\n", nextStep);
+    printf("[INFO] Entering step %d\n", nextStep);
 
     // Turn off leds
-	if (VERBOSE) printf("[INFO] Turning OFF built led %d\n", GPIO_NUM_5);
+	printf("[INFO] Turning OFF built led %d\n", GPIO_NUM_5);
     gpio_set_direction(GPIO_NUM_5, GPIO_MODE_OUTPUT);
     gpio_set_level(GPIO_NUM_5, 1); // 1 => off, 0 => on
     
 	// Initialize SPIFFS File System
 	
-	if (VERBOSE) printf("[INFO] Initializing SPIFFS file system...");
+	printf("[INFO] Initializing SPIFFS file system...");
 	
 	esp_vfs_spiffs_conf_t conf = {
 		.base_path = "/spiffs",
@@ -164,30 +170,30 @@ void TorEsp32Setup() {
 
 	if (ret != ESP_OK) {
 		if (ret == ESP_FAIL) {
-			if (VERBOSE) printf("FAILED! (mont error)\n");
+			printf("FAILED! (mont error)\n");
 		}
 		else if (ret == ESP_ERR_NOT_FOUND) {
-			if (VERBOSE) printf("FAILED! (failed to find SPIFFS partition)\n");
+			printf("FAILED! (failed to find SPIFFS partition)\n");
 		}
 		else {
-			if (VERBOSE) printf("FAILED! reason: %s\n", esp_err_to_name(ret));
+			printf("FAILED! reason: %s\n", esp_err_to_name(ret));
 		}
 		
 		return; // Will create panic
 	}
 
-	if (VERBOSE) printf("done.\n");
+	printf("done.\n");
 	
 	unsigned int total = 0, used = 0;
 	ret = esp_spiffs_info(conf.partition_label, &total, &used);
 	if (ret != ESP_OK) {
-		if (VERBOSE) printf("[INFO] Failed to get SPIFFS partition information: %s\n", esp_err_to_name(ret));
+		printf("[INFO] Failed to get SPIFFS partition information: %s\n", esp_err_to_name(ret));
 	}	
 	else {
-		if (VERBOSE) printf("[INFO] Partition size: total: %d used: %d bytes.\n", total, used);
+		printf("[INFO] Partition size: total: %d used: %d bytes.\n", total, used);
 	} 
 
-    if (VERBOSE) {
+    {
         // Benchmarking
         unsigned long testStart = 0;
 
@@ -238,7 +244,7 @@ void TorEsp32Setup() {
 
 	// Init WiFi to AP+STA 
 	
-	if (VERBOSE) printf("[INFO] Initializing WiFi\n");
+	printf("[INFO] Initializing WiFi\n");
 
 	WiFi = Briand::BriandIDFWifiManager::GetInstance();
 	WiFi->SetVerbose(false, true);
@@ -249,9 +255,9 @@ void TorEsp32Setup() {
 	AP_HOSTNAME->append( Briand::BriandUtils::GetRandomHostName().get() );
 	
 	// High processor frequency
-	if (VERBOSE) printf("[INFO] Setting CPU speed to 240MHz\n");
+	printf("[INFO] Setting CPU speed to 240MHz\n");
 	Briand::BriandESPDevice::SetCpuFreqMHz(240);
-	if (VERBOSE) printf("[INFO] Current CPU speed is %lu MHz.\n", Briand::BriandESPDevice::GetCpuFreqMHz());
+	printf("[INFO] Current CPU speed is %lu MHz.\n", Briand::BriandESPDevice::GetCpuFreqMHz());
 
     // Print welcome
     printLogo();
@@ -291,6 +297,9 @@ void TorEsp32Main(void* taskArg) {
 			else if (in == 13 || in == 10) {
 				SERIAL_INPUT_READING = false;
 				SERIAL_INPUT_POINTER = nullptr;
+
+				// "Show" >ENTER< char
+				printf("\n");
 
 				// de-buffer (terminal "sticky" keys)
 				while (in != 0xFF || in < 0) in = (char)fgetc(stdin);
@@ -363,14 +372,14 @@ void TorEsp32Main(void* taskArg) {
 		}
 		else if (nextStep == 4) {
 			// Got Essid, ask for password
-			if (DEBUG) printf("  >Entered: %s\n", STA_ESSID->c_str());
+			ESP_LOGD(LOGTAG, "  >Entered: %s\n", STA_ESSID->c_str());
 			printf("Connect to WiFi - PASSWORD: ");
 			nextStep = 5;
 			startSerialRead(STA_PASSW.get());
 		}
 		else if (nextStep == 5) {
 			// Got Password, connect
-			if (DEBUG) printf("  >Entered: %s\n", STA_PASSW->c_str());
+			ESP_LOGD(LOGTAG, "  >Entered: %s\n", STA_PASSW->c_str());
 			nextStep = 6;
 		}
 		else if (nextStep == 6) {
@@ -378,15 +387,15 @@ void TorEsp32Main(void* taskArg) {
 			printf("[INFO] Connecting to %s ...", STA_ESSID->c_str());
 
 			if (!WiFi->ConnectStation(*STA_ESSID.get(), *STA_PASSW.get(), WIFI_CONNECTION_TIMEOUT, *STA_HOSTNAME.get(), CHANGE_MAC_TO_RANDOM)) {
-				printf("\n\n[ERR] WIFI CONNECTION ERROR/TIMEOUT. SYSTEM WILL RESTART IN 5 SECONDS!\n");
+				ESP_LOGE(LOGTAG, "\n\n[ERR] WIFI CONNECTION ERROR/TIMEOUT. SYSTEM WILL RESTART IN 5 SECONDS!\n");
 				vTaskDelay(5000 / portTICK_PERIOD_MS);
 				reboot();
 			}
 
 			printf("connected!\n");
 
-			if (VERBOSE) printf("[INFO] STA MAC: %s\n", WiFi->GetStaMAC().c_str());
-			if (VERBOSE) printf("[INFO] LAN IP Address: %s\n", WiFi->GetStaIP().c_str());
+			printf("[INFO] STA MAC: %s\n", WiFi->GetStaMAC().c_str());
+			printf("[INFO] LAN IP Address: %s\n", WiFi->GetStaIP().c_str());
 
 			nextStep = 7;
 		}
@@ -423,13 +432,13 @@ void TorEsp32Main(void* taskArg) {
 
 			// Initialize AP interface
 
-			if(VERBOSE) printf("[INFO] Now initializing AP interface...\n");
+			printf("[INFO] Now initializing AP interface...\n");
 
 			AP_ESSID = make_unique<string>(Briand::BriandUtils::GetRandomSSID().get());
 			AP_PASSW = make_unique<string>(Briand::BriandUtils::GetRandomPassword(WIFI_AP_PASSWORD_LEN).get());
 			//if (WiFi.softAP(apEssid.get(), apPassword.get(), WIFI_AP_CH, WIFI_AP_HIDDEN, WIFI_AP_MAX_CONN)) {
 			if (WiFi->StartAP(*AP_ESSID.get(), *AP_PASSW.get(), WIFI_AP_CH, WIFI_AP_MAX_CONN, CHANGE_MAC_TO_RANDOM)) {
-				if(VERBOSE) printf("[INFO] AP Ready. ESSID: %s PASSWORD: %s\n", AP_ESSID->c_str(), AP_PASSW->c_str());
+				printf("[INFO] AP Ready. ESSID: %s PASSWORD: %s\n", AP_ESSID->c_str(), AP_PASSW->c_str());
 				
 				// Change default ip
 				WiFi->SetApIPv4(10, 0, 0, 1);
@@ -442,7 +451,7 @@ void TorEsp32Main(void* taskArg) {
 
 			}
 			else {
-				printf("[ERR] Error on AP init! Only serial communication is enabled.\n");
+				ESP_LOGE(LOGTAG, "[ERR] Error on AP init! Only serial communication is enabled.\n");
 			}
 
 			// Proceed to next step
@@ -457,7 +466,7 @@ void TorEsp32Main(void* taskArg) {
 			nextStep = 1000;
 		}
 		else if (nextStep == 1000) {
-			printf("[INFO] Starting TOR Circuits Manager (may take some time, check help command).\n");
+			printf("[INFO] Starting TOR Circuits Manager.\n");
 			
 			CIRCUITS_MANAGER = make_unique<Briand::BriandTorCircuitsManager>(TOR_CIRCUITS_KEEPALIVE, TOR_CIRCUITS_MAX_TIME_S, TOR_CIRCUITS_MAX_REQUESTS);
 			CIRCUITS_MANAGER->Start();
@@ -469,7 +478,7 @@ void TorEsp32Main(void* taskArg) {
 			// Start heap-leak warning watch
 			HEAP_LEAK_CHECK = Briand::BriandESPDevice::GetFreeHep(); // TODO + Briand::BriandESPDevice::GetFreePsram();
 
-			if (VERBOSE) printf("[INFO] Free heap at system start is %u bytes.\n", HEAP_LEAK_CHECK);
+			printf("[INFO] Free heap at system start is %u bytes.\n", HEAP_LEAK_CHECK);
 		}
 		else if (nextStep == 10000) {
 			// Here system ready for commands
@@ -511,7 +520,7 @@ void printLogo() {
 }
 
 void syncTimeWithNTP() {
-	if (VERBOSE) printf("[INFO] Sync time to UTC+0 (no daylight saving) with NTP server %s\n", NTP_SERVER);
+	ESP_LOGI(LOGTAG, "[INFO] Sync time to UTC+0 (no daylight saving) with NTP server %s\n", NTP_SERVER);
 
 	//For UTC -5.00 : -5 * 60 * 60 : -18000
 	//For UTC +1.00 : 1 * 60 * 60 : 3600
@@ -535,7 +544,7 @@ void syncTimeWithNTP() {
 	sntp_setservername(0, NTP_SERVER);
 	sntp_init();
 
-	if (VERBOSE) printf("[INFO] SNTP Time sync in progress...");
+	ESP_LOGI(LOGTAG, "[INFO] SNTP Time sync in progress...");
 
 	// Wait until timeout or success
 	int maxTentatives = 60; // = 30 seconds
@@ -544,10 +553,10 @@ void syncTimeWithNTP() {
 		vTaskDelay(500/portTICK_PERIOD_MS);
 	}
 
-	if (VERBOSE && maxTentatives > 0) printf("done.\n");
-	if (VERBOSE && maxTentatives <= 0) printf("FAILED.\n");
+	if (maxTentatives > 0) ESP_LOGI(LOGTAG, "done.\n");
+	if (maxTentatives <= 0) ESP_LOGI(LOGTAG, "FAILED.\n");
 
-	if (VERBOSE) printLocalTime();
+	printLocalTime();
 }
 
 void printLocalTime()
@@ -589,7 +598,7 @@ void executeCommand(string& cmd) {
 
 	if (cmd.compare("help") == 0) {
         printf("COMMAND : description\n");
-		printf("GENERAL---------------------------------------------------------------------------\n");
+		printf("SYSTEM---------------------------------------------------------------------------\n");
 		printf("help : display this.\n");
         printf("time : display date and time.\n");
 		printf("devinfo : display device information.\n");
@@ -597,14 +606,12 @@ void executeCommand(string& cmd) {
 		printf("netinfo : display network STA/AP interfaces information.\n");
 		printf("apoff : turn off AP interface.\n");
 		printf("apon : turn on AP interface (will keep intact hostname/essid/password).\n");
-		printf("torcache : print out the local node cache, all 3 files.\n");
-        printf("torcache-refresh : refresh the tor cache.\n");
-		printf("torcircuits : print out the current tor circuit status.\n");
         printf("synctime : sync localtime time with NTP.\n");
+		printf("loglevel [N/E/W/I/D/V] : Sets the log level, from lower to highest: None/Error/Warning/Info/Debug/Verbose.\n");
 		printf("reboot : restart device.\n");
 
-		if (DEBUG) {
-			printf("TESTING (DEBUG ACTIVE)--------------------------------------------------------\n");
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
+			printf("TESTING (active in DEBUG)-----------------------------------------------------\n");
 			printf("search-guard : if DEBUG active, search and display info for a guard node.\n");
 			printf("search-exit : if DEBUG active, search and display info for an exit node.\n");
 			printf("search-middle : if DEBUG active, search and display info for a middle node.\n");
@@ -617,20 +624,17 @@ void executeCommand(string& cmd) {
 		printf("tortest : Make a TorResolve request for ifconfig.me then sends PADDING cells then another resolve.\n");
 
 		printf("TOR COMMANDS----------------------------------------------------------------------\n");
+		printf("torcache : print out the local node cache, all 3 files.\n");
+        printf("torcache refresh : refresh the tor cache.\n");
+		printf("torcircuits : print out the current tor circuit status.\n");
+		printf("torcircuits restart : Invalidate and rebuild all circuits pool.\n");
+		printf("tor resolve [hostname] : Resolve IPv4 address through tor.\n");
 		printf("tor http get [url] : Tor HTTP/GET request to url. Resulting response printed to console.\n");
     }
     else if (cmd.compare("time") == 0) {
         printLocalTime();
     }
-    else if (cmd.compare("torcache") == 0) {
-        auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
-        relaySearcher->PrintCacheContents();
-    }
-    else if (cmd.compare("torcache-refresh") == 0) {
-        auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
-        relaySearcher->InvalidateCache(true);
-    }
-	else if (cmd.compare("synctime") == 0) {
+    else if (cmd.compare("synctime") == 0) {
         syncTimeWithNTP();
     }
     else if (cmd.compare("devinfo") == 0) {
@@ -662,6 +666,36 @@ void executeCommand(string& cmd) {
 		//printf("STA IPv6: %s\n", WiFi.localIPv6().toString().c_str());
 		//printf("STA GW: %s\n", WiFi.gatewayIP().toString().c_str());
     }
+	else if (cmd.compare("loglevel N") == 0) {
+		esp_log_level_set(LOGTAG, ESP_LOG_NONE);
+		BRIAND_SET_LOG(ESP_LOG_NONE);
+		printf("Log level set to NONE\n");
+	}
+	else if (cmd.compare("loglevel E") == 0) {
+		esp_log_level_set(LOGTAG, ESP_LOG_ERROR);
+		BRIAND_SET_LOG(ESP_LOG_ERROR);
+		printf("Log level set to ERROR\n");
+	}
+	else if (cmd.compare("loglevel W") == 0) {
+		esp_log_level_set(LOGTAG, ESP_LOG_WARN);
+		BRIAND_SET_LOG(ESP_LOG_WARN);
+		printf("Log level set to WARNING\n");
+	}
+	else if (cmd.compare("loglevel I") == 0) {
+		esp_log_level_set(LOGTAG, ESP_LOG_INFO);
+		BRIAND_SET_LOG(ESP_LOG_INFO);
+		printf("Log level set to INFO\n");
+	}
+	else if (cmd.compare("loglevel D") == 0) {
+		esp_log_level_set(LOGTAG, ESP_LOG_DEBUG);
+		BRIAND_SET_LOG(ESP_LOG_DEBUG);
+		printf("Log level set to DEBUG\n");
+	}
+	else if (cmd.compare("loglevel V") == 0) {
+		esp_log_level_set(LOGTAG, ESP_LOG_VERBOSE);
+		BRIAND_SET_LOG(ESP_LOG_VERBOSE);
+		printf("Log level set to VERBOSE\n");
+	}
 	else if (cmd.compare("reboot") == 0)  {
         printf("Device will reboot now.\n");
 		reboot();
@@ -673,13 +707,13 @@ void executeCommand(string& cmd) {
     }
 	else if (cmd.compare("apon") == 0)  {
 		if (WiFi->StartAP(*AP_ESSID.get(), *AP_PASSW.get(), 13, 1, true)) {
-			if(VERBOSE) printf("AP Ready. ESSID: %s PASSWORD: %s\n", AP_ESSID->c_str(), AP_PASSW->c_str());
+			printf("AP Ready. ESSID: %s PASSWORD: %s\n", AP_ESSID->c_str(), AP_PASSW->c_str());
 		}
 		else {
 			printf("[ERR] Error on AP init! Only serial communication is enabled.\n");
 		}
     }
-	else if (cmd.compare("search-guard") == 0 && DEBUG)  {
+	else if (cmd.compare("search-guard") == 0 && (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG))  {
 		auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
 		auto relay = relaySearcher->GetGuardRelay();
         
@@ -690,7 +724,7 @@ void executeCommand(string& cmd) {
 
         relay->PrintRelayInfo();
     }
-	else if (cmd.compare("search-exit") == 0 && DEBUG)  {
+	else if (cmd.compare("search-exit") == 0 && (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG))  {
 		auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
 		auto relay = relaySearcher->GetExitRelay("", "");
         
@@ -701,7 +735,7 @@ void executeCommand(string& cmd) {
         
         relay->PrintRelayInfo();
     }
-	else if (cmd.compare("search-middle") == 0 && DEBUG)  {
+	else if (cmd.compare("search-middle") == 0 && (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG))  {
 		auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
 		auto relay = relaySearcher->GetMiddleRelay("");
 		
@@ -712,7 +746,7 @@ void executeCommand(string& cmd) {
 
         relay->PrintRelayInfo();
     }
-	else if (cmd.compare("testcircuit") == 0 && DEBUG)  {
+	else if (cmd.compare("testcircuit") == 0 && (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG))  {
 		auto tempCircuit = make_unique<Briand::BriandTorCircuit>();
 		
 		if (tempCircuit->BuildCircuit()) {
@@ -723,7 +757,7 @@ void executeCommand(string& cmd) {
 		else 
 			printf("FAILED to build a circuit.\n");
     }
-	else if (cmd.compare("heapleak") == 0 && DEBUG)  {
+	else if (cmd.compare("heapleak") == 0 && (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG))  {
 		auto leakingHeap = make_unique<unsigned char[]>(2048);
 		// release instead of reset
 		leakingHeap.release();
@@ -733,21 +767,50 @@ void executeCommand(string& cmd) {
 		string info = Briand::BriandUtils::BriandIfConfigMe();
 		printf("\nInfo about your real identity:\n\n%s\n", info.c_str());
     }
+	// TOR commands
 	else if (cmd.compare("torcircuits") == 0) {
 		CIRCUITS_MANAGER->PrintCircuitsInfo();
 	}
-	// TOR commands
+	else if (cmd.compare("torcircuits restart") == 0) {
+		printf("Stopping CircuitsManager...");
+		CIRCUITS_MANAGER->Stop();
+		vTaskDelay(10000/portTICK_PERIOD_MS);
+		printf("done.\n");
+		printf("Starting CircuitsManager...");
+		CIRCUITS_MANAGER->Start();
+		printf("done.\n");
+	}
+	else if (cmd.compare("torcache") == 0) {
+        auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
+        relaySearcher->PrintCacheContents();
+    }
+    else if (cmd.compare("torcache refresh") == 0) {
+        auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
+        relaySearcher->InvalidateCache(true);
+    }
 	else if (cmd.compare("tortest") == 0) {
 		auto circuit = CIRCUITS_MANAGER->GetCircuit();
 		if (circuit == nullptr) {
 			printf("No suitable circuit found.\n");
 		}
 		else {
+			printf("Using circuit #%hu\n", circuit->internalID);
 			printf("FISRT RESOLVED TO: %s\n", Briand::BriandUtils::ipv4ToString(circuit->TorResolve("ifconfig.me")).c_str());
 			circuit->SendPadding();
 			circuit->SendPadding();
 			circuit->SendPadding();
 			printf("SECOND RESOLVED TO: %s\n", Briand::BriandUtils::ipv4ToString(circuit->TorResolve("ifconfig.me")).c_str());
+		}
+	}
+	else if (cmd.substr(0, 12).compare("tor resolve ") == 0) {
+		cmd.erase(cmd.begin(), cmd.begin() + 12);
+		auto circuit = CIRCUITS_MANAGER->GetCircuit();
+		if (circuit == nullptr) {
+			printf("No suitable circuit found.\n");
+		}
+		else {
+			printf("Using circuit #%hu\n", circuit->internalID);
+			printf("FISRT RESOLVED TO: %s\n", Briand::BriandUtils::ipv4ToString(circuit->TorResolve(cmd)).c_str());
 		}
 	}
 	else if (cmd.substr(0, 13).compare("tor http get ") == 0) {
@@ -765,7 +828,7 @@ void executeCommand(string& cmd) {
 
 	// Debug: print memory used by command
     int consumption = (heapBefore - static_cast<int>(esp_get_free_heap_size()));
-	if (DEBUG) printf("[DEBUG] Heap consumption: %d (from %d to %d) bytes.\n", consumption, heapBefore, esp_get_free_heap_size());
+	ESP_LOGD(LOGTAG, "[DEBUG] Heap consumption: %d (from %d to %d) bytes.\n", consumption, heapBefore, esp_get_free_heap_size());
 
     // Always useful: check if code has heap leaks 
     // sometimes I do the mistake to use .release() insted of .reset() on smart pointers :P	

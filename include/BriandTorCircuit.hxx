@@ -45,6 +45,7 @@ namespace Briand {
 		bool isClosed;						// it is closed (call destroyer and free RAM!!)
 		bool isBusy;						// Flag (currently streaming / doing something)
 		unsigned long int createdOn;		// create timestamp
+		unsigned long int paddingSent;		// no. of padding cells sent
 
 		// Tor specific
 		unsigned int CIRCID;					// the CIRCID of this circuit
@@ -183,5 +184,11 @@ namespace Briand {
 		 * @return Current StreamID
 		*/
 		unsigned short GetCurrentStreamID();
+
+		/**
+		 * Method returns number of PADDING cells sent through circuit
+		 * @return Current count of PADDING cells sent
+		*/
+		unsigned long int GetSentPadding();
 	};
 }

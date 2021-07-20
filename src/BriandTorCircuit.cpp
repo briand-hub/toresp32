@@ -18,13 +18,10 @@
 
 #include "BriandTorCircuit.hxx"
 
-
-#include <time.h>
-
-
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <time.h>
 
 #include <BriandIDFSocketTlsClient.hxx>
 
@@ -53,7 +50,7 @@ namespace Briand {
 	bool BriandTorCircuit::FindAndPopulateRelay(const unsigned char& relayType) {
 		string relayS;
 
-		if (DEBUG) {
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			
 			switch (relayType) {
 				case 0: relayS = "guard"; break;
@@ -63,7 +60,7 @@ namespace Briand {
 			}
 		}
 
-		printf("[DEBUG] Starting search for %s node.\n", relayS.c_str());
+		ESP_LOGD(LOGTAG, "[DEBUG] Starting search for %s node.\n", relayS.c_str());
 
 		bool done = false;
 		
@@ -88,7 +85,7 @@ namespace Briand {
 		if (tentative != nullptr) {
 			// Fetch relay descriptors
 
-			if (DEBUG) printf("[DEBUG] Retrieving descriptors for %s node...\n", relayS.c_str());
+			ESP_LOGD(LOGTAG, "[DEBUG] Retrieving descriptors for %s node...\n", relayS.c_str());
 
 			if (tentative->FetchDescriptorsFromAuthority()) {
 
@@ -97,14 +94,14 @@ namespace Briand {
 				else if (relayType == 2) this->exitNode = std::move(tentative);
 
 				done = true;
-				if (DEBUG) printf("[DEBUG] %s node ok.\n", relayS.c_str());
+				ESP_LOGD(LOGTAG, "[DEBUG] %s node ok.\n", relayS.c_str());
 			}
 			else {
-				if (DEBUG) printf("[DEBUG] Retrieving descriptors for %s node FAILED\n", relayS.c_str());
+				ESP_LOGD(LOGTAG, "[DEBUG] Retrieving descriptors for %s node FAILED\n", relayS.c_str());
 			}
 		}
 
-		if (!done && VERBOSE) printf("[ERR] FAIL to get a valid %s node.\n", relayS.c_str());
+		if (!done) ESP_LOGW(LOGTAG, "[ERR] FAIL to get a valid %s node.\n", relayS.c_str());
 
 		return done;
 	}
@@ -115,7 +112,7 @@ namespace Briand {
 
 		this->CIRCID = ( Briand::BriandUtils::GetRandomByte() << 8 ) + Briand::BriandUtils::GetRandomByte();
 
-		if(DEBUG) printf("[DEBUG] Temporary CircID = 0x%04X\n", this->CIRCID);
+		if(esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) printf("[DEBUG] Temporary CircID = 0x%04X\n", this->CIRCID);
 
 		unique_ptr<Briand::BriandTorCell> tempCell = nullptr;
 		unique_ptr<vector<unsigned char>> tempCellResponse = nullptr;
@@ -154,7 +151,7 @@ namespace Briand {
 
 		// Send a VERSION the guard
 
-		if (DEBUG) printf("[DEBUG] Sending first VERSION to guard.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Sending first VERSION to guard.\n");
 
 		tempCell = make_unique<Briand::BriandTorCell>(0, this->CIRCID, Briand::BriandTorCellCommand::VERSIONS);
 
@@ -166,13 +163,13 @@ namespace Briand {
 		tempCell.reset();
 
 		if (tempCellResponse->size() == 0) {
-			if (VERBOSE) printf("[ERR] Error on sending first VERSION to Guard.\n");
+			ESP_LOGW(LOGTAG, "[ERR] Error on sending first VERSION to Guard.\n");
 			this->Cleanup();
 			return false;
 		}
 
-		if (DEBUG) printf("[DEBUG] Cell response! :-D Contents (first 32 bytes): ");
-		if (DEBUG) Briand::BriandUtils::PrintByteBuffer( *(tempCellResponse.get()), 128, 32 );
+		ESP_LOGD(LOGTAG, "[DEBUG] Cell response! :-D Contents (first 32 bytes): ");
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) Briand::BriandUtils::PrintByteBuffer( *(tempCellResponse.get()), 128, 32 );
 		
 		// The response contents should have a lot of informations.
 
@@ -186,16 +183,16 @@ namespace Briand {
 		this->LINKPROTOCOLVERSION = tempCell->GetLinkProtocolFromVersionCell();
 
 		if (this->LINKPROTOCOLVERSION == 0) {
-			if (VERBOSE) printf("[ERR] Error on receiving first VERSION from Guard, unable to negotiate link protocol version.\n");
+			ESP_LOGW(LOGTAG, "[ERR] Error on receiving first VERSION from Guard, unable to negotiate link protocol version.\n");
 			this->Cleanup();
 			return false;
 		}
 		else if (this->LINKPROTOCOLVERSION < 4) {
-			if (VERBOSE) printf("[ERR] Guard has an old link protocol (version %d but required >= 4).\n", this->LINKPROTOCOLVERSION);
+			ESP_LOGW(LOGTAG, "[ERR] Guard has an old link protocol (version %d but required >= 4).\n", this->LINKPROTOCOLVERSION);
 			this->Cleanup();
 			return false;
 		}
-		else if (DEBUG) {
+		else if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Link protocol version %d negotiation SUCCESS.\n", this->LINKPROTOCOLVERSION);
 		}
 
@@ -203,36 +200,36 @@ namespace Briand {
 
 		tempCellResponse->erase(tempCellResponse->begin(), tempCellResponse->begin() + tempCell->GetCellTotalSizeBytes() );
 
-		if (DEBUG) printf("[DEBUG] Next chunk (first 32 bytes printed): ");
-		if (DEBUG) Briand::BriandUtils::PrintByteBuffer( *(tempCellResponse.get()), 128, 32 );
+		ESP_LOGD(LOGTAG, "[DEBUG] Next chunk (first 32 bytes printed): ");
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) Briand::BriandUtils::PrintByteBuffer( *(tempCellResponse.get()), 128, 32 );
 
 		tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION);
 		if (tempCell->GetCommand() != Briand::BriandTorCellCommand::CERTS) {
-			if (VERBOSE) printf("[ERR] Error, expected CERTS cell but received %s.\n", Briand::BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
+			ESP_LOGW(LOGTAG, "[ERR] Error, expected CERTS cell but received %s.\n", Briand::BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
 			this->Cleanup();
 			return false;
 		}
 
-		if (DEBUG) printf("[DEBUG] Got CERTS cell!\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Got CERTS cell!\n");
 		
 		if (! tempCell->SetRelayCertificatesFromCertsCell(this->guardNode) ) {
-			if (VERBOSE) printf("[ERR] CERTS cell seems not valid.\n");
+			ESP_LOGW(LOGTAG, "[ERR] CERTS cell seems not valid.\n");
 			this->Cleanup();
 			return false;
 		}
 
-		if (DEBUG) {
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Guard has %d certifcates loaded.\n", this->guardNode->GetCertificateCount());
 			this->guardNode->PrintAllCertificateShortInfo();
 		} 
 
 		if ( ! this->guardNode->ValidateCertificates() ) {
-			if (VERBOSE) printf("[ERR] CERTS cell received has invalid certificates.\n");
+			ESP_LOGW(LOGTAG, "[ERR] CERTS cell received has invalid certificates.\n");
 			this->Cleanup();
 			return false;
 		}
 
-		if (DEBUG) printf("[DEBUG] CERTS cell certificates validation succeded.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] CERTS cell certificates validation succeded.\n");
 
 		// The next part of buffer should be a AUTH_CHALLENGE cell. Free some buffer to point to next cell. And save RAM :)
 
@@ -240,19 +237,19 @@ namespace Briand {
 
 		// AUTH_CHALLENGE is used for authenticate, might not do that.
 
-		if (DEBUG) printf("[DEBUG] Next chunk (first 32 bytes printed): ");
-		if (DEBUG) Briand::BriandUtils::PrintByteBuffer( *(tempCellResponse.get()), 128, 32 );
+		ESP_LOGD(LOGTAG, "[DEBUG] Next chunk (first 32 bytes printed): ");
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) Briand::BriandUtils::PrintByteBuffer( *(tempCellResponse.get()), 128, 32 );
 
 		tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION);
 		if (tempCell->GetCommand() != Briand::BriandTorCellCommand::AUTH_CHALLENGE) {
-			if (VERBOSE) printf("[ERR] Error, expected AUTH_CHALLENGE cell but received %s.\n", Briand::BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
+			ESP_LOGW(LOGTAG, "[ERR] Error, expected AUTH_CHALLENGE cell but received %s.\n", Briand::BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
 			this->Cleanup();
 			return false;
 		}
 
-		if (DEBUG) printf("[DEBUG] Got AUTH_CHALLENGE cell!\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Got AUTH_CHALLENGE cell!\n");
 
-		if (DEBUG) printf("[DEBUG] WARNING: AUTH_CHALLENGE cell is not handled at moment from this version.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] WARNING: AUTH_CHALLENGE cell is not handled at moment from this version.\n");
 		// TODO dont't mind for now..
 
 		// The next part of buffer should be a NETINFO cell. Free some buffer to point to next cell. And save RAM :)
@@ -261,17 +258,17 @@ namespace Briand {
 
 		tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION);
 		if (tempCell->GetCommand() != Briand::BriandTorCellCommand::NETINFO) {
-			if (VERBOSE) printf("[ERR] Error, expected NETINFO cell but received %s.\n", Briand::BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
+			ESP_LOGW(LOGTAG, "[ERR] Error, expected NETINFO cell but received %s.\n", Briand::BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
 			this->Cleanup();
 			return false;
 		}
 
-		if (DEBUG) printf("[DEBUG] Got NETINFO cell!\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Got NETINFO cell!\n");
 
-		if (DEBUG) printf("[DEBUG] Info: this version do not check or handle incoming NETINFO cell.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Info: this version do not check or handle incoming NETINFO cell.\n");
 		// TODO dont't mind for now..
 
-		if (DEBUG) printf("[DEBUG] Got all cells needed for handshake :-)\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Got all cells needed for handshake :-)\n");
 
 		// The next part of buffer needs to be ignored, could be cleared and save RAM.
 		// WARNING: for answer to auth all bytes received must be kept!
@@ -286,21 +283,21 @@ namespace Briand {
 
 		// Answer with NETINFO CELL
 
-		if (DEBUG) printf("[DEBUG] Sending NETINFO cell to guard.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Sending NETINFO cell to guard.\n");
 
 		tempCell = make_unique<BriandTorCell>( this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::NETINFO );
 		struct in_addr public_ip;
 		inet_aton(BriandUtils::BriandGetPublicIPFromIfConfigMe().c_str(), &public_ip);
 		tempCell->BuildAsNETINFO( public_ip );
 
-		if (DEBUG) {
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] NETINFO cell payload to send: ");
 			tempCell->PrintCellPayloadToSerial();
 		} 
 
 		tempCellResponse = tempCell->SendCell(this->sClient, false, false); // Last false: do not expect a response
 
-		printf("[DEBUG] NETINFO cell sent.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] NETINFO cell sent.\n");
 
 		// Freee
 		tempCell.reset();
@@ -310,7 +307,7 @@ namespace Briand {
 	}
 
 	bool BriandTorCircuit::Create2() {
-		if (DEBUG) printf("[DEBUG] Sending CREATE2 cell to guard.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Sending CREATE2 cell to guard.\n");
 
 		/*					
 			Users set up circuits incrementally, one hop at a time. To create a
@@ -325,39 +322,39 @@ namespace Briand {
 		auto tempCell = make_unique<Briand::BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::CREATE2);
 		
 		if (!tempCell->BuildAsCREATE2(*this->guardNode.get())) {
-			if (DEBUG) printf("[DEBUG] Failed on building cell CREATE2.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] Failed on building cell CREATE2.\n");
 			return false;
 		}
 
-		if (DEBUG) printf("[DEBUG] CREATE2 sent. Waiting for CREATED2.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] CREATE2 sent. Waiting for CREATED2.\n");
 		auto tempCellResponse = tempCell->SendCell(this->sClient, false);
 		tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
 		
 		if (!tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION)) {
-			if (VERBOSE) printf("[ERR] Error, response cell had invalid bytes (failed to build from buffer).\n");
+			ESP_LOGW(LOGTAG, "[ERR] Error, response cell had invalid bytes (failed to build from buffer).\n");
 			this->Cleanup();
 			return false;
 		}
 		
 		// If a DESTROY given, tell me why
 		if (tempCell->GetCommand() == BriandTorCellCommand::DESTROY) {
-			if (VERBOSE) printf("[ERR] Error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
+			ESP_LOGW(LOGTAG, "[ERR] Error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
 			this->Cleanup();
 			return false;
 		}
 
 		if (tempCell->GetCommand() != BriandTorCellCommand::CREATED2) {
-			if (VERBOSE) printf("[ERR] Error, response contains %s cell instead of CREATED2. Failure.\n", BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
+			ESP_LOGW(LOGTAG, "[ERR] Error, response contains %s cell instead of CREATED2. Failure.\n", BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
 			this->Cleanup();
 			return false;
 		}
 
-		if (DEBUG) printf("[DEBUG] Got CREATED2, payload:");
-		if (DEBUG) tempCell->PrintCellPayloadToSerial();
+		ESP_LOGD(LOGTAG, "[DEBUG] Got CREATED2, payload:");
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) tempCell->PrintCellPayloadToSerial();
 
 		// Finish the handshake!
 		if (!this->guardNode->FinishHandshake(tempCell->GetPayload())) {
-			if (VERBOSE) printf("[ERR] Error on concluding handshake!\n");
+			ESP_LOGW(LOGTAG, "[ERR] Error on concluding handshake!\n");
 			// From now... always destroy
 			this->TearDown();
 			this->Cleanup();
@@ -372,7 +369,7 @@ namespace Briand {
 	}
 
 	bool BriandTorCircuit::Extend2(bool exitNode) {
-		if (DEBUG) printf("[DEBUG] Sending EXTEND2 cell to guard.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Sending EXTEND2 cell to guard.\n");
 
 		// EXTEND2 is a RELAY cell! (RELAY_EARLY since link protocol v2)
 
@@ -380,7 +377,7 @@ namespace Briand {
 		
 		if (exitNode) {
 			if (!tempCell->BuildAsEXTEND2(*this->exitNode.get())) {
-				if (DEBUG) printf("[DEBUG] Failed on building cell EXTEND2 to exit.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Failed on building cell EXTEND2 to exit.\n");
 				this->TearDown();
 				this->Cleanup();
 				return false;
@@ -388,7 +385,7 @@ namespace Briand {
 		}
 		else {
 			if (!tempCell->BuildAsEXTEND2(*this->middleNode.get())) {
-				if (DEBUG) printf("[DEBUG] Failed on building cell EXTEND2 to middle.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Failed on building cell EXTEND2 to middle.\n");
 				this->TearDown();
 				this->Cleanup();
 				return false;
@@ -398,7 +395,7 @@ namespace Briand {
 		// Prepare a StreamID of all zeros (relay commands with [control] use all-zero streamid!)
 		unsigned short streamID = 0x0000;
 
-		if (DEBUG) printf("[DEBUG] StreamID is: %04X\n", streamID);
+		ESP_LOGD(LOGTAG, "[DEBUG] StreamID is: %04X\n", streamID);
 
 		// After building the main contents, prepare it as a relay cell
 		if (exitNode) {
@@ -408,7 +405,7 @@ namespace Briand {
 			tempCell->PrepareAsRelayCell(BriandTorCellRelayCommand::RELAY_EXTEND2, streamID, this->guardNode->KEY_ForwardDigest_Df);
 		}
 
-		if (DEBUG) {
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] EXTEND2 contents before encryption: ");
 			tempCell->PrintCellPayloadToSerial();
 		}
@@ -417,28 +414,28 @@ namespace Briand {
 		if (exitNode) {
 			// Encrypt with middle key
 			tempCell->ApplyOnionSkin(*this->middleNode);
-			if (DEBUG) printf("[DEBUG] Applied MIDDLE onion skin, encrypted contents: ");
-			tempCell->PrintCellPayloadToSerial();
+			ESP_LOGD(LOGTAG, "[DEBUG] Applied MIDDLE onion skin, encrypted contents: ");
+			if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) tempCell->PrintCellPayloadToSerial();
 			// Encrypt with guard keyù
 			tempCell->ApplyOnionSkin(*this->guardNode);
-			if (DEBUG) printf("[DEBUG] Applied GUARD onion skin, encrypted contents: ");
-			tempCell->PrintCellPayloadToSerial();
+			ESP_LOGD(LOGTAG, "[DEBUG] Applied GUARD onion skin, encrypted contents: ");
+			if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) tempCell->PrintCellPayloadToSerial();
 		}
 		else {
 			// Encrypt with guard key
 			tempCell->ApplyOnionSkin(*this->guardNode);
-			if (DEBUG) printf("[DEBUG] Applied GUARD onion skin, encrypted contents: ");
-			tempCell->PrintCellPayloadToSerial();
+			ESP_LOGD(LOGTAG, "[DEBUG] Applied GUARD onion skin, encrypted contents: ");
+			if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) tempCell->PrintCellPayloadToSerial();
 		}
 
-		if (DEBUG) printf("[DEBUG] EXTEND2 is going to be sent. Waiting for EXTENDED2.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] EXTEND2 is going to be sent. Waiting for EXTENDED2.\n");
 		auto tempCellResponse = tempCell->SendCell(this->sClient, false);
 		tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
 		
 		// Build the basic cell
 
 		if (!tempCell->BuildFromBuffer(tempCellResponse, this->LINKPROTOCOLVERSION)) {
-			if (VERBOSE) printf("[ERR] Error, response cell had invalid bytes (failed to build from buffer).\n");
+			ESP_LOGW(LOGTAG, "[ERR] Error, response cell had invalid bytes (failed to build from buffer).\n");
 			this->TearDown();
 			this->Cleanup();
 			return false;
@@ -446,27 +443,27 @@ namespace Briand {
 		
 		// If a DESTROY given, tell me why
 		if (tempCell->GetCommand() == BriandTorCellCommand::DESTROY) {
-			if (VERBOSE) printf("[ERR] Error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
+			ESP_LOGW(LOGTAG, "[ERR] Error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
 			this->TearDown();
 			this->Cleanup();
 			return false;
 		}
 
 		if (tempCell->GetCommand() != BriandTorCellCommand::RELAY) {
-			if (VERBOSE) printf("[ERR] Error, response contains %s cell instead of RELAY. Failure.\n", BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
+			ESP_LOGW(LOGTAG, "[ERR] Error, response contains %s cell instead of RELAY. Failure.\n", BriandUtils::BriandTorCellCommandToString(tempCell->GetCommand()).c_str());
 			this->TearDown();
 			this->Cleanup();
 			return false;
 		}
 
-		if (DEBUG) printf("[DEBUG] Got RELAY cell, payload:");
-		if (DEBUG) tempCell->PrintCellPayloadToSerial();
+		ESP_LOGD(LOGTAG, "[DEBUG] Got RELAY cell, payload:");
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) tempCell->PrintCellPayloadToSerial();
 
 		// Decrypt payload of received cell
 		if (exitNode) {
 			tempCell->PeelOnionSkin(*this->guardNode);
 
-			if (DEBUG) {
+			if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 				printf("[DEBUG] Removed GUARD onion skin with Kb key: ");
 				BriandUtils::PrintByteBuffer(*this->guardNode->KEY_Backward_Kb.get());
 				printf("[DEBUG] RELAY cell payload after decryption: ");
@@ -479,12 +476,12 @@ namespace Briand {
 				// Have been recognized, if this is true here, an error occoured...
 				tempCell->BuildRelayCellFromPayload(this->guardNode->KEY_BackwardDigest_Db);
 				BriandTorCellRelayCommand unexpectedCmd = tempCell->GetRelayCommand();
-				if (DEBUG) {
+				if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 					printf("[DEBUG] RELAY recognized at Guard, something wrong, cell relay command is: %s. Payload: ", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
 					tempCell->PrintCellPayloadToSerial();
 				}
 
-				if (VERBOSE) printf("[ERR] Error on extending to exit node, received unexpected cell %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+				ESP_LOGW(LOGTAG, "[ERR] Error on extending to exit node, received unexpected cell %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
 				this->TearDown();
 				this->Cleanup();
 				return false;
@@ -494,7 +491,7 @@ namespace Briand {
 
 			tempCell->PeelOnionSkin(*this->middleNode);
 
-			if (DEBUG) {
+			if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 				printf("[DEBUG] Removed MIDDLE onion skin with Kb key: ");
 				BriandUtils::PrintByteBuffer(*this->middleNode->KEY_Backward_Kb.get());
 				printf("[DEBUG] RELAY cell payload after decryption: ");
@@ -504,7 +501,7 @@ namespace Briand {
 			// Check if cell is recognized 
 
 			if (!tempCell->IsRelayCellRecognized(0x0000, this->middleNode->KEY_BackwardDigest_Db)) {
-				if (DEBUG) printf("[DEBUG] Cell has not been recognized, failure.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Cell has not been recognized, failure.\n");
 				this->TearDown();
 				this->Cleanup();
 				return false;
@@ -513,7 +510,7 @@ namespace Briand {
 		else {
 			tempCell->PeelOnionSkin(*this->guardNode);
 
-			if (DEBUG) {
+			if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 				printf("[DEBUG] Removed GUARD onion skin with Kb key: ");
 				BriandUtils::PrintByteBuffer(*this->guardNode->KEY_Backward_Kb.get());
 				printf("[DEBUG] RELAY cell payload after decryption: ");
@@ -523,7 +520,7 @@ namespace Briand {
 			// Check if cell is recognized 
 
 			if (!tempCell->IsRelayCellRecognized(0x0000, this->guardNode->KEY_BackwardDigest_Db)) {
-				if (DEBUG) printf("[DEBUG] Cell has not been recognized, failure.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Cell has not been recognized, failure.\n");
 				this->TearDown();
 				this->Cleanup();
 				return false;
@@ -532,20 +529,20 @@ namespace Briand {
 
 		// Verification passed, now build cell informations 
 		if (exitNode && !tempCell->BuildRelayCellFromPayload(this->middleNode->KEY_BackwardDigest_Db)) {
-			if (VERBOSE) printf("[ERR] Error on rebuilding RELAY cell informations from exit node, invalid cell.\n");
+			ESP_LOGW(LOGTAG, "[ERR] Error on rebuilding RELAY cell informations from exit node, invalid cell.\n");
 			this->TearDown();
 			this->Cleanup();
 			return false;
 		}
 		if (!exitNode && !tempCell->BuildRelayCellFromPayload(this->guardNode->KEY_BackwardDigest_Db)) {
-			if (VERBOSE) printf("[ERR] Error on rebuilding RELAY cell informations from middle node, invalid cell.\n");
+			ESP_LOGW(LOGTAG, "[ERR] Error on rebuilding RELAY cell informations from middle node, invalid cell.\n");
 			this->TearDown();
 			this->Cleanup();
 			return false;
 		}
 
 		if (tempCell->GetRelayCommand() != BriandTorCellRelayCommand::RELAY_EXTENDED2) {
-			if (DEBUG) printf("[DEBUG] Expected EXTENDED2 but received %s\n", BriandUtils::BriandTorRelayCellCommandToString(tempCell->GetRelayCommand()).c_str());
+			ESP_LOGD(LOGTAG, "[DEBUG] Expected EXTENDED2 but received %s\n", BriandUtils::BriandTorRelayCellCommandToString(tempCell->GetRelayCommand()).c_str());
 			this->TearDown();
 			this->Cleanup();
 			return false;
@@ -556,7 +553,7 @@ namespace Briand {
 		/* The payload of an EXTENDED2 cell is the same as the payload of a CREATED2 cell */
 		if (exitNode) {
 			if (!this->exitNode->FinishHandshake(tempCell->GetPayload())) {
-				if (VERBOSE) printf("[ERR] Error on concluding EXTENDED2 handshake with exit!\n");
+				ESP_LOGW(LOGTAG, "[ERR] Error on concluding EXTENDED2 handshake with exit!\n");
 				// Always destroy if fails
 				this->TearDown();
 				this->Cleanup();
@@ -565,7 +562,7 @@ namespace Briand {
 		}
 		else {
 			if (!this->middleNode->FinishHandshake(tempCell->GetPayload())) {
-				if (VERBOSE) printf("[ERR] Error on concluding EXTENDED2 handshake with middle!\n");
+				ESP_LOGW(LOGTAG, "[ERR] Error on concluding EXTENDED2 handshake with middle!\n");
 				// Always destroy if fails
 				this->TearDown();
 				this->Cleanup();
@@ -573,7 +570,7 @@ namespace Briand {
 			}
 		}
 
-		if (DEBUG) printf("[DEBUG] EXTENDED2 Success, circuit has now a new hop\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] EXTENDED2 Success, circuit has now a new hop\n");
 
 		// Free buffers
 		tempCell.reset();
@@ -599,7 +596,9 @@ namespace Briand {
 		this->LINKPROTOCOLVERSION = 0;
 		this->CURRENT_STREAM_ID = 0;
 		this->isBusy = false;
-		
+		this->internalID = -1;
+		this->paddingSent = 0;
+
 		this->sClient = nullptr;
 	}
 
@@ -665,25 +664,25 @@ namespace Briand {
 			below)
 		*/
 
-		if (DEBUG) printf("[DEBUG] Starting relay search.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Starting relay search.\n");
 
 		if (!this->FindAndPopulateRelay(0)) return false; // GUARD
 
-		if (DEBUG) this->guardNode->PrintRelayInfo();
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) this->guardNode->PrintRelayInfo();
 
-		if (DEBUG) printf("[DEBUG] Starting relay search for middle node.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Starting relay search for middle node.\n");
 		
 		if (!this->FindAndPopulateRelay(1)) return false; // MIDDLE
 
-		if (DEBUG) this->middleNode->PrintRelayInfo();
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) this->middleNode->PrintRelayInfo();
 		
-		if (DEBUG) printf("[DEBUG] Starting relay search for exit node.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Starting relay search for exit node.\n");
 
 		if (!this->FindAndPopulateRelay(2)) return false; // EXIT
 
-		if (DEBUG) this->exitNode->PrintRelayInfo();
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) this->exitNode->PrintRelayInfo();
 
-		if (DEBUG) printf("[DEBUG] Guard node ready, start sending VERSION to guard.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Guard node ready, start sending VERSION to guard.\n");
 
 		// All nodes found! Free some RAM
 		this->relaySearcher.reset();
@@ -693,8 +692,8 @@ namespace Briand {
 		// Build the client and connect to guard
 		
 		this->sClient = make_unique<BriandIDFSocketTlsClient>();
-		this->sClient->SetVerbose(DEBUG);
-		this->sClient->SetID(9999);
+		this->sClient->SetVerbose(false);
+		this->sClient->SetID(this->internalID);
 		this->sClient->SetTimeout(NET_CONNECT_TIMEOUT_S, NET_IO_TIMEOUT_S);
 
 		// TODO : find a way to validate requests.
@@ -705,12 +704,12 @@ namespace Briand {
 		// Connect to GUARD
 
 		if ( ! this->sClient->Connect(this->guardNode->GetHost().c_str(), this->guardNode->GetPort() ) ) {
-			if (VERBOSE) printf("[ERR] Failed to connect to Guard.\n");
+			ESP_LOGW(LOGTAG, "[ERR] Failed to connect to Guard.\n");
 			this->Cleanup();
 			return false;
 		}
 
-		if (DEBUG) printf("[DEBUG] Connected to guard node.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Connected to guard node.\n");
 
 		/** Steps validation */
 		bool stepDone = false;
@@ -719,7 +718,7 @@ namespace Briand {
 		stepDone = this->StartInProtocolWithGuard(false); // false = do not answer with self authenticate
 
 		if (!stepDone) {
-			if (DEBUG) printf("[DEBUG] Failed to conclude InProtocol with guard.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] Failed to conclude InProtocol with guard.\n");
 			return false;
 		}
 
@@ -727,12 +726,12 @@ namespace Briand {
 		// This version does not support old CREATE.
 
 		if (this->guardNode->certRSAEd25519CrossCertificate == nullptr) {
-			if (DEBUG) printf("[DEBUG] The guard is missing the Ed25519 identity certificate so a CREATE2 is impossible.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] The guard is missing the Ed25519 identity certificate so a CREATE2 is impossible.\n");
 			return false;
 		}
 
 
-		if (DEBUG) printf("[DEBUG] All information complete. Starting creating the circuit with CREATE2.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] All information complete. Starting creating the circuit with CREATE2.\n");
 
 		// Re-setup CircID with 4 bytes (link protocol >=4)
 
@@ -758,48 +757,48 @@ namespace Briand {
 		// So it's clear, my circid must have MSB to 1
 		this->CIRCID = this->CIRCID | 0x80000000;
 
-		if (DEBUG) printf("[DEBUG] NEW CircID: 0x%08X \n", this->CIRCID);
+		ESP_LOGD(LOGTAG, "[DEBUG] NEW CircID: 0x%08X \n", this->CIRCID);
 
 		// CREATE/CREATE2
 
 		stepDone = this->Create2();
 
 		if (!stepDone) {
-			if (DEBUG) printf("[DEBUG] Failed to conclude CREATE2 with guard.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] Failed to conclude CREATE2 with guard.\n");
 			this->isCreating = false;
 			this->TearDown();
 			return false;
 		}
 
-		if (DEBUG) printf("[DEBUG] CREATE2 success. Extending to Middle node.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] CREATE2 success. Extending to Middle node.\n");
 
 		// EXTEND2 to middle
 
 		stepDone = this->Extend2(false);
 
 		if (!stepDone) {
-			if (DEBUG) printf("[DEBUG] Failed to conclude EXTEND2 with middle node.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] Failed to conclude EXTEND2 with middle node.\n");
 			this->isCreating = false;
 			this->TearDown();
 			return false;
 		}
 
-		if (DEBUG) printf("[DEBUG] EXTEND2 with Middle success. Extending to Exit node.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] EXTEND2 with Middle success. Extending to Exit node.\n");
 
 		// EXTEND2 to exit
 
 		stepDone = this->Extend2(true);
 
 		if (!stepDone) {
-			if (DEBUG) printf("[DEBUG] Failed to conclude EXTEND2 with exit node.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] Failed to conclude EXTEND2 with exit node.\n");
 			this->isCreating = false;
 			this->TearDown();
 			return false;
 		}
 
-		if (DEBUG) printf("[DEBUG] EXTEND2 with Exit success. All done!!\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] EXTEND2 with Exit success. All done!!\n");
 
-		if (DEBUG) this->PrintCircuitInfo();
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) this->PrintCircuitInfo();
 
 		// Circuit is now OK!
 
@@ -812,7 +811,7 @@ namespace Briand {
 		
 		this->createdOn = BriandUtils::GetUnixTime();
 
-		if (DEBUG) this->PrintCircuitInfo();
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) this->PrintCircuitInfo();
 		
 		return true;
 	}
@@ -828,14 +827,14 @@ namespace Briand {
 		this->isBusy = true;
 
 		if (!this->IsCircuitReadyToStream()) {
-			if (VERBOSE) printf("[ERR] TorStream called but circuit is not built and ready to stream.\n");
+			ESP_LOGW(LOGTAG, "[ERR] TorStream called but circuit is not built and ready to stream.\n");
 			this->isBusy = false;
 
 			return response;
 		}
 
 		if (requestPayload == nullptr) {
-			if (VERBOSE) printf("[ERR] TorStream called with NULL request payload.\n");
+			ESP_LOGW(LOGTAG, "[ERR] TorStream called with NULL request payload.\n");
 			this->isBusy = false;
 
 			return response;
@@ -871,7 +870,7 @@ namespace Briand {
 			auto tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
 
 			if (!tempCell->BuildFromBuffer(tempData, this->LINKPROTOCOLVERSION)) {
-				if (VERBOSE) printf("[ERR] TorStream error, response cell had invalid bytes (failed to build from buffer).\n");
+				ESP_LOGW(LOGTAG, "[ERR] TorStream error, response cell had invalid bytes (failed to build from buffer).\n");
 				this->isBusy = false;
 
 				return response;
@@ -879,7 +878,7 @@ namespace Briand {
 
 			// If a DESTROY given must tear down, tell me why
 			if (tempCell->GetCommand() == BriandTorCellCommand::DESTROY) {
-				if (VERBOSE) printf("[ERR] TorStream error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
+				ESP_LOGW(LOGTAG, "[ERR] TorStream error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
 				this->TearDown();
 				this->Cleanup();
 				this->isBusy = false;
@@ -898,12 +897,12 @@ namespace Briand {
 					// If is recognized here, an error occoured.
 					tempCell->BuildRelayCellFromPayload(this->guardNode->KEY_BackwardDigest_Db);
 					BriandTorCellRelayCommand unexpectedCmd = tempCell->GetRelayCommand();
-					if (DEBUG) {
+					if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 						printf("[DEBUG] TorStream RELAY recognized at Guard, something wrong, cell relay command is: %s. Payload: ", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
 						tempCell->PrintCellPayloadToSerial();
 					}
 
-					if (VERBOSE) printf("[ERR] TorStream error, received unexpected cell from guard node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+					ESP_LOGW(LOGTAG, "[ERR] TorStream error, received unexpected cell from guard node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
 
 					this->isBusy = false;
 
@@ -917,12 +916,12 @@ namespace Briand {
 					// If is recognized here, an error occoured.
 					tempCell->BuildRelayCellFromPayload(this->middleNode->KEY_BackwardDigest_Db);
 					BriandTorCellRelayCommand unexpectedCmd = tempCell->GetRelayCommand();
-					if (DEBUG) {
+					if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 						printf("[DEBUG] TorStream RELAY recognized at Middle, something wrong, cell relay command is: %s. Payload: ", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
 						tempCell->PrintCellPayloadToSerial();
 					}
 
-					if (VERBOSE) printf("[ERR] TorStream error, received unexpected cell from middle node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+					ESP_LOGW(LOGTAG, "[ERR] TorStream error, received unexpected cell from middle node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
 					
 					this->isBusy = false;
 
@@ -934,12 +933,12 @@ namespace Briand {
 
 				if (!tempCell->IsRelayCellRecognized(this->CURRENT_STREAM_ID, this->exitNode->KEY_BackwardDigest_Db)) {
 					// If is NOT recognized here, an error occoured.
-					if (DEBUG) {
+					if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 						printf("[DEBUG] TorStream RELAY NOT recognized at Exit, something wrong. Raw payload: ");
 						tempCell->PrintCellPayloadToSerial();
 					}
 
-					if (VERBOSE) printf("[ERR] TorStream error, unrecognized cell from exit node.\n");
+					ESP_LOGW(LOGTAG, "[ERR] TorStream error, unrecognized cell from exit node.\n");
 					
 					this->isBusy = false;
 
@@ -948,7 +947,7 @@ namespace Briand {
 
 				// Here cell is recognized, build informations
 				if (!tempCell->BuildRelayCellFromPayload(this->exitNode->KEY_BackwardDigest_Db)) {
-					if (VERBOSE) printf("[ERR] TorStream error on rebuilding RELAY cell informations from exit node, invalid response cell.\n");
+					ESP_LOGW(LOGTAG, "[ERR] TorStream error on rebuilding RELAY cell informations from exit node, invalid response cell.\n");
 					this->isBusy = false;
 
 					return response;
@@ -956,12 +955,12 @@ namespace Briand {
 
 				// Check if it is the expected command
 				if (tempCell->GetRelayCommand() != waitFor) {
-					if (DEBUG) {
+					if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 						printf("[ERR] TorStream failed, received unexpected cell from exit node: %s, payload: ", BriandUtils::BriandTorRelayCellCommandToString(tempCell->GetRelayCommand()).c_str());
 						tempCell->PrintCellPayloadToSerial();
 					}
-					else if (VERBOSE) 
-						printf("[ERR] Tor resolve failed, received unexpected cell from exit node: %s.", BriandUtils::BriandTorRelayCellCommandToString(tempCell->GetRelayCommand()).c_str());
+					
+					ESP_LOGW(LOGTAG, "[ERR] Tor resolve failed, received unexpected cell from exit node: %s.", BriandUtils::BriandTorRelayCellCommandToString(tempCell->GetRelayCommand()).c_str());
 
 					this->isBusy = false;
 
@@ -996,7 +995,7 @@ namespace Briand {
 			cell containing an in-addr.arpa address.)
 		*/
 
-		if (DEBUG) printf("[DEBUG] Sending RELAY_RESOLVE cell for hostname <%s>.\n", hostname.c_str());
+		ESP_LOGD(LOGTAG, "[DEBUG] Sending RELAY_RESOLVE cell for hostname <%s>.\n", hostname.c_str());
 
 		auto requestPayload = make_unique<vector<unsigned char>>();
 
@@ -1007,7 +1006,7 @@ namespace Briand {
 
 		auto response = this->TorStream(BriandTorCellRelayCommand::RELAY_RESOLVE, requestPayload, BriandTorCellRelayCommand::RELAY_RESOLVED);
 		if (response == nullptr) {
-			if (VERBOSE) printf("[ERR] TorResolve error, failure on streaming tor request.\n");
+			ESP_LOGW(LOGTAG, "[ERR] TorResolve error, failure on streaming tor request.\n");
 			return resolved;
 		}
 
@@ -1041,7 +1040,7 @@ namespace Briand {
 			unsigned char type = response->at(i);
 			if (type == 0xF0 || type == 0xF1) {
 				// Error.
-				if (VERBOSE) printf("[ERR] TorResolve: host could not be resolved, error code = %02X\n", type);
+				ESP_LOGW(LOGTAG, "[ERR] TorResolve: host could not be resolved, error code = %02X\n", type);
 				return resolved;
 			}
 			else if (type != 0x04) {
@@ -1057,7 +1056,7 @@ namespace Briand {
 			}
 		}
 
-		if (DEBUG) {
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Found IPv4 address: 0x%08X / %s\n", resolved.s_addr, BriandUtils::ipv4ToString(resolved).c_str());
 		}
 
@@ -1068,9 +1067,10 @@ namespace Briand {
 		if (this->isBuilt && !this->isBusy && !this->isClosed && !this->isClosing)  {
 			auto tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
 			auto noBuf = tempCell->SendCell(this->sClient, false, false);
-			if (DEBUG) printf("[DEBUG] PADDING cell sent through circuit.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] PADDING cell sent through circuit.\n");
+			this->paddingSent++;
 		}
-		else if (DEBUG) {
+		else if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] SendPadding failed because circuit is not built/is busy/is closing or closed.\n");
 		}
 	}
@@ -1110,22 +1110,22 @@ namespace Briand {
 		*/
 
 		if (this->sClient != nullptr && this->sClient->IsConnected() && (this->isBuilt || this->isCreating) && !this->isClosed) {
-			if (DEBUG) printf("[DEBUG] Sending DESTROY cell to Guard with reason %u\n", static_cast<unsigned char>(reason));
+			ESP_LOGD(LOGTAG, "[DEBUG] Sending DESTROY cell to Guard with reason %u\n", static_cast<unsigned char>(reason));
 
 			auto tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::DESTROY);
 
 			tempCell->AppendToPayload(static_cast<unsigned char>(reason));
 			tempCell->SendCell(this->sClient, true, false);
 
-			if (DEBUG) printf("[DEBUG] DESTROY cell sent.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] DESTROY cell sent.\n");
 						
 			this->sClient->Disconnect();
 			this->sClient.reset();
 
-			if (DEBUG) printf("[DEBUG] Circuit TearDown success.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] Circuit TearDown success.\n");
 		}
 		else {
-			if (DEBUG) printf("[DEBUG] Circuit does not need TearDown.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] Circuit does not need TearDown.\n");
 		}
 
 		// However, always reset values to avoid misunderstandings
@@ -1135,17 +1135,16 @@ namespace Briand {
 		this->isClean = false;
 		this->isBuilt = false;
 		this->isClosed = true;
+		this->paddingSent = 0;
 	}
 
 	void BriandTorCircuit::PrintCircuitInfo() {
-		if (VERBOSE) {
-			if (this->isBuilt && !(this->isClosing || this->isClosed)) {
-				printf("[INFO] Circuit with ID %08X is operative since Unix time %lu.\n", this->CIRCID, this->createdOn);
-				printf("[INFO] You <----> G[%s] <----> M[%s] <----> E[%s] <----> Web\n", this->guardNode->nickname->c_str(), this->middleNode->nickname->c_str(), this->exitNode->nickname->c_str());
-			}
-			else {
-				printf("[INFO] Circuit is not built, closed or in closing.\n");
-			}
+		if (this->isBuilt && !(this->isClosing || this->isClosed)) {
+			printf("[INFO] Circuit with ID %08X is operative since Unix time %lu.\n", this->CIRCID, this->createdOn);
+			printf("[INFO] You <----> G[%s] <----> M[%s] <----> E[%s] <----> Web\n", this->guardNode->nickname->c_str(), this->middleNode->nickname->c_str(), this->exitNode->nickname->c_str());
+		}
+		else {
+			printf("[INFO] Circuit is not built, closed or in closing.\n");
 		}
 	}
 
@@ -1172,4 +1171,9 @@ namespace Briand {
 	unsigned short BriandTorCircuit::GetCurrentStreamID() {
 		return this->CURRENT_STREAM_ID;
 	}
+
+	unsigned long int BriandTorCircuit::GetSentPadding() {
+		return this->paddingSent;
+	}
+
 }

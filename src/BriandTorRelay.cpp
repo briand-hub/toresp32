@@ -18,9 +18,6 @@
 
 #include "BriandTorRelay.hxx"
 
-
-
-
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -141,7 +138,7 @@ namespace Briand {
 				combination, the initiator MUST check the following.
 			*/
 
-			if (DEBUG) printf("[DEBUG] Relay has Ed25519+RSA identity keys.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] Relay has Ed25519+RSA identity keys.\n");
 
 			/*
 				* The CERTS cell contains exactly one CertType 2 "ID" certificate.
@@ -159,7 +156,7 @@ namespace Briand {
 				this->certTLSLink == nullptr ||
 				this->certRSAEd25519CrossCertificate == nullptr ) 
 			{
-				printf("[DEBUG] Relay has invalid number of certificates.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Relay has invalid number of certificates.\n");
 				return false;
 			}
 
@@ -178,7 +175,7 @@ namespace Briand {
 				(this->certRsa1024AuthenticateCell != nullptr && !this->certRsa1024AuthenticateCell->IsValid( *this->certRsa1024Identity.get() ))
 				) 
 			{
-				printf("[DEBUG] Relay has invalid or expired X.509 certificates.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Relay has invalid or expired X.509 certificates.\n");
 				return false;
 			}
 
@@ -187,14 +184,14 @@ namespace Briand {
 			/* The certified key in the ID certificate is a 1024-bit RSA key. */
 			unsigned short keyLen = this->certRsa1024Identity->GetRsaKeyLength();
 			if (keyLen != 1024) {
-				if (DEBUG) printf("[DEBUG] Error, RSA1024_Identity_Self_Signed has an invalid key size of %d bit, expected 1024.\n", keyLen);
+				ESP_LOGD(LOGTAG, "[DEBUG] Error, RSA1024_Identity_Self_Signed has an invalid key size of %d bit, expected 1024.\n", keyLen);
 				return false;
 			}
 
 			/* The RSA->Ed25519 cross-certificate certifies the Ed25519 identity, and is signed with the RSA identity listed in the "ID" certificate. */
 			if (!this->certRSAEd25519CrossCertificate->IsValid( *this->certRsa1024Identity.get() )) 
 			{
-				printf("[DEBUG] Error, RSAEd25519CrossCertificate is expired or not correctly signed by RSA identity.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Error, RSAEd25519CrossCertificate is expired or not correctly signed by RSA identity.\n");
 				return false;
 			}
 
@@ -205,7 +202,7 @@ namespace Briand {
 			*/
 
 			if (!this->certTLSLink->IsValid( *this->certEd25519SigningKey.get(), *this->certLinkKey.get() )) {
-				printf("[DEBUG] Error, TLS Link is expired, not correctly signed by RSA identity or included certified key not matching SHA256 digest of Link certificate.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Error, TLS Link is expired, not correctly signed by RSA identity or included certified key not matching SHA256 digest of Link certificate.\n");
 				return false;
 			}
 
@@ -213,16 +210,16 @@ namespace Briand {
 			
 			// This is not understood, unclear. The Link (certype 5) certified key contains the sha256 digest of the full content of the link (certtype 1) certificate :/
 
-			if (DEBUG) printf("[DEBUG] WARNING: this test is skipped because unclear: \"The certified key in the Link certificate matches the link key that was used to negotiate the TLS connection.\"\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] WARNING: this test is skipped because unclear: \"The certified key in the Link certificate matches the link key that was used to negotiate the TLS connection.\"\n");
 			// TODO
 
 			/* The identity key listed in the ID->Signing cert was used to sign the ID->Signing Cert. (CertType 4 Ed25519) */
 			if (!this->certEd25519SigningKey->IsValid( *this->certRSAEd25519CrossCertificate.get() )) {
-				printf("[DEBUG] Error, Ed25519SigningKey is expired or not correctly signed by RSAEd25519CrossCertificate's ED25519KEY.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Error, Ed25519SigningKey is expired or not correctly signed by RSAEd25519CrossCertificate's ED25519KEY.\n");
 				return false;
 			}
 
-			if (DEBUG) printf("[DEBUG] Relay with RSA+Ed25519 identity has the right and valid certificates.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] Relay with RSA+Ed25519 identity has the right and valid certificates.\n");
 			
 			return true;
 		}
@@ -232,7 +229,7 @@ namespace Briand {
 				the initiator MUST check the following:
 			*/
 
-			if (DEBUG) printf("[DEBUG] Relay has RSA identity key only.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] Relay has RSA identity key only.\n");
 
 			/*
 				* The CERTS cell contains exactly one CertType 1 "Link" certificate.
@@ -241,7 +238,7 @@ namespace Briand {
 
 			if (this->certRsa1024Identity == nullptr || this->certLinkKey == nullptr ) 
 			{
-				printf("[DEBUG] Relay has invalid number of certificates.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Relay has invalid number of certificates.\n");
 				return false;
 			}
 
@@ -257,14 +254,14 @@ namespace Briand {
 				(this->certRsa1024AuthenticateCell != nullptr && !this->certRsa1024AuthenticateCell->IsValid( *this->certRsa1024Identity.get() ))
 				) 
 			{
-				printf("[DEBUG] Relay has invalid or expired X.509 certificates.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Relay has invalid or expired X.509 certificates.\n");
 				return false;
 			}
 	
 			/*	The certified key in the ID certificate is a 1024-bit RSA key. */
 			unsigned short keyLen = this->certRsa1024Identity->GetRsaKeyLength();
 			if (keyLen != 1024) {
-				if (DEBUG) printf("[DEBUG] Error, RSA1024_Identity_Self_Signed has an invalid key size of %d bit, expected 1024.\n", keyLen);
+				ESP_LOGD(LOGTAG, "[DEBUG] Error, RSA1024_Identity_Self_Signed has an invalid key size of %d bit, expected 1024.\n", keyLen);
 				return false;
 			}
 
@@ -274,12 +271,12 @@ namespace Briand {
 			// TODO
 			//
 
-			if (DEBUG) printf("[DEBUG] Relay with RSA identity key only has the right and valid certificates.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] Relay with RSA identity key only has the right and valid certificates.\n");
 
 			return true;
 		}
 		else {
-			if (DEBUG) printf("[DEBUG] Relay has no valid certificates to verify (no identity)!\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] Relay has no valid certificates to verify (no identity)!\n");
 			return false;
 		}
 
@@ -305,7 +302,7 @@ namespace Briand {
 
 		while(httpCode != 200 && curDir < TOR_DIR_AUTHORITIES_NUMBER) {
 			auto randomDirectory = TOR_DIR_AUTHORITIES[TOR_DIR_LAST_USED];
-			if (DEBUG) printf("[DEBUG] FetchDescriptorsFromAuthority Query to dir #%u (%s).\n", TOR_DIR_LAST_USED, randomDirectory.nickname);
+			ESP_LOGD(LOGTAG, "[DEBUG] FetchDescriptorsFromAuthority Query to dir #%u (%s).\n", TOR_DIR_LAST_USED, randomDirectory.nickname);
 
 			string path = "/tor/server/fp/" + *this->fingerprint.get();	// also /tor/server/d/<F> working
 			bool secureRequest = false;
@@ -318,12 +315,12 @@ namespace Briand {
 			if (httpCode != 200) {
 				curDir++;
 				TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED + 1) % TOR_DIR_AUTHORITIES_NUMBER;
-				if (DEBUG) printf("[DEBUG] FetchDescriptorsFromAuthority missed valid response, retry with dir #%u.\n", TOR_DIR_LAST_USED);
+				ESP_LOGD(LOGTAG, "[DEBUG] FetchDescriptorsFromAuthority missed valid response, retry with dir #%u.\n", TOR_DIR_LAST_USED);
 			}
 		}
 
 		if (httpCode == 200) {
-			if (DEBUG) printf("[DEBUG] FetchDescriptorsFromAuthority GET success.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] FetchDescriptorsFromAuthority GET success.\n");
 			unsigned int starts, ends;
 
 			// Find the ntor-onion-key 
@@ -331,7 +328,7 @@ namespace Briand {
 			ends = response->find("\n", starts);
 			
 			if (starts == string::npos || ends == string::npos) {
-				if (DEBUG) printf("[DEBUG] FetchDescriptorsFromAuthority ntor-onion-key failed.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] FetchDescriptorsFromAuthority ntor-onion-key failed.\n");
 				this->descriptorNtorOnionKey->assign("");
 				return false;
 			}
@@ -363,7 +360,7 @@ namespace Briand {
 			// TODO : other descriptors needed??
 		}
 		else {
-			if (DEBUG) printf("[DEBUG] FetchDescriptorsFromAuthority has failed, httpcode: %d\n", httpCode);
+			ESP_LOGD(LOGTAG, "[DEBUG] FetchDescriptorsFromAuthority has failed, httpcode: %d\n", httpCode);
 			return false;
 		}
 
@@ -389,7 +386,7 @@ namespace Briand {
 
 		// Check if data is enough WARNING: in future the length may change!
 		if (created2_extended2_payload->size() < 2+G_LENGTH+H_LENGTH) {
-			if (VERBOSE) printf("[ERR] Error, CREATED2 contains inconsistent payload (%u bytes against %u expected). Failure.\n", created2_extended2_payload->size(), 2+G_LENGTH+H_LENGTH);
+			ESP_LOGW(LOGTAG, "[ERR] Error, CREATED2 contains inconsistent payload (%u bytes against %u expected). Failure.\n", created2_extended2_payload->size(), 2+G_LENGTH+H_LENGTH);
 			return false;
 		}
 
@@ -399,7 +396,7 @@ namespace Briand {
 
 		// Check HLEN consistent
 		if (HLEN != G_LENGTH+H_LENGTH) {
-			if (VERBOSE) printf("[ERR] Error, CREATED2 contains inconsistent HLEN payload (%u bytes against %u expected). Failure.\n", HLEN, G_LENGTH+H_LENGTH);
+			ESP_LOGW(LOGTAG, "[ERR] Error, CREATED2 contains inconsistent HLEN payload (%u bytes against %u expected). Failure.\n", HLEN, G_LENGTH+H_LENGTH);
 			return false;
 		}
 
@@ -411,7 +408,7 @@ namespace Briand {
 				created2_extended2_payload->begin() + 2 + G_LENGTH
 			);
 		
-		if (DEBUG) {
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Relay's PK: ");
 			BriandUtils::PrintByteBuffer(*this->CREATED_EXTENDED_RESPONSE_SERVER_PK.get(), this->CREATED_EXTENDED_RESPONSE_SERVER_PK->size(), this->CREATED_EXTENDED_RESPONSE_SERVER_PK->size());
 		}
@@ -424,7 +421,7 @@ namespace Briand {
 				created2_extended2_payload->begin() + 2 + G_LENGTH + H_LENGTH
 			);
 
-		if (DEBUG) {
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Relay's AUTH: ");
 			BriandUtils::PrintByteBuffer(*this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH.get(), this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size(), this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size());
 		}
@@ -441,11 +438,11 @@ namespace Briand {
 		bool keysReady = BriandTorCryptoUtils::NtorHandshakeComplete(*this);
 
 		if (!keysReady) {
-			if (DEBUG) printf("[DEBUG] The handshake is failed, no keys have been exchanged.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] The handshake is failed, no keys have been exchanged.\n");
 			return false;
 		}
 
-		if (DEBUG) {
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Forward key: ");
 			BriandUtils::PrintByteBuffer( *this->KEY_Forward_Kf.get() );
 			printf("[DEBUG] Backward key: ");
@@ -471,7 +468,7 @@ namespace Briand {
 	}
 
 	void BriandTorRelay::PrintAllCertificateShortInfo() {
-		if (DEBUG) {
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			if (this->certLinkKey != nullptr) this->certLinkKey->PrintCertInfo();
 			if (this->certRsa1024Identity != nullptr) this->certRsa1024Identity->PrintCertInfo();
 			if (this->certRsa1024AuthenticateCell != nullptr) this->certRsa1024AuthenticateCell->PrintCertInfo();
@@ -484,7 +481,7 @@ namespace Briand {
 	}
 
 	void BriandTorRelay::PrintRelayInfo() {
-		if (DEBUG) {
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Nickame: %s\n", this->nickname->c_str());
 			printf("[DEBUG] Address: %s\n", this->address->c_str());
 			printf("[DEBUG] OR Port: %u\n", this->port);

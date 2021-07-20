@@ -9,9 +9,11 @@
 * Authenticate cell? => Prepare stub method to authenticate client
 * General ignore PADDING cells in SendCell responses
 * Send DEBUG/VERBOSE messages to another tty/stderr
+* Check randomize() working on RelaySearcher
 
 ## 2021-07-18
 
+* Changed logging system with ESP default
 * Tested Circuits Manager, working
 * Added test tor command and tested PADDING on built circuits, hostname resolution. All OK!
 

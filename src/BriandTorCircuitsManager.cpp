@@ -50,7 +50,9 @@ namespace Briand
 
     void BriandTorCircuitsManager::Start() {
         // If not empty, clear out the current circuit pool (useful if Stop() not called and want to re-Start the manager)
+        ESP_LOGD(LOGTAG, "Stopping previous instances.\n");
         this->Stop();
+        ESP_LOGD(LOGTAG, "Starting circuits.\n");
 
         // Create a new object for the allocated pool size.
         for (static unsigned short i = 0; i < this->CIRCUIT_POOL_SIZE; i++) {
@@ -59,6 +61,7 @@ namespace Briand
             // Save in the internal ID the index in this array
             this->CIRCUITS[i]->internalID = i;
 
+            ESP_LOGD(LOGTAG, "Circuit #%hu instanced. Starting task.\n", i);
             // Start an async build task for each circuit.
             xTaskCreate(this->CircuitTask, "CircuitTask", this->TASK_STACK_SIZE, &(this->CIRCUITS[i]->internalID), 500, NULL);
         }
@@ -69,11 +72,11 @@ namespace Briand
         while (1) {
             unsigned short cIndex = *(reinterpret_cast<unsigned short*>(circuitIndex));
 
-            if (DEBUG) printf("[DEBUG] Invoked task for circuit #%hu.\n", cIndex);
+            ESP_LOGD(LOGTAG, "[DEBUG] Invoked task for circuit #%hu.\n", cIndex);
 
             // If this is an "orphan" task of a previous "killed" circuit, terminate.
             if (BriandTorCircuitsManager::CIRCUITS[cIndex] == nullptr) {
-                if (DEBUG) printf("[DEBUG] Circuit #%hu is orphan, killing task.\n", cIndex);
+                ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is orphan, killing task.\n", cIndex);
 
                 // delete this task!
                 vTaskDelete(NULL);
@@ -83,10 +86,10 @@ namespace Briand
                 
                 if (circuit->IsCircuitCreating()) {
                     // Just wait
-                    if (DEBUG) printf("[DEBUG] Circuit #%hu is creating, waiting.\n", cIndex);
+                    ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is creating, waiting.\n", cIndex);
                 }
                 else if (circuit->IsCircuitClosingOrClosed()) {
-                    if (DEBUG) printf("[DEBUG] Circuit #%hu is closing/closed, removing from pool.\n", cIndex);
+                    ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is closing/closed, removing from pool.\n", cIndex);
 
                     // Reset the pointer
                     BriandTorCircuitsManager::CIRCUITS[cIndex].reset();
@@ -95,7 +98,7 @@ namespace Briand
                     vTaskDelete(NULL);
                 }
                 else if (!circuit->IsCircuitBuilt()) {
-                    if (DEBUG) printf("[DEBUG] Circuit #%hu needs to be built, building.\n", cIndex);
+                    ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu needs to be built, building.\n", cIndex);
 
                     // Here circuit is not built nor in creating, so build it.
                     circuit->BuildCircuit(false);
@@ -103,18 +106,18 @@ namespace Briand
                 else if(circuit->IsCircuitBuilt()) {
                     if (BriandUtils::GetUnixTime() >= circuit->GetCreatedOn() + BriandTorCircuitsManager::CIRCUIT_MAX_TIME) {
                         // The circuit should be closed for elapsed time
-                        if (DEBUG) printf("[DEBUG] Circuit #%hu has reached maximum life time, sending destroy.\n", cIndex);
+                        ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu has reached maximum life time, sending destroy.\n", cIndex);
                         circuit->TearDown(Briand::BriandTorDestroyReason::FINISHED);
                     }
                     else if (circuit->GetCurrentStreamID() >= BriandTorCircuitsManager::CIRCUIT_MAX_REQUESTS) {
                         // The circuit should be closed for maximum requests
-                        if (DEBUG) printf("[DEBUG] Circuit #%hu has reached maximum requests, sending destroy.\n", cIndex);
+                        ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu has reached maximum requests, sending destroy.\n", cIndex);
                         circuit->TearDown(Briand::BriandTorDestroyReason::FINISHED);
                     }
                     else if (!circuit->IsCircuitBusy()) {
                         // No problems                     
                         // Send a PADDING to keep alive!
-                        if (DEBUG) printf("[DEBUG] Circuit #%hu is alive and not busy, sending PADDING.\n", cIndex);
+                        ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is alive and not busy, sending PADDING.\n", cIndex);
                         circuit->SendPadding();
                     }
                 }
@@ -122,7 +125,7 @@ namespace Briand
                 // Check if there are the number of needed circuits built, if not add the needed
                 for (unsigned short i = 0; i < BriandTorCircuitsManager::CIRCUIT_POOL_SIZE; i++) {
                     if (BriandTorCircuitsManager::CIRCUITS[i] == nullptr) {
-                        if (DEBUG) printf("[DEBUG] Adding a new circuit to pool as #%hu.\n", i);
+                        ESP_LOGD(LOGTAG, "[DEBUG] Adding a new circuit to pool as #%hu.\n", i);
                         BriandTorCircuitsManager::CIRCUITS[i] = make_unique<BriandTorCircuit>();
                         BriandTorCircuitsManager::CIRCUITS[i]->internalID = i;
                         xTaskCreate(CircuitTask, "CircuitTask", BriandTorCircuitsManager::TASK_STACK_SIZE, &(BriandTorCircuitsManager::CIRCUITS[i]->internalID), 500, NULL);
@@ -159,11 +162,11 @@ namespace Briand
     }
 
     void BriandTorCircuitsManager::PrintCircuitsInfo() {
-        printf("#\tStatus\t\tDescription\n");
+        printf("#\tStatus\t\tPaddings\tCreatedOn\tDescription\n");
         for (unsigned short i=0; i<this->CIRCUIT_POOL_SIZE; i++) {
             printf("%u\t", i);
             if (this->CIRCUITS[i] == nullptr) {
-                printf("NONE\t\tNot instanced\n");
+                printf("NONE\t\tNot instanced\t\t%08lu\t\n", 0L);
             }
             else {
                 auto& circuit = this->CIRCUITS[i];
@@ -175,6 +178,9 @@ namespace Briand
                     printf("Closing/Closed\t");
                 else
                     printf("Unknown\t\t");
+
+                printf("%08lu\t", circuit->GetSentPadding());
+                printf("%08lu\t", circuit->GetCreatedOn());
 
                 printf("You <--> ");
 

@@ -113,10 +113,10 @@ namespace Briand {
 		);
 
 		if (httpCode != 200) {
-			if (VERBOSE) printf("[ERR] Error on downloading Onionoo relay. Http code: %d\n", httpCode);
+			ESP_LOGW(LOGTAG, "[ERR] Error on downloading Onionoo relay. Http code: %d\n", httpCode);
 		}
 		else {
-			if (DEBUG) printf("[DEBUG] Response before trimming has size %d bytes\n", response->length());
+			ESP_LOGD(LOGTAG, "[DEBUG] Response before trimming has size %d bytes\n", response->length());
 
 			// Seems that sometimes additional bytes are included in response when body only is requested. 
 			// So remove before the first { and after the last }
@@ -131,7 +131,7 @@ namespace Briand {
 			BriandUtils::StringTrimAll(*response.get(), '\r');
 			BriandUtils::StringTrimAll(*response.get(), '\n');
 
-			if (DEBUG) printf("[DEBUG] After trimming has size %d bytes\n", response->length());
+			ESP_LOGD(LOGTAG, "[DEBUG] After trimming has size %d bytes\n", response->length());
 
 			success = true;
 		}
@@ -157,16 +157,16 @@ namespace Briand {
 		success = false;
 		tentative = 0;
 		while (!success && tentative < maxTentatives) {
-			if (DEBUG) printf("[DEBUG] Downloading guard cache from Oniooo, tentative %d of %d.\n", tentative+1, maxTentatives);
+			ESP_LOGD(LOGTAG, "[DEBUG] Downloading guard cache from Oniooo, tentative %d of %d.\n", tentative+1, maxTentatives);
 			// effective_family and exit_policy_summary removed due to too much bytes...
 			auto json = this->GetOnionooJson("relay", "nickname,or_addresses,fingerprint", TOR_FLAGS_GUARD_MUST_HAVE, success, TOR_NODES_CACHE_SIZE);
 			if (success) {
-				if (DEBUG) printf("[DEBUG] Downloading guard cache from Oniooo success, saving cache.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Downloading guard cache from Oniooo success, saving cache.\n");
 				
 				// Prepend the time to object (the first byte is the "{" initialization)
 				string addTimestamp = "\"cachecreatedon\":" + std::to_string(BriandUtils::GetUnixTime()) + ",";
 				json->insert(json->begin()+1, addTimestamp.begin(), addTimestamp.end());
-				if (DEBUG) printf("[DEBUG] Guard cache from Oniooo will have a size of %u bytes.\n", json->size());
+				ESP_LOGD(LOGTAG, "[DEBUG] Guard cache from Oniooo will have a size of %u bytes.\n", json->size());
 				
 				ofstream f(NODES_FILE_GUARD, ios::out | ios::trunc);
 
@@ -185,14 +185,14 @@ namespace Briand {
 				f.flush();
 				f.close();
 				json.reset(); // save ram
-				if (DEBUG) printf("[DEBUG] Guard cache from Oniooo saved to %s\n", this->NODES_FILE_GUARD);
+				ESP_LOGD(LOGTAG, "[DEBUG] Guard cache from Oniooo saved to %s\n", this->NODES_FILE_GUARD);
 			}
 
 			tentative++;
 		}
 
 		if (tentative == maxTentatives) {
-			if (DEBUG) printf("[DEBUG] RefreshOnionooCache permanent failure. exiting.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] RefreshOnionooCache permanent failure. exiting.\n");
 			return;
 		}
 
@@ -200,15 +200,15 @@ namespace Briand {
 		success = false;
 		tentative = 0;
 		while (!success && tentative < maxTentatives) {
-			if (DEBUG) printf("[DEBUG] Downloading middle cache from Oniooo, tentative %d of %d.\n", tentative+1, maxTentatives);
+			ESP_LOGD(LOGTAG, "[DEBUG] Downloading middle cache from Oniooo, tentative %d of %d.\n", tentative+1, maxTentatives);
 			// effective_family and exit_policy_summary removed due to too much bytes...			
 			auto json = this->GetOnionooJson("relay", "nickname,or_addresses,fingerprint", TOR_FLAGS_MIDDLE_MUST_HAVE, success, TOR_NODES_CACHE_SIZE);
 			if (success) {
-				if (DEBUG) printf("[DEBUG] Downloading middle cache from Oniooo success, saving cache.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Downloading middle cache from Oniooo success, saving cache.\n");
 				// Prepend the time to object (the first byte is the "{" initialization)
 				string addTimestamp = "\"cachecreatedon\":" + std::to_string(BriandUtils::GetUnixTime()) + ",";
 				json->insert(json->begin()+1, addTimestamp.begin(), addTimestamp.end());
-				if (DEBUG) printf("[DEBUG] Middle cache from Oniooo will have a size of %u bytes.\n", json->size());
+				ESP_LOGD(LOGTAG, "[DEBUG] Middle cache from Oniooo will have a size of %u bytes.\n", json->size());
 
 				ofstream f(NODES_FILE_MIDDLE, ios::out | ios::trunc);
 
@@ -228,14 +228,14 @@ namespace Briand {
 				f.close();
 
 				json.reset(); // save ram
-				if (DEBUG) printf("[DEBUG] Middle cache from Oniooo saved to %s\n", this->NODES_FILE_MIDDLE);
+				ESP_LOGD(LOGTAG, "[DEBUG] Middle cache from Oniooo saved to %s\n", this->NODES_FILE_MIDDLE);
 			}
 
 			tentative++;
 		}
 
 		if (tentative == maxTentatives) {
-			if (DEBUG) printf("[DEBUG] RefreshOnionooCache permanent failure. exiting.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] RefreshOnionooCache permanent failure. exiting.\n");
 			return;
 		}
 
@@ -243,16 +243,16 @@ namespace Briand {
 		success = false;
 		tentative = 0;
 		while (!success && tentative < maxTentatives) {
-			if (DEBUG) printf("[DEBUG] Downloading exit cache from Oniooo, tentative %d of %d.\n", tentative+1, maxTentatives);
+			ESP_LOGD(LOGTAG, "[DEBUG] Downloading exit cache from Oniooo, tentative %d of %d.\n", tentative+1, maxTentatives);
 			// Exit nodes => require exit_summary!
 			// effective_family and exit_policy_summary removed due to too much bytes...
 			auto json = this->GetOnionooJson("relay", "nickname,or_addresses,fingerprint", TOR_FLAGS_EXIT_MUST_HAVE, success, TOR_NODES_CACHE_SIZE);
 			if (success) {
-				if (DEBUG) printf("[DEBUG] Downloading exit cache from Oniooo success, saving cache.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Downloading exit cache from Oniooo success, saving cache.\n");
 				// Prepend the time to object (the first byte is the "{" initialization)
 				string addTimestamp = "\"cachecreatedon\":" + std::to_string(BriandUtils::GetUnixTime()) + ",";
 				json->insert(json->begin()+1, addTimestamp.begin(), addTimestamp.end());
-				if (DEBUG) printf("[DEBUG] Middle exit from Oniooo will have a size of %u bytes.\n", json->size());
+				ESP_LOGD(LOGTAG, "[DEBUG] Middle exit from Oniooo will have a size of %u bytes.\n", json->size());
 				
 				ofstream f(NODES_FILE_EXIT, ios::out | ios::trunc);
 
@@ -271,14 +271,14 @@ namespace Briand {
 				f.flush();
 				f.close();
 				json.reset(); // save ram
-				if (DEBUG) printf("[DEBUG] Exit cache from Oniooo saved to %s\n", this->NODES_FILE_EXIT);
+				ESP_LOGD(LOGTAG, "[DEBUG] Exit cache from Oniooo saved to %s\n", this->NODES_FILE_EXIT);
 			}
 
 			tentative++;
 		}
 
 		if (tentative == maxTentatives) {
-			if (DEBUG) printf("[DEBUG] RefreshOnionooCache permanent failure. exiting.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] RefreshOnionooCache permanent failure. exiting.\n");
 			return;
 		}
 
@@ -307,7 +307,7 @@ namespace Briand {
 			if (root == NULL) {
 				// Get last error
 				const char *error_ptr = cJSON_GetErrorPtr();
-				if (DEBUG) printf("[DEBUG] %s cache deserialization error: %s\n", filename, error_ptr);
+				ESP_LOGD(LOGTAG, "[DEBUG] %s cache deserialization error: %s\n", filename, error_ptr);
 				// Free resources
 				cJSON_Delete(root);
 				return false;
@@ -319,7 +319,7 @@ namespace Briand {
 				cacheAge = static_cast<unsigned long int>(cacheField->valueint);
 			}
 
-			if (DEBUG) printf("[DEBUG] %s cache created on %lu.\n", filename, cacheAge);
+			ESP_LOGD(LOGTAG, "[DEBUG] %s cache created on %lu.\n", filename, cacheAge);
 
 			if ( (cacheAge + (TOR_NODES_CACHE_VAL_H*3600)) >= BriandUtils::GetUnixTime() ) {
 				valid = true;
@@ -328,7 +328,7 @@ namespace Briand {
 			cJSON_Delete(root);
 		}
 		else {
-			if (DEBUG) printf("[DEBUG] %s cache file does not exist.\n", filename);
+			ESP_LOGD(LOGTAG, "[DEBUG] %s cache file does not exist.\n", filename);
 		}
 
 		return valid;
@@ -368,14 +368,14 @@ namespace Briand {
 		unique_ptr<BriandTorRelay> relay = nullptr;
 
 		if (!this->cacheValid) {
-			if (DEBUG) printf("[DEBUG] Nodes cache invalid, download and rebuilding.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache invalid, download and rebuilding.\n");
 			RefreshOnionooCache();
 		}
 		if (this->cacheValid) {
 			// randomize for random picking
 			this->randomize();
 			
-			if (DEBUG) printf("[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
+			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
 
 			ifstream file(this->NODES_FILE_GUARD, ios::in);
 			auto json = make_unique<string>("");
@@ -390,7 +390,7 @@ namespace Briand {
 			if (root == NULL || cJSON_GetObjectItemCaseSensitive(root, "relays") == NULL) {
 				// Get last error
 				const char *error_ptr = cJSON_GetErrorPtr();
-				if (DEBUG) printf("[DEBUG] Guard cache deserialization error: %s\n", error_ptr);
+				ESP_LOGD(LOGTAG, "[DEBUG] Guard cache deserialization error: %s\n", error_ptr);
 				// Free resources
 				cJSON_Delete(root);
 				return relay;
@@ -398,7 +398,7 @@ namespace Briand {
 
 			auto relays = cJSON_GetObjectItemCaseSensitive(root, "relays");
 			if (!cJSON_IsArray(relays)) {
-				if (DEBUG) printf("[DEBUG] Guard cache deserialization error (no relays array)\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Guard cache deserialization error (no relays array)\n");
 				// Free resources
 				cJSON_Delete(root);
 				return relay;
@@ -428,7 +428,7 @@ namespace Briand {
 			cJSON_Delete(root);
 		}
 		else {
-			if (VERBOSE) printf("[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
+			ESP_LOGW(LOGTAG, "[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
 		}
 
 		return relay;
@@ -438,14 +438,14 @@ namespace Briand {
 		unique_ptr<BriandTorRelay> relay = nullptr;
 
 		if (!this->cacheValid) {
-			if (DEBUG) printf("[DEBUG] Nodes cache invalid, download and rebuilding.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache invalid, download and rebuilding.\n");
 			RefreshOnionooCache();
 		}
 		if (this->cacheValid) {
 			// randomize for random picking
 			this->randomize();
 			
-			if (DEBUG) printf("[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
+			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
 
 			ifstream file(this->NODES_FILE_GUARD, ios::in);
 			auto json = make_unique<string>("");
@@ -460,7 +460,7 @@ namespace Briand {
 			if (root == NULL || cJSON_GetObjectItemCaseSensitive(root, "relays") == NULL) {
 				// Get last error
 				const char *error_ptr = cJSON_GetErrorPtr();
-				if (DEBUG) printf("[DEBUG] Guard cache deserialization error: %s\n", error_ptr);
+				ESP_LOGD(LOGTAG, "[DEBUG] Guard cache deserialization error: %s\n", error_ptr);
 				// Free resources
 				cJSON_Delete(root);
 				return relay;
@@ -468,7 +468,7 @@ namespace Briand {
 
 			auto relays = cJSON_GetObjectItemCaseSensitive(root, "relays");
 			if (!cJSON_IsArray(relays)) {
-				if (DEBUG) printf("[DEBUG] Guard cache deserialization error (no relays array)\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Guard cache deserialization error (no relays array)\n");
 				// Free resources
 				cJSON_Delete(root);
 				return relay;
@@ -512,7 +512,7 @@ namespace Briand {
 			cJSON_Delete(root);
 		}
 		else {
-			if (VERBOSE) printf("[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
+			ESP_LOGW(LOGTAG, "[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
 		}
 
 		return relay;
@@ -522,14 +522,14 @@ namespace Briand {
 		unique_ptr<BriandTorRelay> relay = nullptr;
 
 		if (!this->cacheValid) {
-			if (DEBUG) printf("[DEBUG] Nodes cache invalid, download and rebuilding.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache invalid, download and rebuilding.\n");
 			RefreshOnionooCache();
 		}
 		if (this->cacheValid) {
 			// randomize for random picking
 			this->randomize();
 			
-			if (DEBUG) printf("[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
+			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
 
 			ifstream file(this->NODES_FILE_GUARD, ios::in);
 			auto json = make_unique<string>("");
@@ -544,7 +544,7 @@ namespace Briand {
 			if (root == NULL || cJSON_GetObjectItemCaseSensitive(root, "relays") == NULL) {
 				// Get last error
 				const char *error_ptr = cJSON_GetErrorPtr();
-				if (DEBUG) printf("[DEBUG] Guard cache deserialization error: %s\n", error_ptr);
+				ESP_LOGD(LOGTAG, "[DEBUG] Guard cache deserialization error: %s\n", error_ptr);
 				// Free resources
 				cJSON_Delete(root);
 				return relay;
@@ -552,7 +552,7 @@ namespace Briand {
 
 			auto relays = cJSON_GetObjectItemCaseSensitive(root, "relays");
 			if (!cJSON_IsArray(relays)) {
-				if (DEBUG) printf("[DEBUG] Guard cache deserialization error (no relays array)\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Guard cache deserialization error (no relays array)\n");
 				// Free resources
 				cJSON_Delete(root);
 				return relay;
@@ -599,7 +599,7 @@ namespace Briand {
 			cJSON_Delete(root);
 		}
 		else {
-			if (VERBOSE) printf("[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
+			ESP_LOGW(LOGTAG, "[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
 		}
 
 		return relay;
@@ -613,7 +613,7 @@ namespace Briand {
 	}
 
 	void BriandTorRelaySearcher::PrintCacheContents() {
-		if (DEBUG) {
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] GUARDS CACHE:\n");
 			BriandUtils::PrintFileContent(this->NODES_FILE_GUARD);
 			printf("\n");

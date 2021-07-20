@@ -18,8 +18,6 @@
 
 #include "BriandUtils.hxx"
 
-
-
 #include <esp_system.h>
 
 #include <iostream>
@@ -267,7 +265,7 @@ namespace Briand
 			}
 		}
 		else {
-			printf("[ERR] Error on downloading from https://ifconfig.me/all.json Http code: %d Deserialization success: %d\n", httpCode, success);
+			ESP_LOGW(LOGTAG, "[ERR] Error on downloading from https://ifconfig.me/all.json Http code: %d Deserialization success: %d\n", httpCode, success);
 		}
 
 		cJSON_Delete(doc);
@@ -293,7 +291,7 @@ namespace Briand
 			}
 		}
 		else {
-			printf("[ERR] Error on downloading IP Informations from https://ifconfig.me/all.json Http code: %d Deserialization success: %d\n", httpCode, success);
+			ESP_LOGW(LOGTAG, "[ERR] Error on downloading IP Informations from https://ifconfig.me/all.json Http code: %d Deserialization success: %d\n", httpCode, success);
 		}
 
 		cJSON_Delete(doc);

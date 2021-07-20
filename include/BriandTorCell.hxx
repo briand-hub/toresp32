@@ -77,7 +77,6 @@ namespace Briand {
 		/* RELAY cell Digest (first 4 bytes) */
 		unsigned int Digest;
 
-
 		/** Pads the payload (if needed) */
 		void PadPayload();
 

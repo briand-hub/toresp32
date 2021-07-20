@@ -74,20 +74,20 @@ namespace Briand
 		auto client = make_unique<BriandIDFSocketClient>();
 
 		// Set parameters
-		client->SetVerbose(DEBUG);
+		client->SetVerbose(false);
 		client->SetTimeout(NET_CONNECT_TIMEOUT_S, NET_IO_TIMEOUT_S);
 
 		// Connect
 		if ( !client->Connect(host.c_str(), port) ) {
-			if (VERBOSE) printf("[ERR] Failed to connect\n");
+			ESP_LOGW(LOGTAG, "[ERR] Failed to connect\n");
 			return output;
 		}
 
-		if (DEBUG) printf("[DEBUG] Connected.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Connected.\n");
 
 		// Write request
 		if ( !client->WriteData(content) ) {
-			if (VERBOSE) printf("[ERR] Failed to send data\n");
+			ESP_LOGW(LOGTAG, "[ERR] Failed to send data\n");
 			return output;
 		}
 
@@ -96,13 +96,13 @@ namespace Briand
 
 		// Wait response until timeout reached
 		
-		if (DEBUG) printf("[DEBUG] Request sent.\n");
-		if (DEBUG) printf("[DEBUG] Waiting response");
+		ESP_LOGD(LOGTAG, "[DEBUG] Request sent.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Waiting response");
 
 		// Response
 		output = client->ReadData(false);
 		
-		if (DEBUG) printf("[DEBUG] Got response of %d bytes.\n", output->size());
+		ESP_LOGD(LOGTAG, "[DEBUG] Got response of %d bytes.\n", output->size());
 
 		client->Disconnect();
 
@@ -127,7 +127,7 @@ namespace Briand
 			// Read response
 			output = client->ReadData();
 			
-			if (DEBUG) printf("[DEBUG] Got response of %d bytes.\n", output->size());
+			ESP_LOGD(LOGTAG, "[DEBUG] Got response of %d bytes.\n", output->size());
 
 			if (client->IsConnected() && closeConnection)
 				client->Disconnect();
@@ -142,7 +142,7 @@ namespace Briand
 		auto client = make_unique<BriandIDFSocketTlsClient>();
 
 		// Set parameters
-		client->SetVerbose(DEBUG);
+		client->SetVerbose(false);
 		client->SetTimeout(NET_CONNECT_TIMEOUT_S, NET_IO_TIMEOUT_S);
 
 		if (pemCAcert != nullptr) {
@@ -152,17 +152,17 @@ namespace Briand
 			client->AddCACertificateToChainDER(*derCAcert.get());
 		}
 		else {
-			if (DEBUG) printf("[DEBUG] Insecure mode (no PEM/DER CA certificate).\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] Insecure mode (no PEM/DER CA certificate).\n");
 		}
 
 		// Connect
 
 		if ( !client->Connect(host, port) ) {
-			if (VERBOSE) printf("[ERR] Failed to connect\n");
+			ESP_LOGW(LOGTAG, "[ERR] Failed to connect\n");
 			return output;
 		}
 
-		if (DEBUG) printf("[DEBUG] Connected.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Connected.\n");
 
 		// Write request
 		client->WriteData(content);
@@ -173,13 +173,13 @@ namespace Briand
 
 		// Wait response until timeout reached
 		
-		if (DEBUG) printf("[DEBUG] Request sent.\n");
-		if (DEBUG) printf("[DEBUG] Waiting response\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Request sent.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] Waiting response\n");
 
 		// Response ready!
 		output = client->ReadData();
 		
-		if (DEBUG) printf("[DEBUG] Got response of %d bytes.\n", output->size());
+		ESP_LOGD(LOGTAG, "[DEBUG] Got response of %d bytes.\n", output->size());
 
 		if (client->IsConnected())
 			client->Disconnect();
@@ -190,7 +190,7 @@ namespace Briand
 	}
 
 	unique_ptr<string> BriandNet::HttpsGet(const string& host, const short& port, const string& path, short& httpReturnCode, const string& agent /* = "empty"*/, const bool& returnBodyOnly /* = false*/, const unique_ptr<string>& pemCAcert /*= nullptr*/, const unique_ptr<vector<unsigned char>>& derCAcert /*= nullptr*/) {
-		if (DEBUG) printf("[DEBUG] HttpsGet called to https://%s:%d%s\n", host.c_str(), port, path.c_str());
+		ESP_LOGD(LOGTAG, "[DEBUG] HttpsGet called to https://%s:%d%s\n", host.c_str(), port, path.c_str());
 
 		// Prepare request
 
@@ -205,12 +205,12 @@ namespace Briand
 		auto contents = StringToUnsignedCharVector(request, true);
 		request.reset();
 		
-		if (DEBUG) printf("[DEBUG] HttpsGet sending raw request.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] HttpsGet sending raw request.\n");
 		auto response = RawSecureRequest(host, port, contents, true, pemCAcert, derCAcert);
 
 		if (response->size() > 0) {
 			// Success
-			if (DEBUG) printf("[DEBUG] HttpsGet success.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] HttpsGet success.\n");
 
 			// Convert to string
 			auto responseContent = UnsignedCharVectorToString(response, true);
@@ -229,20 +229,20 @@ namespace Briand
 			return responseContent;
 		}
 		else {
-			if (DEBUG) printf("[DEBUG] HttpsGet failed.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] HttpsGet failed.\n");
 			return nullptr;
 		}
 	}
 
 	cJSON* BriandNet::HttpsGetJson(const string& host, const short& port, const string& path, short& httpReturnCode, bool& deserializationSuccess, const string& agent  /* = "empty"*/, const unique_ptr<string>& pemCAcert /*= nullptr*/, const unique_ptr<vector<unsigned char>>& derCAcert /*= nullptr*/) {
-		if (DEBUG) printf("[DEBUG] HttpsGetJson called to https://%s:%d/%s\n", host.c_str(), port, path.c_str());
+		ESP_LOGD(LOGTAG, "[DEBUG] HttpsGetJson called to https://%s:%d/%s\n", host.c_str(), port, path.c_str());
 		
 		deserializationSuccess = false;
 
 		auto response = HttpsGet(host, port, path, httpReturnCode, agent, true);
 
 		if (httpReturnCode == 200) {
-			if (DEBUG) printf("[DEBUG] HttpsGetJson response ok (200).\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] HttpsGetJson response ok (200).\n");
 
 			// Seems that sometimes additional bytes are included in response when body only is requested. 
 			// So remove before the first { and after the last }
@@ -258,25 +258,25 @@ namespace Briand
 			if (root == NULL) {
 				// Get last error
 				const char *error_ptr = cJSON_GetErrorPtr();
-				if (DEBUG) printf("[DEBUG] JSON parsing error: %s\n", error_ptr);
+				ESP_LOGD(LOGTAG, "[DEBUG] JSON parsing error: %s\n", error_ptr);
 				// Free resources
 				cJSON_Delete(root);
 				return NULL;
 			}
 
-			if (DEBUG) printf("[DEBUG] JSON deserialization success.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] JSON deserialization success.\n");
 			deserializationSuccess = true;
 
 			return root;
 		}
 		else {
-			if (DEBUG) printf("[DEBUG] HttpsGetJson failed httpcode = %d\n ", httpReturnCode);
+			ESP_LOGD(LOGTAG, "[DEBUG] HttpsGetJson failed httpcode = %d\n ", httpReturnCode);
 			return NULL;
 		}
 	}
 
 	unique_ptr<string> BriandNet::HttpInsecureGet(const string& host, const short& port, const string& path, short& httpReturnCode, const string& agent /* = "empty"*/, const bool& returnBodyOnly /* = false*/) {
-		if (DEBUG) printf("[DEBUG] HttpInsecureGet called to http://%s:%d%s\n", host.c_str(), port, path.c_str());
+		ESP_LOGD(LOGTAG, "[DEBUG] HttpInsecureGet called to http://%s:%d%s\n", host.c_str(), port, path.c_str());
 
 		// Prepare request
 
@@ -290,12 +290,12 @@ namespace Briand
 
 		auto contents = StringToUnsignedCharVector(request, true);
 		
-		if (DEBUG) printf("[DEBUG] HttpInsecureGet sending raw request.\n");
+		ESP_LOGD(LOGTAG, "[DEBUG] HttpInsecureGet sending raw request.\n");
 		auto response = RawInsecureRequest(host, port, contents, true);
 
 		if (response->size() > 0) {
 			// Success
-			if (DEBUG) printf("[DEBUG] HttpInsecureGet success.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] HttpInsecureGet success.\n");
 
 			// Convert to string
 			auto responseContent = UnsignedCharVectorToString(response, true);
@@ -314,7 +314,7 @@ namespace Briand
 			return responseContent;
 		}
 		else {
-			if (DEBUG) printf("[DEBUG] HttpInsecureGet failed.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG] HttpInsecureGet failed.\n");
 			return nullptr;
 		}
 	}

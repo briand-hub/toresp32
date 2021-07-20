@@ -163,21 +163,21 @@ namespace Briand
 
 				unsigned int pos;
 
-				if (DEBUG) printf("\n[DEBUG] File decrypted. Contents:");
+				ESP_LOGD(LOGTAG, "\n[DEBUG] File decrypted. Contents:");
 
 				// First line => Essid
 				pos = contents.find("\r\n");
 				if (pos == string::npos) return false;
 				this->WESSID = contents.substr(0, pos);
 				contents.erase(0, pos + 2);
-				if (DEBUG) printf("[DEBUG] Essid: %s\n", this->WESSID.c_str());
+				ESP_LOGD(LOGTAG, "[DEBUG] Essid: %s\n", this->WESSID.c_str());
 
 				// Second line => Password
 				pos = contents.find("\r\n");
 				if (pos == string::npos) return false;
 				this->WPASSWORD = contents.substr(0, pos);
 				contents.erase(0, pos + 2);
-				if (DEBUG) printf("[DEBUG] Password: %s\n", this->WPASSWORD.c_str());
+				ESP_LOGD(LOGTAG, "[DEBUG] Password: %s\n", this->WPASSWORD.c_str());
 
 				// 3rd line => Serial encryption password (could be empty)
 				pos = contents.find("\r\n");
@@ -186,7 +186,7 @@ namespace Briand
 				if (this->SERIAL_ENC_KEY.length() < 16)
 					this->SERIAL_ENC_KEY.clear();
 				contents.erase(0, pos + 2);
-				if (DEBUG) printf("[DEBUG] Enc KEY: %s\n", this->SERIAL_ENC_KEY.c_str());
+				ESP_LOGD(LOGTAG, "[DEBUG] Enc KEY: %s\n", this->SERIAL_ENC_KEY.c_str());
 
 				return true;
 			}
