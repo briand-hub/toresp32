@@ -31,6 +31,7 @@ namespace Briand
     unsigned short BriandTorCircuitsManager::CIRCUIT_POOL_SIZE = 3;
     unsigned short BriandTorCircuitsManager::CIRCUIT_MAX_TIME = 900;
     unsigned short BriandTorCircuitsManager::CIRCUIT_MAX_REQUESTS = 15;
+    bool BriandTorCircuitsManager::isStopped = true;
 
     BriandTorCircuitsManager::BriandTorCircuitsManager() : BriandTorCircuitsManager(3, 15*60, 15) {
     }
@@ -41,6 +42,7 @@ namespace Briand
         this->CIRCUIT_MAX_REQUESTS = maxRequests;
         this->CIRCUITS = make_unique<unique_ptr<BriandTorCircuit>[]>(this->CIRCUIT_POOL_SIZE);
         this->CIRCUIT_LAST_USED = -1;
+        this->isStopped = true;
     }
 
     BriandTorCircuitsManager::~BriandTorCircuitsManager() {
@@ -50,90 +52,127 @@ namespace Briand
 
     void BriandTorCircuitsManager::Start() {
         // If not empty, clear out the current circuit pool (useful if Stop() not called and want to re-Start the manager)
-        ESP_LOGD(LOGTAG, "Stopping previous instances.\n");
+        ESP_LOGD(LOGTAG, "Stopping old instances.\n");
         this->Stop();
         ESP_LOGD(LOGTAG, "Starting circuits.\n");
 
         // Create a new object for the allocated pool size.
-        for (static unsigned short i = 0; i < this->CIRCUIT_POOL_SIZE; i++) {
+        for (unsigned short i = 0; i < this->CIRCUIT_POOL_SIZE; i++) {
             this->CIRCUITS[i] = make_unique<BriandTorCircuit>();
 
             // Save in the internal ID the index in this array
             this->CIRCUITS[i]->internalID = i;
 
             ESP_LOGD(LOGTAG, "Circuit #%hu instanced. Starting task.\n", i);
+
             // Start an async build task for each circuit.
-            xTaskCreate(this->CircuitTask, "CircuitTask", this->TASK_STACK_SIZE, &(this->CIRCUITS[i]->internalID), 500, NULL);
+            xTaskCreate(this->CircuitTask, "CircuitTask", this->TASK_STACK_SIZE, &(this->CIRCUITS[i]->internalID), 600, NULL);
+        }
+
+        this->isStopped = false;
+
+        // Create a task to periodically check circuit instances situation
+        xTaskCreate(this->RestartCircuits, "MgrInst", 2048, NULL, 400, NULL);
+    }
+
+    /*static*/ void BriandTorCircuitsManager::RestartCircuits(void* noparam) {
+        // ESP-IDF task must never return 
+        while (1) {
+            if (!BriandTorCircuitsManager::isStopped) {
+                ESP_LOGE(LOGTAG, "[DEBUG] CircuitsManager main task invoked, checking for instances.\n");
+
+                // Check if there are the number of needed circuits built, if not add the needed
+                for (unsigned short i = 0; i < BriandTorCircuitsManager::CIRCUIT_POOL_SIZE; i++) {
+                    if (BriandTorCircuitsManager::CIRCUITS[i] == nullptr) {
+                        ESP_LOGE(LOGTAG, "[DEBUG] Adding a new circuit to pool as #%hu.\n", i);
+                        BriandTorCircuitsManager::CIRCUITS[i] = make_unique<BriandTorCircuit>();
+                        BriandTorCircuitsManager::CIRCUITS[i]->internalID = i;
+                        xTaskCreate(CircuitTask, "CircuitTask", BriandTorCircuitsManager::TASK_STACK_SIZE, &(BriandTorCircuitsManager::CIRCUITS[i]->internalID), 500, NULL);
+                    }
+                }
+            }
+            else {
+                ESP_LOGE(LOGTAG, "[DEBUG] Stopping CircuitsManager main task.\n");
+                // delete this task
+                vTaskDelete(NULL);
+            }
+
+            // Wait before next execution.
+            vTaskDelay(BriandTorCircuitsManager::TASK_WAIT_BEFORE_NEXT / portTICK_PERIOD_MS);
         }
     }
 
     /*static*/ void BriandTorCircuitsManager::CircuitTask(void* circuitIndex) {
         // ESP-IDF task must never return 
         while (1) {
-            unsigned short cIndex = *(reinterpret_cast<unsigned short*>(circuitIndex));
-
-            ESP_LOGD(LOGTAG, "[DEBUG] Invoked task for circuit #%hu.\n", cIndex);
 
             // If this is an "orphan" task of a previous "killed" circuit, terminate.
-            if (BriandTorCircuitsManager::CIRCUITS[cIndex] == nullptr) {
-                ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is orphan, killing task.\n", cIndex);
+            if (circuitIndex == NULL || circuitIndex == nullptr) {
+                ESP_LOGD(LOGTAG, "[DEBUG] Found orphan circuit, killing task.\n");
 
                 // delete this task!
                 vTaskDelete(NULL);
             }
             else {
-                auto& circuit = BriandTorCircuitsManager::CIRCUITS[cIndex];
-                
-                if (circuit->IsCircuitCreating()) {
-                    // Just wait
-                    ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is creating, waiting.\n", cIndex);
-                }
-                else if (circuit->IsCircuitClosingOrClosed()) {
-                    ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is closing/closed, removing from pool.\n", cIndex);
+                unsigned short cIndex = *(reinterpret_cast<unsigned short*>(circuitIndex));
 
-                    // Reset the pointer
-                    BriandTorCircuitsManager::CIRCUITS[cIndex].reset();
+                ESP_LOGD(LOGTAG, "[DEBUG] Invoked task for circuit #%hu.\n", cIndex);
 
-                    // Terminate this task
+                // If this is an "orphan" task of a previous "killed" circuit, terminate.
+                if (cIndex >= BriandTorCircuitsManager::CIRCUIT_POOL_SIZE || BriandTorCircuitsManager::CIRCUITS[cIndex] == nullptr) {
+                    ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is orphan, killing task.\n", cIndex);
+
+                    // delete this task!
                     vTaskDelete(NULL);
                 }
-                else if (!circuit->IsCircuitBuilt()) {
-                    ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu needs to be built, building.\n", cIndex);
+                else {
+                    auto& circuit = BriandTorCircuitsManager::CIRCUITS[cIndex];
+                    
+                    if (circuit->IsCircuitCreating()) {
+                        // Just wait
+                        ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is creating, waiting.\n", cIndex);
+                    }
+                    else if (circuit->IsCircuitClosingOrClosed()) {
+                        ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is closing/closed, removing from pool.\n", cIndex);
 
-                    // Here circuit is not built nor in creating, so build it.
-                    circuit->BuildCircuit(false);
-                }
-                else if(circuit->IsCircuitBuilt()) {
-                    if (BriandUtils::GetUnixTime() >= circuit->GetCreatedOn() + BriandTorCircuitsManager::CIRCUIT_MAX_TIME) {
-                        // The circuit should be closed for elapsed time
-                        ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu has reached maximum life time, sending destroy.\n", cIndex);
-                        circuit->TearDown(Briand::BriandTorDestroyReason::FINISHED);
-                    }
-                    else if (circuit->GetCurrentStreamID() >= BriandTorCircuitsManager::CIRCUIT_MAX_REQUESTS) {
-                        // The circuit should be closed for maximum requests
-                        ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu has reached maximum requests, sending destroy.\n", cIndex);
-                        circuit->TearDown(Briand::BriandTorDestroyReason::FINISHED);
-                    }
-                    else if (!circuit->IsCircuitBusy()) {
-                        // No problems                     
-                        // Send a PADDING to keep alive!
-                        ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is alive and not busy, sending PADDING.\n", cIndex);
-                        circuit->SendPadding();
-                    }
-                }
+                        // Reset the pointer
+                        BriandTorCircuitsManager::CIRCUITS[cIndex].reset();
 
-                // Check if there are the number of needed circuits built, if not add the needed
-                for (unsigned short i = 0; i < BriandTorCircuitsManager::CIRCUIT_POOL_SIZE; i++) {
-                    if (BriandTorCircuitsManager::CIRCUITS[i] == nullptr) {
-                        ESP_LOGD(LOGTAG, "[DEBUG] Adding a new circuit to pool as #%hu.\n", i);
-                        BriandTorCircuitsManager::CIRCUITS[i] = make_unique<BriandTorCircuit>();
-                        BriandTorCircuitsManager::CIRCUITS[i]->internalID = i;
-                        xTaskCreate(CircuitTask, "CircuitTask", BriandTorCircuitsManager::TASK_STACK_SIZE, &(BriandTorCircuitsManager::CIRCUITS[i]->internalID), 500, NULL);
+                        // Terminate this task
+                        vTaskDelete(NULL);
                     }
-                }
+                    else if (!circuit->IsCircuitBuilt()) {
+                        ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu needs to be built, building.\n", cIndex);
 
-                // Wait before next execution.
-                vTaskDelay(BriandTorCircuitsManager::TASK_WAIT_BEFORE_NEXT / portTICK_PERIOD_MS);
+                        // Here circuit is not built nor in creating, so build it.
+                        if (!circuit->BuildCircuit(false)) {
+                            // If circuit fails, reset and terminate.
+                            BriandTorCircuitsManager::CIRCUITS[cIndex].reset();
+                            vTaskDelete(NULL);
+                        }
+                    }
+                    else if(circuit->IsCircuitBuilt()) {
+                        if (BriandUtils::GetUnixTime() >= circuit->GetCreatedOn() + BriandTorCircuitsManager::CIRCUIT_MAX_TIME) {
+                            // The circuit should be closed for elapsed time
+                            ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu has reached maximum life time, sending destroy.\n", cIndex);
+                            circuit->TearDown(Briand::BriandTorDestroyReason::FINISHED);
+                        }
+                        else if (circuit->GetCurrentStreamID() >= BriandTorCircuitsManager::CIRCUIT_MAX_REQUESTS) {
+                            // The circuit should be closed for maximum requests
+                            ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu has reached maximum requests, sending destroy.\n", cIndex);
+                            circuit->TearDown(Briand::BriandTorDestroyReason::FINISHED);
+                        }
+                        else if (!circuit->IsCircuitBusy()) {
+                            // No problems                     
+                            // Send a PADDING to keep alive!
+                            ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is alive and not busy, sending PADDING.\n", cIndex);
+                            circuit->SendPadding();
+                        }
+                    }
+
+                    // Wait before next execution.
+                    vTaskDelay(BriandTorCircuitsManager::TASK_WAIT_BEFORE_NEXT / portTICK_PERIOD_MS);
+                }
             }
         }
     }
@@ -145,6 +184,8 @@ namespace Briand
                 this->CIRCUITS[i].reset();
             }
         }
+
+        this->isStopped = true;
     }
 
     BriandTorCircuit* BriandTorCircuitsManager::GetCircuit() {
@@ -166,7 +207,7 @@ namespace Briand
         for (unsigned short i=0; i<this->CIRCUIT_POOL_SIZE; i++) {
             printf("%u\t", i);
             if (this->CIRCUITS[i] == nullptr) {
-                printf("NONE\t\tNot instanced\t\t%08lu\t\n", 0L);
+                printf("NONE\t\t%08lu\t%08lu\tNot instanced\n", 0L, 0L);
             }
             else {
                 auto& circuit = this->CIRCUITS[i];
@@ -198,4 +239,5 @@ namespace Briand
             printf("\n");
         }
     }
+
 }

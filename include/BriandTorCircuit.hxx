@@ -119,14 +119,14 @@ namespace Briand {
 		bool IsCircuitReadyToStream();
 
 		/**
-		 * Method streams a cell through an operative circuit and waits for the expected command response
+		 * Method streams a single cell through an operative circuit and waits for the expected command response
 		 * or error (RELAY_END, DESTROY), ignores PADDING cells. StreamID is automatically incremented.
 		 * @param command The RELAY command 
 		 * @param requestPayload The payload to stream
 		 * @param waitFor The command to wait for 
 		 * @return Pointer to response payload or nullptr if error occours.
 		*/
-		unique_ptr<vector<unsigned char>> TorStream(const BriandTorCellRelayCommand& command, const unique_ptr<vector<unsigned char>>& requestPayload, const BriandTorCellRelayCommand& waitFor);
+		unique_ptr<vector<unsigned char>> TorStreamSingle(const BriandTorCellRelayCommand& command, const unique_ptr<vector<unsigned char>>& requestPayload, const BriandTorCellRelayCommand& waitFor);
 
 		/**
 		 * Resolves an hostname through TOR (only IPv4 at moment)

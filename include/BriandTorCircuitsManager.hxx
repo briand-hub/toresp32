@@ -39,6 +39,9 @@ namespace Briand {
         /** Task re-execution time, obtained by tests, in milliseconds. */
         static const unsigned short TASK_WAIT_BEFORE_NEXT = 30*1000;
 
+        /** Status of the manager */
+        static bool isStopped;
+
         /** The circuit pool */
         static unique_ptr<unique_ptr<BriandTorCircuit>[]> CIRCUITS;
 
@@ -58,7 +61,13 @@ namespace Briand {
          * This method is asynchronous and provides operations for a single circuit
          * @param circuitIndex an unsigned short (circuit index in the CIRCUITS vector), void* because of ESP-IDF requirement.
         */
-       static void CircuitTask(void* circuitIndex);
+        static void CircuitTask(void* circuitIndex);
+
+        /**
+         * Method checks and restarts circuits pool with new instances if any is not instanced. Executes only if property isStopped=false
+         * @param noparam set to NULL
+        */
+        static void RestartCircuits(void* noparam);
 
         public:
 

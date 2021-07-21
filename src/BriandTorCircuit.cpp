@@ -820,7 +820,7 @@ namespace Briand {
 		return this->isBuilt && !this->isClosed && !this->isClosing;
 	}
 
-	unique_ptr<vector<unsigned char>> BriandTorCircuit::TorStream(const BriandTorCellRelayCommand& command, const unique_ptr<vector<unsigned char>>& requestPayload, const BriandTorCellRelayCommand& waitFor) {
+	unique_ptr<vector<unsigned char>> BriandTorCircuit::TorStreamSingle(const BriandTorCellRelayCommand& command, const unique_ptr<vector<unsigned char>>& requestPayload, const BriandTorCellRelayCommand& waitFor) {
 		if (!this->isClean) this->isClean = false;
 		
 		unique_ptr<vector<unsigned char>> response = nullptr;
@@ -1004,7 +1004,7 @@ namespace Briand {
 		}
 		requestPayload->push_back(0x00); // NUL terminating byte
 
-		auto response = this->TorStream(BriandTorCellRelayCommand::RELAY_RESOLVE, requestPayload, BriandTorCellRelayCommand::RELAY_RESOLVED);
+		auto response = this->TorStreamSingle(BriandTorCellRelayCommand::RELAY_RESOLVE, requestPayload, BriandTorCellRelayCommand::RELAY_RESOLVED);
 		if (response == nullptr) {
 			ESP_LOGW(LOGTAG, "[ERR] TorResolve error, failure on streaming tor request.\n");
 			return resolved;

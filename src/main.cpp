@@ -810,7 +810,7 @@ void executeCommand(string& cmd) {
 		}
 		else {
 			printf("Using circuit #%hu\n", circuit->internalID);
-			printf("FISRT RESOLVED TO: %s\n", Briand::BriandUtils::ipv4ToString(circuit->TorResolve(cmd)).c_str());
+			printf("IPv4 address: %s\n", Briand::BriandUtils::ipv4ToString(circuit->TorResolve(cmd)).c_str());
 		}
 	}
 	else if (cmd.substr(0, 13).compare("tor http get ") == 0) {
