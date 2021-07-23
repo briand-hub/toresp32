@@ -16,6 +16,7 @@
 * Changed logging system with ESP default
 * Tested Circuits Manager, working
 * Added test tor command and tested PADDING on built circuits, hostname resolution. All OK!
+* BUG: Sometimes tasks launch sys_check_timeouts errors, related to tcpip thread. Solution could be one task for all circuits with delayed building
 
 ## 2021-07-17
 

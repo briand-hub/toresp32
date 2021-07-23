@@ -44,7 +44,14 @@ namespace Briand {
 				this->sClient->Disconnect();
 			this->sClient.reset();
 		}
+		
 		this->CURRENT_STREAM_ID = 0;
+
+		this->isBuilt = false;
+		this->isClean = false;
+		this->isClosed = true;
+		this->isClosing = false;
+		this->isCreating = false;
 	}
 
 	bool BriandTorCircuit::FindAndPopulateRelay(const unsigned char& relayType) {
@@ -641,7 +648,7 @@ namespace Briand {
 		this->isClean = false;
 		this->isClosed = true;
 		this->isClosing = false;
-		this->isCreating = true;
+		this->isCreating = false;
 		
 		// Prepare for search
 		this->relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
@@ -686,6 +693,9 @@ namespace Briand {
 
 		// All nodes found! Free some RAM
 		this->relaySearcher.reset();
+
+		// The creation starts now
+		this->isCreating = true;
 
 		// Now start to build the path
 
@@ -967,6 +977,11 @@ namespace Briand {
 					return response;
 				}
 
+				if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
+					printf("[DEBUG] TorStream success, received %s, payload: ", BriandUtils::BriandTorRelayCellCommandToString(tempCell->GetRelayCommand()).c_str());
+					tempCell->PrintCellPayloadToSerial();
+				}
+
 				// Take payload and return, that's all!
 				response = make_unique<vector<unsigned char>>();
 				response->insert(response->begin(), tempCell->GetPayload()->begin(), tempCell->GetPayload()->end());
@@ -1044,14 +1059,16 @@ namespace Briand {
 				return resolved;
 			}
 			else if (type != 0x04) {
-				i += 1 + response->at(i+1) + 4;
+				i++; // go to the length field
+				i += 1 + response->at(i) + 4; // skit TTL and the length, add 1 to point the next information
 			}
 			else {
-				i += 1;
-				resolved.s_addr += response->at(i) << 24;
-				resolved.s_addr += response->at(i+1) << 16;
-				resolved.s_addr += response->at(i+2) << 8;
-				resolved.s_addr += response->at(i+3);
+				i += 1; // go to the length field
+				// resolved octets
+				resolved.s_addr += response->at(i+1) << 24;
+				resolved.s_addr += response->at(i+2) << 16;
+				resolved.s_addr += response->at(i+3) << 8;
+				resolved.s_addr += response->at(i+4);
 				break;
 			}
 		}

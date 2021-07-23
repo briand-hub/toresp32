@@ -627,7 +627,7 @@ void executeCommand(string& cmd) {
 		printf("torcache : print out the local node cache, all 3 files.\n");
         printf("torcache refresh : refresh the tor cache.\n");
 		printf("torcircuits : print out the current tor circuit status.\n");
-		printf("torcircuits restart : Invalidate and rebuild all circuits pool.\n");
+		printf("torcircuits [restart|stop] : Invalidate all circuits pool, if restart rebuild again.\n");
 		printf("tor resolve [hostname] : Resolve IPv4 address through tor.\n");
 		printf("tor http get [url] : Tor HTTP/GET request to url. Resulting response printed to console.\n");
     }
@@ -774,10 +774,14 @@ void executeCommand(string& cmd) {
 	else if (cmd.compare("torcircuits restart") == 0) {
 		printf("Stopping CircuitsManager...");
 		CIRCUITS_MANAGER->Stop();
-		vTaskDelay(10000/portTICK_PERIOD_MS);
 		printf("done.\n");
 		printf("Starting CircuitsManager...");
 		CIRCUITS_MANAGER->Start();
+		printf("done.\n");
+	}
+	else if (cmd.compare("torcircuits stop") == 0) {
+		printf("Stopping CircuitsManager...");
+		CIRCUITS_MANAGER->Stop();
 		printf("done.\n");
 	}
 	else if (cmd.compare("torcache") == 0) {

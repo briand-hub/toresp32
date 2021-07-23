@@ -61,13 +61,21 @@ namespace Briand {
          * This method is asynchronous and provides operations for a single circuit
          * @param circuitIndex an unsigned short (circuit index in the CIRCUITS vector), void* because of ESP-IDF requirement.
         */
-        static void CircuitTask(void* circuitIndex);
+        // [DELETED] static void CircuitTask(void* circuitIndex);
 
         /**
          * Method checks and restarts circuits pool with new instances if any is not instanced. Executes only if property isStopped=false
          * @param noparam set to NULL
         */
-        static void RestartCircuits(void* noparam);
+        // [DELETED] static void RestartCircuits(void* noparam);
+
+        /**
+         * Method checks and restarts circuits pool with new instances if any is not instanced. 
+         * It also provides operations for all circuits pool.
+         * Executes only if property isStopped=false
+         * @param noparam set to NULL
+        */
+        static void CircuitsTaskSingle(void* noparam);
 
         public:
 
@@ -104,10 +112,6 @@ namespace Briand {
          * @return Raw pointer to the circuit (BE CAREFUL!!), nullptr if no circuits available
         */
        BriandTorCircuit* GetCircuit();
-
-        /** 
-         * 
-        */
 
        /**
         * Prints out the current circuits situation
