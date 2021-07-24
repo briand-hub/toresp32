@@ -42,7 +42,7 @@
     constexpr unsigned short TOR_CIRCUITS_KEEPALIVE = 3;	// No. of Tor circuits to be kept always open and ready
     constexpr unsigned short TOR_CIRCUITS_MAX_TIME_S = 900;	// Elapsed this time (seconds) the Tor circuit will be closed automatically.
     constexpr unsigned short TOR_CIRCUITS_MAX_REQUESTS = 15; // After N requests the Tor circuit will be closed and changed.
-    constexpr unsigned char TOR_NODES_CACHE_SIZE = 50;		// No. of Tor nodes, for each type (guard/exit/middle) to keep saved. (Avoid more than 50)
+    constexpr unsigned char TOR_NODES_CACHE_SIZE = 35;		// No. of Tor nodes, for each type (guard/exit/middle) to keep saved. (Avoid more than 50)
     constexpr unsigned char TOR_NODES_CACHE_VAL_H = 24;		// Hours since the chache of nodes is considered OLD and must be downloaded again
 
     // Early declarations of ESP logging functions trick (see BriandEspLogging.cpp)

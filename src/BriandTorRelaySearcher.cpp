@@ -626,4 +626,5 @@ namespace Briand {
 			printf("[DEBUG] Cache status is: %s\n", (this->cacheValid ? "Valid" : "Invalid"));
 		}
 	}
+
 }

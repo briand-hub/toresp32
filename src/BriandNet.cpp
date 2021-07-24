@@ -53,6 +53,9 @@ namespace Briand
 	unique_ptr<string> BriandNet::UnsignedCharVectorToString(unique_ptr<vector<unsigned char>>& input, bool emptyContents /* = true*/) {
 		auto output = make_unique<string>();
 
+		if (input == nullptr)
+			return output;
+
 		if (emptyContents) {
 			while (input->size() > 0) {
 				output->push_back( input->at(0) );

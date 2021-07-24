@@ -183,7 +183,7 @@ namespace Briand
                     }
                     
                     // A new circuit to be built?
-                    if (!BriandTorCircuitsManager::CIRCUITS[i]->IsCircuitBuilt()) {
+                    if (!BriandTorCircuitsManager::CIRCUITS[i]->IsCircuitBuilt() && !BriandTorCircuitsManager::CIRCUITS[i]->IsCircuitCreating()) {
                         ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu needs to be built, building.\n", i);
 
                         // Here circuit is not built nor in creating, so build it.
@@ -252,27 +252,22 @@ namespace Briand
     }
 
     BriandTorCircuit* BriandTorCircuitsManager::GetCircuit() {
+        unsigned short testedCircuits = (this->CIRCUIT_LAST_USED + 1) % this->CIRCUIT_POOL_SIZE;
 
-        // Not nice, should be circular buffer.
+        do {
+            // Evaluate all circuits, including the last used if it is the only one available
 
-        for (unsigned short i = 0; i < BriandTorCircuitsManager::CIRCUIT_POOL_SIZE; i++) {
-            if (BriandTorCircuitsManager::CIRCUITS[i] != nullptr) {
-                auto& circuit = BriandTorCircuitsManager::CIRCUITS[i];
-                if (circuit->IsCircuitBuilt() && !circuit->IsCircuitBusy() && circuit->internalID != this->CIRCUIT_LAST_USED) {
+            if (BriandTorCircuitsManager::CIRCUITS[testedCircuits] != nullptr) {
+                auto& circuit = BriandTorCircuitsManager::CIRCUITS[testedCircuits];
+                if (circuit->IsCircuitBuilt() && !circuit->IsCircuitBusy()) {
                     this->CIRCUIT_LAST_USED = circuit->internalID;
                     return circuit.get();
                 }
             }
-        }
 
-        // Here there could be no circuits at all or the only available is the last used. Check.
-        if (BriandTorCircuitsManager::CIRCUITS[this->CIRCUIT_LAST_USED] != nullptr && 
-            BriandTorCircuitsManager::CIRCUITS[this->CIRCUIT_LAST_USED]->IsCircuitBuilt() &&
-            !BriandTorCircuitsManager::CIRCUITS[this->CIRCUIT_LAST_USED]->IsCircuitBusy()) {
+            testedCircuits = (testedCircuits + 1) % this->CIRCUIT_POOL_SIZE;
 
-            return BriandTorCircuitsManager::CIRCUITS[this->CIRCUIT_LAST_USED].get();
-        }
-
+        } while (testedCircuits != ((this->CIRCUIT_LAST_USED + 1) % this->CIRCUIT_POOL_SIZE));
 
         return nullptr;
     }

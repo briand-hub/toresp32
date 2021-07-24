@@ -30,7 +30,7 @@ I would like to keep the code well-organized and as simple as possible. I'll try
 The code will implement the **current** last specifications and will not support any deprecated or *will-be-deprecated* (imho) feature. For example if I have to choose to implement hidden services, I would just write code for V3 and not any previous version (sorry, I have no time).
 
 ## Dev environment
-Project is built with VSCode and PlatformIO on WEMOS LOLIND32 platform and Espressif IDF 4.4 framework.
+Project is built with VSCode and PlatformIO on WEMOS LOLIND32 platform and Espressif IDF 4.3 framework.
 
 ## Challenges
 

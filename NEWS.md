@@ -10,9 +10,11 @@
 * General ignore PADDING cells in SendCell responses
 * Send DEBUG/VERBOSE messages to another tty/stderr
 * Check randomize() working on RelaySearcher
+* Consider a circuit status Enum
 
 ## 2021-07-18
 
+* IDF updated: Platformio update framework-espidf 3.40300.0 (4.3.0)
 * Changed logging system with ESP default
 * Tested Circuits Manager, working
 * Added test tor command and tested PADDING on built circuits, hostname resolution. All OK!

@@ -1064,11 +1064,11 @@ namespace Briand {
 			}
 			else {
 				i += 1; // go to the length field
-				// resolved octets
-				resolved.s_addr += response->at(i+1) << 24;
-				resolved.s_addr += response->at(i+2) << 16;
-				resolved.s_addr += response->at(i+3) << 8;
-				resolved.s_addr += response->at(i+4);
+				// resolved octets (WRITE AS C-Style Structure, not Network byte order!)
+				resolved.s_addr += response->at(i+1);
+				resolved.s_addr += response->at(i+2) << 8;
+				resolved.s_addr += response->at(i+3) << 16;
+				resolved.s_addr += response->at(i+4) << 24;
 				break;
 			}
 		}
