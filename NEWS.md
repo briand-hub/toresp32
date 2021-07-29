@@ -1,6 +1,8 @@
 # Development status
 
 ## Next steps
+
+* Deep debug for random crashes related to FreeRTOS xTask
 * Implement a vector of nodes.
 * Add CircID verification and other verification stuff
 * Change the "old" buffer-copy to vector->data() to optimize memory usage
@@ -11,6 +13,11 @@
 * Send DEBUG/VERBOSE messages to another tty/stderr
 * Check randomize() working on RelaySearcher
 * Consider a circuit status Enum
+
+## 
+
+* Random crashes still persist (when restarting tor circuits manager task), need deep debugging
+* Started to write SOCKS5 class
 
 ## 2021-07-18
 

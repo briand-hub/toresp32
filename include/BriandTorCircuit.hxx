@@ -129,6 +129,41 @@ namespace Briand {
 		unique_ptr<vector<unsigned char>> TorStreamSingle(const BriandTorCellRelayCommand& command, const unique_ptr<vector<unsigned char>>& requestPayload, const BriandTorCellRelayCommand& waitFor);
 
 		/**
+		 * Method sends a RELAY_BEGIN cell.
+		 * @param hostname The hostname
+		 * @return true on success, false otherwise
+		*/
+		bool TorStreamStart(const string& hostname);
+
+		/**
+		 * Method sends a RELAY_BEGIN cell.
+		 * @param ipv4 The IPv4
+		 * @return true on success, false otherwise
+		*/
+		bool TorStreamStart(const in_addr& ipv4);
+
+		/**
+		 * Method streams a single RELAY_DATA cell (non blocking).
+		 * @param data Data to stream (MAXIMUM 498 bytes!!!)
+		 * @param sent Set to false if any error occoured
+		*/
+		void TorStreamSend(const unique_ptr<vector<unsigned char>>& data, bool& sent);
+
+		/**
+		 * Method reads a single RELAY_DATA cell back and ADDS to the buffer
+		 * @param buffer The buffer where data is ADDED. Max 498 bytes per session.
+		 * @param finished The value will be set to true if RELAY_END from node is encountered.
+		 * @return true if success, false on error (ex. TRUNCATE).
+		*/
+		bool TorStreamRead(unique_ptr<vector<unsigned char>>& buffer, bool& finished);
+
+		/**
+		 * Method finishes the current data stream (write)
+		 * @return true on success, false on error
+		*/
+		bool TorStreamEnd();
+
+		/**
 		 * Resolves an hostname through TOR (only IPv4 at moment)
 		 * @param hostname the hostname to resolve
 		 * @return an in_addr struct with the resolved IP Address

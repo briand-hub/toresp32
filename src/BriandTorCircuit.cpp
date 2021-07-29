@@ -1080,6 +1080,37 @@ namespace Briand {
 		return resolved;
 	}
 
+	bool BriandTorCircuit::TorStreamStart(const string& hostname) {
+		//
+		// TODO
+		//
+	}
+
+	bool BriandTorCircuit::TorStreamStart(const in_addr& ipv4) {
+		//
+		// TODO
+		//
+	}
+
+	void BriandTorCircuit::TorStreamSend(const unique_ptr<vector<unsigned char>>& data, bool& sent) {
+		//
+		// TODO
+		//
+	}
+
+	bool BriandTorCircuit::TorStreamRead(unique_ptr<vector<unsigned char>>& buffer, bool& finished) {
+		//
+		// TODO
+		//
+	}
+
+	bool BriandTorCircuit::TorStreamEnd() {
+		//
+		// TODO
+		//
+	}
+
+
 	void BriandTorCircuit::SendPadding() {
 		if (this->isBuilt && !this->isBusy && !this->isClosed && !this->isClosing)  {
 			auto tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
