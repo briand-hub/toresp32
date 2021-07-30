@@ -51,6 +51,7 @@
 #include "BriandTorCircuit.hxx"
 #include "BriandTorCryptoUtils.hxx"
 #include "BriandTorCircuitsManager.hxx"
+#include "BriandTorSocks5Proxy.hxx"
 
 /* Startup tests */
 
@@ -79,6 +80,7 @@ unique_ptr<string> AP_ESSID = nullptr;
 unique_ptr<string> AP_PASSW = nullptr;
 unique_ptr<string> COMMAND = nullptr;
 unique_ptr<Briand::BriandTorCircuitsManager> CIRCUITS_MANAGER = nullptr;
+unique_ptr<Briand::BriandTorSocks5Proxy> SOCKS5_PROXY = nullptr;
 unsigned long long int COMMANDID = 0;
 unsigned int HEAP_LEAK_CHECK = 0;
 
@@ -628,6 +630,7 @@ void executeCommand(string& cmd) {
         printf("torcache refresh : refresh the tor cache.\n");
 		printf("torcircuits : print out the current tor circuit status.\n");
 		printf("torcircuits [restart|stop] : Invalidate all circuits pool, if restart rebuild again.\n");
+		printf("torproxy [restart|stop] : Starts/Stops SOCKS5 Proxy.\n");
 		printf("tor resolve [hostname] : Resolve IPv4 address through tor.\n");
 		printf("tor http get [url] : Tor HTTP/GET request to url. Resulting response printed to console.\n");
     }
@@ -782,6 +785,17 @@ void executeCommand(string& cmd) {
 	else if (cmd.compare("torcircuits stop") == 0) {
 		printf("Stopping CircuitsManager...");
 		CIRCUITS_MANAGER->Stop();
+		printf("done.\n");
+	}
+	else if (cmd.compare("torproxy start") == 0) {
+		printf("Starting SOCKS5 Proxy on port 5001...");
+		if (SOCKS5_PROXY == nullptr) SOCKS5_PROXY = make_unique<Briand::BriandTorSocks5Proxy>();
+		SOCKS5_PROXY->StartProxyServer(TOR_SOCKS5_PROXY_PORT, CIRCUITS_MANAGER);
+		printf("done.\n");
+	}
+	else if (cmd.compare("torproxy stop") == 0) {
+		printf("Stopping SOCKS5 Proxy...");
+		if (SOCKS5_PROXY != nullptr) SOCKS5_PROXY->StopProxyServer();
 		printf("done.\n");
 	}
 	else if (cmd.compare("torcache") == 0) {

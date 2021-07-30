@@ -2,7 +2,11 @@
 
 ## Next steps
 
+* Consider a circuit status Enum
+* Consider error management short/int for method errors (mbedtls style)
+* Consider adding TIMEOUT seconds to Stream methods.
 * Deep debug for random crashes related to FreeRTOS xTask
+* Check for RELAY_TRUNCATE/RELAY_TRUNCATED responses when streaming data (should tear down?)
 * Implement a vector of nodes.
 * Add CircID verification and other verification stuff
 * Change the "old" buffer-copy to vector->data() to optimize memory usage
@@ -12,12 +16,12 @@
 * General ignore PADDING cells in SendCell responses
 * Send DEBUG/VERBOSE messages to another tty/stderr
 * Check randomize() working on RelaySearcher
-* Consider a circuit status Enum
 
 ## 
 
 * Random crashes still persist (when restarting tor circuits manager task), need deep debugging
 * Started to write SOCKS5 class
+* Changes to Stream methods, more simple and raw.
 
 ## 2021-07-18
 

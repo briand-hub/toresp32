@@ -24,6 +24,7 @@
 #include <BriandIDFSocketTlsClient.hxx>
 
 #include "BriandTorDefinitions.hxx"
+#include "BriandTorCell.hxx"
 #include "BriandTorRelay.hxx"
 #include "BriandTorRelaySearcher.hxx"
 
@@ -119,8 +120,23 @@ namespace Briand {
 		bool IsCircuitReadyToStream();
 
 		/**
-		 * Method streams a single cell through an operative circuit and waits for the expected command response
-		 * or error (RELAY_END, DESTROY), ignores PADDING cells. StreamID is automatically incremented.
+		 * Method streams a single cell forward, ignores PADDING cells. 
+		 * StreamID must be prepared (incremented) BEFORE calling this method and a TorStreamStart() must be called BEFORE.
+		 * @param command The RELAY command 
+		 * @param data The payload to stream
+		 * @return true if sent with success, false if error.
+		*/
+		bool TorStreamWriteData(const BriandTorCellRelayCommand& command, const unique_ptr<vector<unsigned char>>& data);
+
+		/**
+		 * Method reads a single backward, ignores PADDING cells. 
+		 * @return Pointer to the read cell. Nullptr if error occours.
+		*/
+		unique_ptr<BriandTorCell> TorStreamReadData();
+
+		/**
+		 * Method streams a single cell through an operative circuit and waits for the expected RELAY command response
+		 * or error (RELAY_END, DESTROY), ignores PADDING cells. StreamID must be prepared (incremented) BEFORE calling this method.
 		 * @param command The RELAY command 
 		 * @param requestPayload The payload to stream
 		 * @param waitFor The command to wait for 
@@ -131,16 +147,18 @@ namespace Briand {
 		/**
 		 * Method sends a RELAY_BEGIN cell.
 		 * @param hostname The hostname
+		 * @param port The port
 		 * @return true on success, false otherwise
 		*/
-		bool TorStreamStart(const string& hostname);
+		bool TorStreamStart(const string& hostname, const short& port);
 
 		/**
 		 * Method sends a RELAY_BEGIN cell.
 		 * @param ipv4 The IPv4
+		 * @param port The port
 		 * @return true on success, false otherwise
 		*/
-		bool TorStreamStart(const in_addr& ipv4);
+		bool TorStreamStart(const in_addr& ipv4, const short& port);
 
 		/**
 		 * Method streams a single RELAY_DATA cell (non blocking).
@@ -153,7 +171,7 @@ namespace Briand {
 		 * Method reads a single RELAY_DATA cell back and ADDS to the buffer
 		 * @param buffer The buffer where data is ADDED. Max 498 bytes per session.
 		 * @param finished The value will be set to true if RELAY_END from node is encountered.
-		 * @return true if success, false on error (ex. TRUNCATE).
+		 * @return true if success, false on error (ex. TRUNCATE/DESTROY).
 		*/
 		bool TorStreamRead(unique_ptr<vector<unsigned char>>& buffer, bool& finished);
 

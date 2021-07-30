@@ -71,7 +71,7 @@ namespace Briand
          * @param port Port number
          * @param manager The Circuits Manager instance
         */
-        void StartProxyServer(unsigned short& port, unique_ptr<BriandTorCircuitsManager>& mgr);
+        void StartProxyServer(const unsigned short& port, unique_ptr<BriandTorCircuitsManager>& mgr);
 
         /**
          * Method stops the proxy and closes any binding.
