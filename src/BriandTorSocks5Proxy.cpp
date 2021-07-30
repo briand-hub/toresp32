@@ -278,7 +278,6 @@ namespace Briand
                 // Send OK Response to client
                 unsigned char temp[4] = { 0x05, 0x00, 0x00, 0x01 /* omitted */ };
                 send(clientSock, temp, 4, 0);
-                delete[] temp;
 
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy streaming data.\n");
 
