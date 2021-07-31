@@ -88,6 +88,12 @@ namespace Briand
 		static string BriandGetPublicIPFromIfConfigMe();
 
 		/**
+		 * Method to get public IP address from ipify API
+		 * @return string with IP, empty if fails
+		*/
+		static string BriandGetPublicIPFromIPFY();
+
+		/**
 		 * DEBUG Method to print raw bytes to serial output (hex format)
 		 * @param buffer the buffer to be printed (vector)
 		 * @param bytesToPrint number of buffer bytes to print (0 to print all)

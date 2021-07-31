@@ -299,6 +299,16 @@ namespace Briand
 		return output;
 	}
 
+	string BriandUtils::BriandGetPublicIPFromIPFY() {
+		short httpCode = 0;
+		string randomAgent = string( Briand::BriandUtils::GetRandomHostName().get() );
+
+		auto ipString = Briand::BriandNet::HttpsGet("api.ipfy.org", 443, "/", httpCode, randomAgent);
+
+		if (ipString == nullptr) return "";
+		else return *ipString.get();
+	}
+
 	void BriandUtils::PrintByteBuffer(const vector<unsigned char>& buffer, const short& newLineAfterBytes /* = 0 */, const unsigned int& bytesToPrint /* = 0 */) {
 		unsigned int limit;
 

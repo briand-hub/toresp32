@@ -29,6 +29,7 @@ namespace Briand
     BriandTorSocks5Proxy::BriandTorSocks5Proxy() {
         this->proxySocket = -1;
         this->torCircuits = nullptr;
+        this->proxyStarted = false;
         bzero(&this->proxyTaskHandle, sizeof(this->proxyTaskHandle));
     }
 
@@ -38,7 +39,7 @@ namespace Briand
 
     void BriandTorSocks5Proxy::StartProxyServer(const unsigned short& port, unique_ptr<BriandTorCircuitsManager>& mgr) {
         // If the instance is/was created, stop the previous.
-        this->StopProxyServer();
+        if (this->proxyStarted) this->StopProxyServer();
 
         this->torCircuits = mgr.get();
         if (this->torCircuits == nullptr) {
@@ -82,7 +83,9 @@ namespace Briand
 
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy listening.\n");
 
-        xTaskCreate(this->HandleRequest, "TorProxy", 2048, reinterpret_cast<void*>(this->proxySocket), 300, &this->proxyTaskHandle);
+        xTaskCreate(this->HandleRequest, "TorProxy", 4096, reinterpret_cast<void*>(this->proxySocket), 300, &this->proxyTaskHandle);
+
+        this->proxyStarted = true;
 
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy started.\n");
     }
@@ -131,6 +134,11 @@ namespace Briand
 
                 len = recv(clientSock, recBuf.get(), 257, 0);
 
+                if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
+                    printf("[DEBUG] SOCKS5 Proxy (methods) received %d bytes: ", len);
+                    BriandUtils::PrintOldStyleByteBuffer(recBuf.get(), len);
+                }
+
                 if (len <= 0) {
                     ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy methods receiving error. Closing connection.\n");
                     // Close client socket
@@ -155,7 +163,7 @@ namespace Briand
 
                 // Find if there is a suitable method (0x00 => no authentication is required)
                 bool methodOk = false;
-                for (unsigned int i = 2; i<len && i < recBuf[1] ; i++) {
+                for (unsigned int i = 2; i<len && i < recBuf[1]+2 ; i++) {
                     if (recBuf[i] == 0x00) {
                         methodOk = true;
                         break;
@@ -176,6 +184,11 @@ namespace Briand
 
                 recBuf = make_unique<unsigned char[]>(32);  // request could be max 22 bytes long
                 len = recv(clientSock, recBuf.get(), 32, 0);
+
+                if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
+                    printf("[DEBUG] SOCKS5 Proxy connect request received %d bytes: ", len);
+                    BriandUtils::PrintOldStyleByteBuffer(recBuf.get(), len);
+                }
 
                 if (len < 10) {
                     ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy connect request receiving error. Closing connection.\n");
@@ -348,7 +361,7 @@ namespace Briand
 
     void BriandTorSocks5Proxy::StopProxyServer() {
         // If socket is ready then close and delete associated IDF Task
-        if (this->proxySocket > 0) {
+        if (this->proxyStarted) {
             ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy killing task.\n");    
             vTaskDelete(this->proxyTaskHandle);
             ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy closing socket.\n");    
@@ -357,4 +370,5 @@ namespace Briand
         
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy stopped.\n");
     }
+
 }

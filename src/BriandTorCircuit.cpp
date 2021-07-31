@@ -294,7 +294,7 @@ namespace Briand {
 
 		tempCell = make_unique<BriandTorCell>( this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::NETINFO );
 		struct in_addr public_ip;
-		inet_aton(BriandUtils::BriandGetPublicIPFromIfConfigMe().c_str(), &public_ip);
+		inet_aton(BriandUtils::BriandGetPublicIPFromIPFY().c_str(), &public_ip);
 		tempCell->BuildAsNETINFO( public_ip );
 
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {

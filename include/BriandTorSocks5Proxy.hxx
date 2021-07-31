@@ -45,6 +45,9 @@ namespace Briand
         /** IDF vTask handle */
         TaskHandle_t proxyTaskHandle;
 
+        /** Proxy status */
+        bool proxyStarted;
+
         /** Pointer to CircuitsManager instance */
         static BriandTorCircuitsManager* torCircuits;
 

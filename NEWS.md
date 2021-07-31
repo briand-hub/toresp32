@@ -17,7 +17,14 @@
 * Send DEBUG/VERBOSE messages to another tty/stderr
 * Check randomize() working on RelaySearcher
 
-## 
+## 2021-07-31
+
+* Random crashes still persist (when restarting tor circuits manager task), need deep debugging
+* Finished SOCKS5 class
+* Changed public IP request to IPFY API
+* Arrived ESP-Prog debugging board, testing and debugging!!
+
+## 2021-07-25
 
 * Random crashes still persist (when restarting tor circuits manager task), need deep debugging
 * Started to write SOCKS5 class

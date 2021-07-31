@@ -106,6 +106,16 @@ void app_main() {
 	// TODO: verify stack size
 }
 
+void builtin_led_task(void* p) {
+	// IDF Task cannot return!
+	while(1) {
+		int l = gpio_get_level(GPIO_NUM_5);
+		if (l == 0) gpio_set_level(GPIO_NUM_5, 1);
+		else gpio_set_level(GPIO_NUM_5, 0);
+		vTaskDelay( (BUILTIN_LED_MODE*100) / portTICK_PERIOD_MS);
+	}
+}
+
 void TorEsp32Setup() {
 	// Initialize globals
     CONFIG_PASSWORD = make_unique<string>("");
@@ -149,10 +159,24 @@ void TorEsp32Setup() {
 
     printf("[INFO] Entering step %d\n", nextStep);
 
-    // Turn off leds
-	printf("[INFO] Turning OFF built led %d\n", GPIO_NUM_5);
-    gpio_set_direction(GPIO_NUM_5, GPIO_MODE_OUTPUT);
-    gpio_set_level(GPIO_NUM_5, 1); // 1 => off, 0 => on
+	// Builtin led handling
+	gpio_set_direction(GPIO_NUM_5, GPIO_MODE_OUTPUT);
+	if (BUILTIN_LED_MODE == 0) {
+		// Turn off
+		printf("[INFO] Turning OFF built led %d\n", GPIO_NUM_5);
+		gpio_set_level(GPIO_NUM_5, 1); // 1 => off, 0 => on
+	}
+	else if (BUILTIN_LED_MODE == 1) {
+		// Turn on
+		printf("[INFO] Turning OFF built led %d\n", GPIO_NUM_5);
+		gpio_set_level(GPIO_NUM_5, 0); // 1 => off, 0 => on
+	}
+	else {
+		// On/off delay
+		printf("[INFO] Starting blinking task for built led %d\n", GPIO_NUM_5);
+		gpio_set_level(GPIO_NUM_5, 0); // initial status ON
+		xTaskCreate(builtin_led_task, "blinkled", 512, NULL, 1000, NULL);
+	}   
     
 	// Initialize SPIFFS File System
 	
