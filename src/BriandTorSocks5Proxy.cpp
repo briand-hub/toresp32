@@ -366,6 +366,7 @@ namespace Briand
             vTaskDelete(this->proxyTaskHandle);
             ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy closing socket.\n");    
             close(this->proxySocket);
+            this->proxyStarted = false;
         }
         
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy stopped.\n");

@@ -56,19 +56,7 @@ namespace Briand {
 
         /** Maximum number of requests to do with the same circuit (default 15 requests) before closing it */
         static unsigned short CIRCUIT_MAX_REQUESTS;
-
-        /**
-         * This method is asynchronous and provides operations for a single circuit
-         * @param circuitIndex an unsigned short (circuit index in the CIRCUITS vector), void* because of ESP-IDF requirement.
-        */
-        // [DELETED] static void CircuitTask(void* circuitIndex);
-
-        /**
-         * Method checks and restarts circuits pool with new instances if any is not instanced. Executes only if property isStopped=false
-         * @param noparam set to NULL
-        */
-        // [DELETED] static void RestartCircuits(void* noparam);
-
+        
         /**
          * Method checks and restarts circuits pool with new instances if any is not instanced. 
          * It also provides operations for all circuits pool.
