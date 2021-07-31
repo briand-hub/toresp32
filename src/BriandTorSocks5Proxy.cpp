@@ -180,6 +180,14 @@ namespace Briand
 
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client handshake ok.\n");
 
+                // Send OK Response to client
+                {
+                    unsigned char temp[2] = { 0x05, 0x00 };
+                    send(clientSock, temp, 2, 0);
+                }
+
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client waiting for request.\n");
+
                 // At this point client sends a request to connect
 
                 recBuf = make_unique<unsigned char[]>(32);  // request could be max 22 bytes long
@@ -289,8 +297,10 @@ namespace Briand
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy connected.\n");
 
                 // Send OK Response to client
-                unsigned char temp[4] = { 0x05, 0x00, 0x00, 0x01 /* omitted */ };
-                send(clientSock, temp, 4, 0);
+                {
+                    unsigned char temp[4] = { 0x05, 0x00, 0x00, 0x01 /* omitted */ };
+                    send(clientSock, temp, 4, 0);
+                }
 
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy streaming data.\n");
 

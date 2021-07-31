@@ -109,7 +109,9 @@ void app_main() {
 void builtin_led_task(void* p) {
 	// IDF Task cannot return!
 	while(1) {
+		gpio_set_direction(GPIO_NUM_5, GPIO_MODE_INPUT);
 		int l = gpio_get_level(GPIO_NUM_5);
+		gpio_set_direction(GPIO_NUM_5, GPIO_MODE_OUTPUT);
 		if (l == 0) gpio_set_level(GPIO_NUM_5, 1);
 		else gpio_set_level(GPIO_NUM_5, 0);
 		vTaskDelay( (BUILTIN_LED_MODE*100) / portTICK_PERIOD_MS);
