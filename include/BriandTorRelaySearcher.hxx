@@ -18,12 +18,7 @@
 
 #pragma once
 
-#include <iostream>
-#include <memory>
-
-// Crypto library chosen
-#include <mbedtls/ecdh.h>
-
+#include "BriandDefines.hxx"
 #include "BriandTorRelay.hxx"
 #include "BriandTorCertificates.hxx"
 

@@ -17,6 +17,7 @@
 */
 
 // GENERAL DEFINES / SETTINGS / PARAMETERS FOR ALL FILES
+// MOVED HERE ALL #include directives in order to simplify files
 // This settings could be changed if needed
 
 /* Avoid error of multiple definitions (first defined here...) */
@@ -47,18 +48,104 @@
     constexpr unsigned char TOR_NODES_CACHE_VAL_H = 24;		// Hours since the chache of nodes is considered OLD and must be downloaded again
     constexpr unsigned short TOR_SOCKS5_PROXY_PORT = 5001;  // Port of the Socks5 Proxy
 
-    // Early declarations of ESP logging functions trick (see BriandEspLogging.cpp)
+    // Includes needed (with linux porting enabled)
+
+    /* Standard C++ libraries */
+    #include <iostream>
+    #include <memory>
+    #include <vector>
+    #include <sstream>
+    #include <climits>
+    #include <time.h>
+    #include <fstream>
+    #include <iomanip>
+    #include <algorithm>
     
-    /* This define, before including esp_log.h, allows log level higher than the settings in menuconfig  */
-    #define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 
-    #include <esp_idf_version.h>
-    #include <esp_log.h>
+    /* mbedtls and libsodium libraries */
+    #include <sodium.h>
+    #include <mbedtls/md.h>
+    #include <mbedtls/md_internal.h>
+    #include <mbedtls/ecdh.h>
+    #include <mbedtls/ssl.h>
+    #include <mbedtls/entropy.h>
+    #include <mbedtls/ctr_drbg.h>
+    #include <mbedtls/error.h>
+    #include <mbedtls/certs.h>
+    #include <mbedtls/rsa.h>
+    #include <mbedtls/pk.h>
+    #include <mbedtls/base64.h>
+    #include <mbedtls/ecp.h>
 
-    void BRIAND_SET_LOG(esp_log_level_t);
+    #ifdef MBEDTLS_HKDF_C
+        #include <mbedtls/hkdf.h>
+    #endif
 
-    #if ESP_IDF_VERSION <= ESP_IDF_VERSION_VAL(4, 3, 0)
-        esp_log_level_t esp_log_level_get(const char*);
+    #if defined(ESP_PLATFORM)
+
+        /* Framework libraries */
+        #include <freertos/FreeRTOS.h>
+        #include <freertos/task.h>
+        #include <esp_system.h>
+        #include <esp_wifi.h>
+        #include <esp_event.h>
+        #include <esp_log.h>
+        #include <esp_idf_version.h>
+        #include <esp_int_wdt.h>
+        #include <esp_task_wdt.h>
+        #include <nvs_flash.h>
+        #include <driver/gpio.h>
+        #include <esp_spiffs.h>
+        #include <esp_sntp.h>
+        #include <esp_timer.h>
+        #include <esp_tls.h>
+        // HW Accelleration by ESP32 cryptographic hardware
+        // #include <mbedtls/aes.h> gives linker error!
+        #include <aes/esp_aes.h>
+        #include <lwip/err.h>
+        #include <lwip/sockets.h>
+        #include <lwip/sys.h>
+        #include <lwip/netdb.h>
+        #include <lwip/inet.h>
+        #include <lwip/ip_addr.h>
+
+        /* Custom specific libraries */
+        #include <BriandESPDevice.hxx>
+        #include <BriandIDFWifiManager.hxx>
+        #include <BriandIDFSocketClient.hxx>
+        #include <BriandIDFSocketTlsClient.hxx>
+        #include <cJSON.h>
+
+        // Early declarations of ESP logging functions trick (see BriandEspLogging.cpp)
+        
+        /* This define, before including esp_log.h, allows log level higher than the settings in menuconfig  */
+        #ifndef LOG_LOCAL_LEVEL
+            #define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
+        #endif
+
+        void BRIAND_SET_LOG(esp_log_level_t);
+
+        #if ESP_IDF_VERSION <= ESP_IDF_VERSION_VAL(4, 3, 0)
+            esp_log_level_t esp_log_level_get(const char*);
+        #endif
+
+    #elif defined(__linux__)
+        /* Framework libraries */
+
+        /* Custom specific libraries */
+        #include <BriandESPDevice.hxx>
+        #include <BriandIDFWifiManager.hxx>
+        #include <BriandIDFSocketClient.hxx>
+        #include <BriandIDFSocketTlsClient.hxx>
+        #include <cJSON.h>
+        
+        // #include <mbedtls/aes.h> gives linker error on ESP_PLATFORM!
+        #include <mbedtls/aes.h>
+
+        
+    #else 
+        #error "UNSUPPORTED PLATFORM (ESP32 OR LINUX REQUIRED)"
     #endif
 
 #endif /* BRIANDDEFINES_H_ */
+

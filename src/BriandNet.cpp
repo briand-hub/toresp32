@@ -18,15 +18,6 @@
 
 #include "BriandNet.hxx"
 
-#include <cJSON.h>
-
-#include <BriandIDFSocketClient.hxx>
-#include <BriandIDFSocketTlsClient.hxx>
-
-#include <iostream>
-#include <memory>
-#include <vector>
-
 using namespace std;
 
 namespace Briand

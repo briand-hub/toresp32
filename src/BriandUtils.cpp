@@ -18,14 +18,6 @@
 
 #include "BriandUtils.hxx"
 
-#include <esp_system.h>
-
-#include <iostream>
-#include <memory>
-#include <fstream>
-#include <sstream>
-#include <algorithm>
-
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
 #include "BriandNet.hxx"

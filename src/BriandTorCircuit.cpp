@@ -18,20 +18,6 @@
 
 #include "BriandTorCircuit.hxx"
 
-#include <iostream>
-#include <memory>
-#include <sstream>
-#include <time.h>
-
-#include <BriandIDFSocketTlsClient.hxx>
-
-#include "BriandDefines.hxx"
-#include "BriandTorDefinitions.hxx"
-#include "BriandUtils.hxx"
-#include "BriandNet.hxx"
-#include "BriandTorRelay.hxx"
-#include "BriandTorCell.hxx"
-
 using namespace std;
 
 namespace Briand {

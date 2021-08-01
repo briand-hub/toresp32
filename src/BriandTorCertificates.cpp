@@ -17,19 +17,9 @@
 */
 
 #include "BriandTorCertificates.hxx"
-
-#include <iostream>
-#include <memory>
-#include <sstream>
-#include <iomanip>
-#include <cstring>
-
 #include "BriandDefines.hxx"
-#include "BriandTorDefinitions.hxx"
-#include "BriandUtils.hxx"
 #include "BriandTorCryptoUtils.hxx"
-
-#include <mbedtls/ssl.h>
+#include "BriandUtils.hxx"
 
 using namespace std;
 

@@ -18,8 +18,6 @@
 
 #pragma once
 
-#include <iostream>
-
 #include "BriandDefines.hxx"
 
 /* This file contains list of classes intented to be used only as data structures, enums, constants etc. */

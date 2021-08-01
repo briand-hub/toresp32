@@ -18,11 +18,7 @@
 
 #pragma once
 
-#include <iostream>
-#include <memory>
-
-#include <BriandIDFSocketTlsClient.hxx>
-
+#include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
 #include "BriandTorCell.hxx"
 #include "BriandTorRelay.hxx"

@@ -17,20 +17,6 @@
 */
 
 #include "BriandTorRelaySearcher.hxx"
-
-#include <iostream>
-#include <memory>
-#include <sstream>
-#include <fstream>
-#include <vector>
-#include <algorithm>
-
-#include <lwip/sockets.h>
-#include <lwip/inet.h>
-#include <lwip/ip_addr.h>
-#include <cJSON.h>
-#include <mbedtls/ecdh.h>
-
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
 #include "BriandUtils.hxx"

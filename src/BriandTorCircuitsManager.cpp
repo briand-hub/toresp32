@@ -19,10 +19,6 @@
 #include "BriandTorCircuitsManager.hxx"
 #include "BriandUtils.hxx"
 
-#include <iostream>
-#include <memory>
-#include <vector>
-
 using namespace std;
 
 namespace Briand

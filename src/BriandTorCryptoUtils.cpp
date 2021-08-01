@@ -17,39 +17,6 @@
 */
 
 #include "BriandTorCryptoUtils.hxx"
-
-#include <iostream>
-#include <memory>
-#include <sstream>
-#include <iomanip>
-#include <cstring>
-#include <algorithm>
-
-/* mbedTLS library for SSL / SHA / TLS / RSA */
-#include <mbedtls/ssl.h>
-#include <mbedtls/entropy.h>
-#include <mbedtls/ctr_drbg.h>
-#include <mbedtls/error.h>
-#include <mbedtls/certs.h>
-#include <mbedtls/rsa.h>
-#include <mbedtls/md.h>
-#include <mbedtls/md_internal.h>
-#include <mbedtls/pk.h>
-#include <mbedtls/base64.h>
-#include <mbedtls/ecp.h>
-
-#ifdef MBEDTLS_HKDF_C
-#include <mbedtls/hkdf.h>
-#endif
-
-// HW Accelleration by ESP32 cryptographic hardware
-// #include <mbedtls/aes.h> gives linker error!
-#include <aes/esp_aes.h>
-
-
-/* LibSodium found for Ed25519 signatures! It's on framework :-D */
-#include <sodium.h>
-
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
 #include "BriandUtils.hxx"

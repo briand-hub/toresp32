@@ -18,15 +18,6 @@
 
 #pragma once
 
-#include <iostream>
-#include <memory>
-#include <vector>
-
-#include <cJSON.h>
-
-#include <BriandIDFSocketClient.hxx>
-#include <BriandIDFSocketTlsClient.hxx>
-
 #include "BriandDefines.hxx"
 
 /* This file contains static class to perform network communications */

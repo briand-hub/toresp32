@@ -18,15 +18,6 @@
 
 #pragma once
 
-#include <iostream>
-#include <memory>
-#include <vector>
-
-#include <lwip/err.h>
-#include <lwip/sockets.h>
-#include <lwip/sys.h>
-#include <lwip/netdb.h>
-
 #include "BriandDefines.hxx"
 #include "BriandTorCircuit.hxx"
 #include "BriandTorCircuitsManager.hxx"

@@ -16,31 +16,8 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-/* Framework libraries */
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#include <esp_system.h>
-#include <esp_wifi.h>
-#include <esp_event.h>
-#include <esp_int_wdt.h>
-#include <esp_task_wdt.h>
-#include <nvs_flash.h>
-#include <driver/gpio.h>
-#include <esp_spiffs.h>
-#include <esp_sntp.h>
-#include <esp_timer.h>
-
-/* Standard C++ libraries */
-#include <iostream>
-#include <memory>
-#include <climits>
-#include <time.h>
-
-/* Custom specific libraries */
-#include <BriandESPDevice.hxx>
-#include <BriandIDFWifiManager.hxx>
-#include <BriandIDFSocketClient.hxx>
-#include <BriandIDFSocketTlsClient.hxx>
+/* Global parameters and includes (change it if you want by editing global file) */
+#include "BriandDefines.hxx"
 
 /* Project libraries */
 #include "BriandTorEsp32Config.hxx"
@@ -56,9 +33,6 @@
 /* Startup tests */
 
 using namespace std;
-
-/* Global parameters (change it if you want by editing global file) */
-#include "BriandDefines.hxx"
 
 // Required for C++ use WITH IDF!
 extern "C" {

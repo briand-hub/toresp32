@@ -16,14 +16,6 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <iostream>
-#include <memory>
-#include <fstream>
-
-// HW Accelleration by ESP32 cryptographic hardware
-// #include <mbedtls/aes.h> gives linker error!
-#include <aes/esp_aes.h>
-
 #include "BriandDefines.hxx"
 #include "BriandUtils.hxx"
 

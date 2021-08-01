@@ -18,15 +18,7 @@
 
 #pragma once
 
-#include <iostream>
-#include <memory>
-#include <vector>
-
-// Crypto library chosen
-#include <mbedtls/ecdh.h>
-#include <mbedtls/md.h>
-#include <aes/esp_aes.h>
-
+#include "BriandDefines.hxx"
 #include "BriandTorCertificates.hxx"
 
 using namespace std;

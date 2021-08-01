@@ -18,9 +18,7 @@
 
 #pragma once
 
-#include <iostream>
-#include <memory>
-
+#include "BriandDefines.hxx"
 #include "BriandTorCircuit.hxx"
 
 using namespace std;

@@ -17,16 +17,6 @@
 */
 
 #include "BriandTorRelay.hxx"
-
-#include <iostream>
-#include <memory>
-#include <sstream>
-#include <vector>
-#include <algorithm>
-
-// Crypto library chosen
-#include <mbedtls/ecdh.h>
-
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
 #include "BriandTorDirAuthority.hxx"

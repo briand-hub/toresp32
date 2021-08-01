@@ -20,13 +20,6 @@
 
 #include "BriandDefines.hxx"
 
-#include <iostream>
-#include <sstream>
-#include <memory>
-
-// HW Accelleration by ESP32 cryptographic hardware
-#include <mbedtls/aes.h>
-
 using namespace std;
 
 namespace Briand {

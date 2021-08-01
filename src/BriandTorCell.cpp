@@ -17,18 +17,8 @@
 */
 
 #include "BriandTorCell.hxx"
-
-#include <iostream>
-#include <memory>
-#include <vector>
-
-#include "BriandDefines.hxx"
-#include "BriandTorDefinitions.hxx"
-#include "BriandUtils.hxx"
-#include "BriandNet.hxx"
-#include "BriandTorCertificates.hxx"
 #include "BriandTorCryptoUtils.hxx"
-#include "BriandTorRelay.hxx"
+#include "BriandNet.hxx"
 
 using namespace std;
 

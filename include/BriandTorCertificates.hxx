@@ -18,10 +18,6 @@
 
 #pragma once
 
-#include <iostream>
-#include <memory>
-#include <vector>
-
 #include "BriandDefines.hxx"
 #include "BriandTorDefinitions.hxx"
 

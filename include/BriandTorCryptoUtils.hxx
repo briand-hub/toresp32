@@ -16,9 +16,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include <iostream>
-#include <memory>
-
+#include "BriandDefines.hxx"
 #include "BriandTorRelay.hxx"
 
 using namespace std;
