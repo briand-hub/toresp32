@@ -133,16 +133,17 @@
         /* Framework libraries */
 
         /* Custom specific libraries */
-        #include <BriandESPDevice.hxx>
-        #include <BriandIDFWifiManager.hxx>
-        #include <BriandIDFSocketClient.hxx>
-        #include <BriandIDFSocketTlsClient.hxx>
+        #include "BriandEspLinuxPorting.hxx"
+        #include "BriandESPDevice.hxx"
+        #include "BriandIDFWifiManager.hxx"
+        #include "BriandIDFSocketClient.hxx"
+        #include "BriandIDFSocketTlsClient.hxx"
         #include <cJSON.h>
         
         // #include <mbedtls/aes.h> gives linker error on ESP_PLATFORM!
         #include <mbedtls/aes.h>
 
-        
+
     #else 
         #error "UNSUPPORTED PLATFORM (ESP32 OR LINUX REQUIRED)"
     #endif
