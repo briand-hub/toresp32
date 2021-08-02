@@ -410,8 +410,12 @@ namespace Briand {
 		
 		bool signedCorrectly = BriandTorCryptoUtils::CheckSignature_RSASHA256(messageToVerify, signAuthenticator.Contents, this->SIGNATURE);
 
-		if (signedCorrectly) ESP_LOGD(LOGTAG, "[DEBUG] RSAEd25519CrossCertificate has valid signature.\n");
-		else ESP_LOGD(LOGTAG, "[DEBUG] RSAEd25519CrossCertificate has invalid signature!\n");
+		if (signedCorrectly) {
+			ESP_LOGD(LOGTAG, "[DEBUG] RSAEd25519CrossCertificate has valid signature.\n");
+		}
+		else { 
+			ESP_LOGD(LOGTAG, "[DEBUG] RSAEd25519CrossCertificate has invalid signature!\n");
+		}
 
 		return signedCorrectly;
 	}

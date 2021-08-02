@@ -497,13 +497,13 @@ namespace Briand
 	}
 
 	string BriandUtils::ipv4ToString(const in_addr& ip) {
-		return string(ip4addr_ntoa( reinterpret_cast<const ip4_addr_t*>(&ip) ));
+		return string(inet_ntoa(ip));
 	}
 
 	in_addr BriandUtils::ipv4FromString(const string& ip) {
 		in_addr temp;
 		bzero(&temp, sizeof(temp));
-		ip4addr_aton(ip.c_str(), reinterpret_cast<ip4_addr_t*>(&temp));
+		inet_aton(ip.c_str(), &temp);
 
 		return temp;
 	}

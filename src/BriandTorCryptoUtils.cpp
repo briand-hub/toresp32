@@ -376,7 +376,7 @@ namespace Briand {
 		// using mbedtls
 		
 		auto output = make_unique<vector<unsigned char>>();
-		unsigned int outSize;
+		size_t outSize;
 		
 		// test the output size
 		mbedtls_base64_decode(NULL, 0, &outSize, reinterpret_cast<const unsigned char*>(input.c_str()), input.length());

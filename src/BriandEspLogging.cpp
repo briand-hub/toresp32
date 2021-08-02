@@ -20,22 +20,32 @@
 
 #include "BriandDefines.hxx"
 
-#if ESP_IDF_VERSION <= ESP_IDF_VERSION_VAL(4, 3, 0)
+#if defined(ESP_PLATFORM)
 
-    // Define esp_log_level_get like the latest version, this is a trick
+    #if ESP_IDF_VERSION <= ESP_IDF_VERSION_VAL(4, 3, 0)
 
-    esp_log_level_t CURRENT_LOG_LEVEL = ESP_LOG_WARN;
-    
+        // Define esp_log_level_get like the latest version, this is a trick
+
+        esp_log_level_t CURRENT_LOG_LEVEL = ESP_LOG_WARN;
+        
+        void BRIAND_SET_LOG(esp_log_level_t newLevel) { 
+            CURRENT_LOG_LEVEL = newLevel; 
+        }
+        
+        esp_log_level_t esp_log_level_get(const char* logTag) { 
+            return CURRENT_LOG_LEVEL; 
+        }
+    #endif
+
+#elif defined(__linux__)
+
     void BRIAND_SET_LOG(esp_log_level_t newLevel) { 
-        CURRENT_LOG_LEVEL = newLevel; 
-    }
-    
-    esp_log_level_t esp_log_level_get(const char* logTag) { 
-        return CURRENT_LOG_LEVEL; 
+        // There is the base function
+        esp_log_level_set("*", newLevel);
     }
 
 #else
 
-    constexpr void BRIAND_SET_LOG(esp_log_level_t newLevel) { };
+    constexpr void BRIAND_SET_LOG(esp_log_level_t newLevel) { /* do nothing */ };
 
-#endif
+#endif /* defined(ESP_PLATFORM) */

@@ -23,6 +23,7 @@
 * Finished SOCKS5 class
 * Changed public IP request to IPFY API
 * Arrived ESP-Prog debugging board, testing and debugging!!
+* Upgraded LibBriandIDF, working to linux porting for better debugging and tests.
 
 ## 2021-07-25
 

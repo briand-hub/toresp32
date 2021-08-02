@@ -60,7 +60,6 @@
     #include <fstream>
     #include <iomanip>
     #include <algorithm>
-    
 
     /* mbedtls and libsodium libraries */
     #include <sodium.h>
@@ -110,10 +109,10 @@
         #include <lwip/ip_addr.h>
 
         /* Custom specific libraries */
-        #include <BriandESPDevice.hxx>
-        #include <BriandIDFWifiManager.hxx>
-        #include <BriandIDFSocketClient.hxx>
-        #include <BriandIDFSocketTlsClient.hxx>
+        #include "BriandESPDevice.hxx"
+        #include "BriandIDFWifiManager.hxx"
+        #include "BriandIDFSocketClient.hxx"
+        #include "BriandIDFSocketTlsClient.hxx"
         #include <cJSON.h>
 
         // Early declarations of ESP logging functions trick (see BriandEspLogging.cpp)
@@ -131,6 +130,9 @@
 
     #elif defined(__linux__)
         /* Framework libraries */
+        #include <cstdio>
+        #include <cstdlib>
+        #include <unistd.h>
 
         /* Custom specific libraries */
         #include "BriandEspLinuxPorting.hxx"
@@ -143,6 +145,14 @@
         // #include <mbedtls/aes.h> gives linker error on ESP_PLATFORM!
         #include <mbedtls/aes.h>
 
+
+        /* Re-define project-specific IDF functions */
+        void BRIAND_SET_LOG(esp_log_level_t newLevel);
+        typedef mbedtls_aes_context esp_aes_context;
+        #define esp_aes_init(ctx_ptr) mbedtls_aes_init(ctx_ptr)
+        #define esp_aes_free(ctx_ptr) mbedtls_aes_free(ctx_ptr)
+        #define esp_aes_setkey(ctx_ptr, key_ptr, keybits) { mbedtls_aes_setkey_dec(ctx_ptr, key_ptr, keybits); mbedtls_aes_setkey_enc(ctx_ptr, key_ptr, keybits); return 0; }
+        #define esp_aes_crypt_ctr(ctx_ptr, length, nc_off_ptr, nonce_counter_ptr, stream_block_ptr, input_ptr, output_ptr) mbedtls_aes_crypt_ctr(ctx_ptr, length, nc_off_ptr, nonce_counter_ptr, stream_block_ptr, input_ptr, output_ptr)    
 
     #else 
         #error "UNSUPPORTED PLATFORM (ESP32 OR LINUX REQUIRED)"

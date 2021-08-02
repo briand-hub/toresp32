@@ -93,12 +93,12 @@ namespace Briand {
 
 		unique_ptr<esp_aes_context> AES_ForwardContext;
 		unsigned char AES_ForwardNonceCounter[16] = {0x00};
-		unsigned int AES_ForwardNonceOffset = 0;
+		size_t AES_ForwardNonceOffset = 0;
 		unsigned char AES_ForwardIV[16] = {0x00};
 
 		unique_ptr<esp_aes_context> AES_BackwardContext;
 		unsigned char AES_BackwardNonceCounter[16] = {0x00};
-		unsigned int AES_BackwardNonceOffset = 0;
+		size_t AES_BackwardNonceOffset = 0;
 		unsigned char AES_BackwardIV[16] = {0x00};
 
 		// ------------------------------
