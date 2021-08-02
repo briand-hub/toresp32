@@ -317,6 +317,11 @@ namespace Briand
 	void BriandUtils::PrintOldStyleByteBuffer(unsigned char buffer[], const unsigned int& size, const short& newLineAfterBytes /* = 0 */, const unsigned int& bytesToPrint /* = 0 */) {
 		unsigned int limit;
 
+		if (buffer == NULL) {
+			printf("(NULL)");
+			return;
+		} 
+
 		if (bytesToPrint > 0 && bytesToPrint < size) limit = bytesToPrint;
 		else limit = size;
 
@@ -395,6 +400,9 @@ namespace Briand
 
 	unique_ptr<vector<unsigned char>> BriandUtils::ArrayToVector(const unique_ptr<unsigned char[]>& input, const unsigned long int& size) {
 		auto v = make_unique<vector<unsigned char>>();
+
+		if (input == nullptr) return std::move(v);
+
 		for (int i = 0; i < size; i++)
 			v->push_back(input[i]);
 		return std::move(v);
@@ -415,6 +423,8 @@ namespace Briand
 	string BriandUtils::OldBufferToString(unique_ptr<unsigned char[]>& input, const unsigned long int& size) {
 		string output("");
 		unsigned long int limit = size;
+
+		if (input == nullptr) return output;
 
 		// If null-terminated string, do not include
 		if (input[size-1] == 0x00) limit--;
