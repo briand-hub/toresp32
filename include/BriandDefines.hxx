@@ -149,11 +149,11 @@
         /* Re-define project-specific IDF functions */
         void BRIAND_SET_LOG(esp_log_level_t newLevel);
         typedef mbedtls_aes_context esp_aes_context;
-        #define esp_aes_init(ctx_ptr) mbedtls_aes_init(ctx_ptr)
-        #define esp_aes_free(ctx_ptr) mbedtls_aes_free(ctx_ptr)
-        #define esp_aes_setkey(ctx_ptr, key_ptr, keybits) { mbedtls_aes_setkey_dec(ctx_ptr, key_ptr, keybits); mbedtls_aes_setkey_enc(ctx_ptr, key_ptr, keybits); return 0; }
-        #define esp_aes_crypt_ctr(ctx_ptr, length, nc_off_ptr, nonce_counter_ptr, stream_block_ptr, input_ptr, output_ptr) mbedtls_aes_crypt_ctr(ctx_ptr, length, nc_off_ptr, nonce_counter_ptr, stream_block_ptr, input_ptr, output_ptr)    
-
+        #define esp_aes_init mbedtls_aes_init
+        #define esp_aes_free mbedtls_aes_free
+        #define esp_aes_setkey mbedtls_aes_setkey_enc
+        #define esp_aes_crypt_ctr mbedtls_aes_crypt_ctr
+        
     #else 
         #error "UNSUPPORTED PLATFORM (ESP32 OR LINUX REQUIRED)"
     #endif
