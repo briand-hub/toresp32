@@ -307,8 +307,10 @@ void TorEsp32Main(void* taskArg) {
 				// "Show" >ENTER< char
 				printf("\n");
 
-				// de-buffer (terminal "sticky" keys)
+				// de-buffer (terminal "sticky" keys) (ONLY if running on ESP, on Linux will be infinite loop!)
+				#if defined(ESP_PLATFORM)
 				while (in != 0xFF || in < 0) in = (char)fgetc(stdin);
+				#endif
 			}
 
 			// delay before next check

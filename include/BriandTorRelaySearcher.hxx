@@ -35,12 +35,24 @@ namespace Briand {
 	class BriandTorRelaySearcher {
 		private:
 
-		/** File name for the exit nodes cache */
-		const char* NODES_FILE_EXIT = "/spiffs/cache_exit";
-		/** File name for the guard nodes cache */
-		const char* NODES_FILE_GUARD = "/spiffs/cache_guard";
-		/** File name for the middle nodes cache */
-		const char* NODES_FILE_MIDDLE = "/spiffs/cache_middle";
+		// Linux porting requires little modification
+		#if defined(ESP_PLATFORM)
+			/** File name for the exit nodes cache */
+			const char* NODES_FILE_EXIT = "/spiffs/cache_exit";
+			/** File name for the guard nodes cache */
+			const char* NODES_FILE_GUARD = "/spiffs/cache_guard";
+			/** File name for the middle nodes cache */
+			const char* NODES_FILE_MIDDLE = "/spiffs/cache_middle";
+		#elif defined(__linux__)
+			/** File name for the exit nodes cache */
+			const char* NODES_FILE_EXIT = "/tmp/toresp32_cache_exit";
+			/** File name for the guard nodes cache */
+			const char* NODES_FILE_GUARD = "/tmp/toresp32_cache_guard";
+			/** File name for the middle nodes cache */
+			const char* NODES_FILE_MIDDLE = "/tmp/toresp32_cache_middle";
+		#else
+			#error "UNSUPPORTED PLATFORM (ESP32 OR LINUX REQUIRED)"
+		#endif
 
 		protected:
 

@@ -153,7 +153,7 @@ namespace Briand
 				auto tempVector = BriandUtils::VectorToArray(buffer);
 				string contents = this->Decrypt(tempVector, buffer->size());
 
-				unsigned int pos;
+				size_t pos;
 
 				ESP_LOGD(LOGTAG, "\n[DEBUG] File decrypted. Contents:");
 

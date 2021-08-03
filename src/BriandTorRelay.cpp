@@ -281,7 +281,7 @@ namespace Briand {
 		// Call via http
 		unique_ptr<string> response = nullptr;
 		string agent = string( BriandUtils::GetRandomHostName().get() );
-		short httpCode;
+		short httpCode = 0;
 
 		// Auth dir enquiry : choose a random one then enquiry another if one fails
 		if (TOR_DIR_LAST_USED == 0x0000) {
@@ -311,7 +311,7 @@ namespace Briand {
 
 		if (httpCode == 200) {
 			ESP_LOGD(LOGTAG, "[DEBUG] FetchDescriptorsFromAuthority GET success.\n");
-			unsigned int starts, ends;
+			size_t starts, ends;
 
 			// Find the ntor-onion-key 
 			starts = response->find("ntor-onion-key ");

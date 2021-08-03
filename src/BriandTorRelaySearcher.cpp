@@ -402,7 +402,7 @@ namespace Briand {
 			// Take first address, separate host and port
 			auto addresses = cJSON_GetObjectItemCaseSensitive(randomRelay, "or_addresses");
 			string firstAddress = cJSON_GetArrayItem(addresses, 0)->valuestring;
-			int pos = firstAddress.find(':');
+			size_t pos = firstAddress.find(':');
 			relay->address->assign(firstAddress.substr(0, pos));
 			relay->port = std::stoi(firstAddress.substr(pos+1, 5));
 
@@ -478,7 +478,7 @@ namespace Briand {
 				// Take first address, separate host and port
 				auto addresses = cJSON_GetObjectItemCaseSensitive(randomRelay, "or_addresses");
 				string firstAddress = cJSON_GetArrayItem(addresses, 0)->valuestring;
-				int pos = firstAddress.find(':');
+				size_t pos = firstAddress.find(':');
 				relay->address->assign(firstAddress.substr(0, pos));
 				relay->port = std::stoi(firstAddress.substr(pos+1, 5));
 
@@ -562,7 +562,7 @@ namespace Briand {
 				// Take first address, separate host and port
 				auto addresses = cJSON_GetObjectItemCaseSensitive(randomRelay, "or_addresses");
 				string firstAddress = cJSON_GetArrayItem(addresses, 0)->valuestring;
-				int pos = firstAddress.find(':');
+				size_t pos = firstAddress.find(':');
 				relay->address->assign(firstAddress.substr(0, pos));
 				relay->port = std::stoi(firstAddress.substr(pos+1, 5));
 

@@ -1325,8 +1325,10 @@ namespace Briand {
 						printf("[ERR] TorStreamRead failed, received unexpected cell from exit node: %s, payload: ", BriandUtils::BriandTorRelayCellCommandToString(readCell->GetRelayCommand()).c_str());
 						readCell->PrintCellPayloadToSerial();
 					}
-					
-					ESP_LOGW(LOGTAG, "[ERR] TorStreamRead failed, received unexpected cell from exit node: %s.", BriandUtils::BriandTorRelayCellCommandToString(readCell->GetRelayCommand()).c_str());
+					else {
+						ESP_LOGW(LOGTAG, "[ERR] TorStreamRead failed, received unexpected cell from exit node: %s.\n", BriandUtils::BriandTorRelayCellCommandToString(readCell->GetRelayCommand()).c_str());
+					}
+
 					finished = true;
 					return false;
 				}
