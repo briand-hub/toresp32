@@ -26,6 +26,11 @@ namespace Briand
 	unique_ptr<vector<unsigned char>> BriandNet::StringToUnsignedCharVector(unique_ptr<string>& input, bool emptyContents /* = true*/) {
 		auto output = make_unique<vector<unsigned char>>();
 
+		if (input == nullptr || input->size() == 0) {
+			ESP_LOGD(LOGTAG, "[DEBUG] StringToUnsignedCharVector called with null data!\n");
+			return output;
+		} 
+
 		if (emptyContents) {
 			while (input->length() > 0) {
 				output->push_back( input->at(0) );
@@ -43,6 +48,11 @@ namespace Briand
 
 	unique_ptr<string> BriandNet::UnsignedCharVectorToString(unique_ptr<vector<unsigned char>>& input, bool emptyContents /* = true*/) {
 		auto output = make_unique<string>();
+
+		if (input == nullptr || input->size() == 0) {
+			ESP_LOGD(LOGTAG, "[DEBUG] UnsignedCharVectorToString called with null data!\n");
+			return output;
+		} 
 
 		if (input == nullptr)
 			return output;
@@ -64,6 +74,11 @@ namespace Briand
 
 	unique_ptr<vector<unsigned char>> BriandNet::RawInsecureRequest(const string& host, const short& port, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/) {
 		auto output = make_unique<vector<unsigned char>>();
+
+		if (content == nullptr || content->size() == 0) {
+			ESP_LOGD(LOGTAG, "[DEBUG] RawInsecureRequest called with null data!\n");
+			return output;
+		} 
 
 		auto client = make_unique<BriandIDFSocketClient>();
 
@@ -108,6 +123,11 @@ namespace Briand
 	unique_ptr<vector<unsigned char>> BriandNet::RawSecureRequest(const unique_ptr<BriandIDFSocketTlsClient>& client, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/, bool closeConnection /* = false*/, bool expectResponse /* = true */) {
 		auto output = make_unique<vector<unsigned char>>();
 
+		if (content == nullptr || content->size() == 0) {
+			ESP_LOGD(LOGTAG, "[DEBUG] RawSecureRequest called with null data!\n");
+			return output;
+		} 
+
 		// Write request
 
 		client->WriteData(content);
@@ -132,6 +152,11 @@ namespace Briand
 
 	unique_ptr<vector<unsigned char>> BriandNet::RawSecureRequest(const string& host, const short& port, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/, const unique_ptr<string>& pemCAcert /*= nullptr*/, const unique_ptr<vector<unsigned char>>& derCAcert /*= nullptr*/) {
 		auto output = make_unique<vector<unsigned char>>();
+
+		if (content == nullptr || content->size() == 0) {
+			ESP_LOGD(LOGTAG, "[DEBUG] RawSecureRequest called with null data!\n");
+			return output;
+		} 
 
 		auto client = make_unique<BriandIDFSocketTlsClient>();
 
@@ -297,7 +322,12 @@ namespace Briand
 			// Parse header to get httpCode
 			// HTTP/1.1 XXX OK
 			// 3 digit after space
-			httpReturnCode = stoi( responseContent->substr(responseContent->find(" ") + 1, 3 ) );
+			size_t httpStatusPos = responseContent->find(" ");
+			if (httpStatusPos != string::npos) {
+				string httpStatusStr = responseContent->substr(httpStatusPos + 1, 3 );
+				if (httpStatusStr.size() > 0)
+					httpReturnCode = stoi( httpStatusStr );
+			}
 
 			if (returnBodyOnly) {
 				// Get the body without headers

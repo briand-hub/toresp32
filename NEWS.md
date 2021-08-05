@@ -2,20 +2,26 @@
 
 ## Next steps
 
-* Consider a circuit status Enum
+* MUST change Relay cache with something better now (consensus). Double check not to choose same relays
+* MUST implement SENDME cells as in tor-specs 7.3. Circuit-level flow control
+* Remove serial streaming and use SOCKS5 proxy only, remove unused terminal commands
 * Consider error management short/int for method errors (mbedtls style)
 * Consider adding TIMEOUT seconds to Stream methods.
-* Deep debug for random crashes related to FreeRTOS xTask
-* Check for RELAY_TRUNCATE/RELAY_TRUNCATED responses when streaming data (should tear down?)
 * Implement a vector of nodes.
 * Add CircID verification and other verification stuff
 * Change the "old" buffer-copy to vector->data() to optimize memory usage
 * Find a way to get a small-size official consensus from directories
 * Simplify code in TorCircuit class
 * Authenticate cell? => Prepare stub method to authenticate client
-* General ignore PADDING cells in SendCell responses
-* Send DEBUG/VERBOSE messages to another tty/stderr
-* Check randomize() working on RelaySearcher
+
+##
+
+* Debugging with linux porting and valgrind: resolved some bugs
+* Testing with valgrind
+* Found that torcache has too poor nodes and sometimes the same is chosen
+* Found that crashes are due to task calling objects that are "busy" and are destroyed before finishing.
+* Added circuit status flags
+* Better task scheduling resolved crashes (on linux, still to deep test on esp32)
 
 ## 2021-07-31
 

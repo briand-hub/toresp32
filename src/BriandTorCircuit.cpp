@@ -22,7 +22,133 @@ using namespace std;
 
 namespace Briand {
 
+	BriandTorCircuit::BriandTorCircuit() {
+		this->guardNode = nullptr;
+		this->middleNode = nullptr;
+		this->exitNode = nullptr;
+		this->relaySearcher = nullptr;
+
+		this->createdOn = 0;
+
+		this->CIRCID = 0;
+		this->LINKPROTOCOLVERSION = 0;
+		this->CURRENT_STREAM_ID = 0;
+
+		this->internalID = -1;
+		this->paddingSent = 0;
+
+		this->sClient = nullptr;
+		this->CIRCUIT_STATUS = CircuitStatusFlag::NONE;
+	}
+
+	void BriandTorCircuit::StatusSetFlag(const CircuitStatusFlag& flag) {
+		// If ANY flag is set, this circuit must be considered DIRT
+		if (flag > 0 && !this->StatusGetFlag(CircuitStatusFlag::DIRT)) {
+			this->CIRCUIT_STATUS = this->CIRCUIT_STATUS | CircuitStatusFlag::DIRT;
+		}
+
+		this->CIRCUIT_STATUS = this->CIRCUIT_STATUS | flag;
+	}
+
+	void BriandTorCircuit::StatusUnsetFlag(const CircuitStatusFlag& flag) {
+		this->CIRCUIT_STATUS = this->CIRCUIT_STATUS & (~flag);
+	}
+
+	void BriandTorCircuit::StatusResetTo(const CircuitStatusFlag& flag) {
+		// If it was dirt, remember it.
+		bool wasDirt = this->StatusGetFlag(CircuitStatusFlag::DIRT);
+
+		this->CIRCUIT_STATUS = CircuitStatusFlag::NONE;
+		this->StatusSetFlag(flag);
+
+		// If it was dirt, remember it.
+		if (wasDirt) this->StatusSetFlag(CircuitStatusFlag::DIRT);
+	}
+
+	bool BriandTorCircuit::StatusGetFlag(const CircuitStatusFlag& flag) {
+		return (this->CIRCUIT_STATUS & flag) > 0;
+	}
+
+	string BriandTorCircuit::StatusGetString() {
+		ostringstream ss;
+		
+		if (this->CIRCUIT_STATUS == CircuitStatusFlag::NONE) {
+			ss << "NONE";
+		} 
+		if (this->StatusGetFlag(CircuitStatusFlag::BUILDING)) {
+			if (ss.str().size() > 0) ss << ",";
+			ss << "BUILDING";
+		} 
+		if (this->StatusGetFlag(CircuitStatusFlag::BUILT)) {
+			if (ss.str().size() > 0) ss << ","; 
+			ss << "BUILT";
+		}
+		if (this->StatusGetFlag(CircuitStatusFlag::BUSY)) {
+			if (ss.str().size() > 0) ss << ",";
+			ss << "BUSY";
+		}
+		if (this->StatusGetFlag(CircuitStatusFlag::CLEAN)) {
+			if (ss.str().size() > 0) ss << ",";
+			ss << "CLEAN";
+		}
+		if (this->StatusGetFlag(CircuitStatusFlag::CLOSED)) {
+			if (ss.str().size() > 0) ss << ",";
+			ss << "CLOSED";
+		}
+		if (this->StatusGetFlag(CircuitStatusFlag::STREAM_READY)) {
+			if (ss.str().size() > 0) ss << ",";
+			ss << "STREAM_READY";
+		}
+		if (this->StatusGetFlag(CircuitStatusFlag::STREAMING)) {
+			if (ss.str().size() > 0) ss << ",";
+			ss << "STREAMING";
+		}
+		if (this->StatusGetFlag(CircuitStatusFlag::DIRT)) {
+			if (ss.str().size() > 0) ss << ",";
+			ss << "DIRT";
+		}
+
+		return ss.str();
+	}
+
+	bool BriandTorCircuit::IsInstanceBusy() {
+		return this->StatusGetFlag(CircuitStatusFlag::BUSY);
+	}
+
+	BriandTorCircuit::~BriandTorCircuit() {
+		// Wait for any instance work to be finished
+		while ( this->StatusGetFlag(CircuitStatusFlag::BUSY) );
+
+		this->StatusSetFlag(CircuitStatusFlag::BUSY);
+
+		// If it was previously created or a tentative was in place, tear down the previous.
+		if ( this->StatusGetFlag(CircuitStatusFlag::BUILT) || this->StatusGetFlag(CircuitStatusFlag::BUILDING) ) {
+			this->TearDown();
+		}
+
+		if (!this->StatusGetFlag(CircuitStatusFlag::CLOSED)) {
+			this->TearDown();
+		}
+
+		if (this->sClient != nullptr) {
+			// close connetion if active
+			if (this->sClient->IsConnected())
+				this->sClient->Disconnect();
+			this->sClient.reset();
+		}
+
+		if (this->guardNode != nullptr) this->guardNode.reset();
+		if (this->middleNode != nullptr) this->middleNode.reset();
+		if (this->exitNode != nullptr) this->exitNode.reset();
+		if (this->relaySearcher != nullptr) this->relaySearcher.reset();
+
+		this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
+	}
+
 	void BriandTorCircuit::Cleanup() {
+
+		this->StatusSetFlag(CircuitStatusFlag::BUSY);
+
 		if (this->relaySearcher != nullptr) this->relaySearcher.reset();
 		if (this->sClient != nullptr) {
 			// close connetion if active
@@ -33,11 +159,7 @@ namespace Briand {
 		
 		this->CURRENT_STREAM_ID = 0;
 
-		this->isBuilt = false;
-		this->isClean = false;
-		this->isClosed = true;
-		this->isClosing = false;
-		this->isCreating = false;
+		this->StatusResetTo(CircuitStatusFlag::CLOSED);
 	}
 
 	bool BriandTorCircuit::FindAndPopulateRelay(const unsigned char& relayType) {
@@ -572,72 +694,21 @@ namespace Briand {
 		return true;
 	}
 
-	BriandTorCircuit::BriandTorCircuit() {
-		this->guardNode = nullptr;
-		this->middleNode = nullptr;
-		this->exitNode = nullptr;
-		this->relaySearcher = nullptr;
-
-		this->isBuilt = false;
-		this->isCreating = false;
-		this->isClean = false;
-		this->isClosing = false;
-		this->isClosed = false;
-		this->createdOn = 0;
-
-		this->CIRCID = 0;
-		this->LINKPROTOCOLVERSION = 0;
-		this->CURRENT_STREAM_ID = 0;
-		this->isBusy = false;
-		this->internalID = -1;
-		this->paddingSent = 0;
-
-		this->sClient = nullptr;
-	}
-
-	BriandTorCircuit::~BriandTorCircuit() {
-		// If it was previously created or a tentative was in place, tear down the previous.
-		if ( (this->isCreating || this->isBuilt) && !(this->isClosed || this->isClosing) ) {
-			this->TearDown();
-		}
-
-		if (!this->isClosed) {
-			this->TearDown();
-		}
-
-		if (this->sClient != nullptr) {
-			// close connetion if active
-			if (this->sClient->IsConnected())
-				this->sClient->Disconnect();
-			this->sClient.reset();
-		}
-
-		if (this->guardNode != nullptr) this->guardNode.reset();
-		if (this->middleNode != nullptr) this->middleNode.reset();
-		if (this->exitNode != nullptr) this->exitNode.reset();
-		if (this->relaySearcher != nullptr) this->relaySearcher.reset();
-	}
-
 	bool BriandTorCircuit::BuildCircuit(bool forceTorCacheRefresh /* = false*/) {
 		// If it was previously created or a tentative was in place, tear down the previous.
-		if ( (this->isCreating || this->isBuilt) && !(this->isClosed || this->isClosing) ) {
+		if ( (this->StatusGetFlag(CircuitStatusFlag::BUILT) || this->StatusGetFlag(CircuitStatusFlag::BUILDING)) && !this->StatusGetFlag(CircuitStatusFlag::CLOSING) ) {
 			this->TearDown();
 		}
 
-		if (forceTorCacheRefresh) {
-			auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
-			relaySearcher->InvalidateCache(true); // invalidate and rebuild the cache
-		}
-
-		// Refresh
-		this->isBuilt = false;
-		this->isClean = false;
-		this->isClosed = true;
-		this->isClosing = false;
-		this->isCreating = false;
+		// Set circuit busy (long work!)
+		this->StatusResetTo(CircuitStatusFlag::BUSY);
 		
 		// Prepare for search
 		this->relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
+
+		if (forceTorCacheRefresh) {
+			relaySearcher->InvalidateCache(true); // invalidate and rebuild the cache
+		}
 
 		// Search for nodes to build a path: 
 		// may take time due to request/response time plus delays (needed in order to keep safe ESP32 watchdog!)
@@ -659,19 +730,31 @@ namespace Briand {
 
 		ESP_LOGD(LOGTAG, "[DEBUG] Starting relay search.\n");
 
-		if (!this->FindAndPopulateRelay(0)) return false; // GUARD
+		// GUARD
+		if (!this->FindAndPopulateRelay(0)) { 
+			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
+			return false;  
+		}
 
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) this->guardNode->PrintRelayInfo();
 
 		ESP_LOGD(LOGTAG, "[DEBUG] Starting relay search for middle node.\n");
 		
-		if (!this->FindAndPopulateRelay(1)) return false; // MIDDLE
+		// MIDDLE
+		if (!this->FindAndPopulateRelay(1)) { 
+			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
+			return false;  
+		} 
 
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) this->middleNode->PrintRelayInfo();
 		
 		ESP_LOGD(LOGTAG, "[DEBUG] Starting relay search for exit node.\n");
 
-		if (!this->FindAndPopulateRelay(2)) return false; // EXIT
+		// EXIT
+		if (!this->FindAndPopulateRelay(2)) { 
+			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
+			return false;  
+		} 
 
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) this->exitNode->PrintRelayInfo();
 
@@ -681,7 +764,7 @@ namespace Briand {
 		this->relaySearcher.reset();
 
 		// The creation starts now
-		this->isCreating = true;
+		this->StatusSetFlag(CircuitStatusFlag::BUILDING);
 
 		// Now start to build the path
 
@@ -691,11 +774,6 @@ namespace Briand {
 		this->sClient->SetVerbose(false);
 		this->sClient->SetID(this->internalID);
 		this->sClient->SetTimeout(NET_CONNECT_TIMEOUT_S, NET_IO_TIMEOUT_S);
-
-		// TODO : find a way to validate requests.
-		// Not providing a CACert will be a leak of security but hard-coding has disadvantages...
-
-		//this->sClient->setInsecure();
 
 		// Connect to GUARD
 
@@ -715,6 +793,7 @@ namespace Briand {
 
 		if (!stepDone) {
 			ESP_LOGD(LOGTAG, "[DEBUG] Failed to conclude InProtocol with guard.\n");
+			this->Cleanup();
 			return false;
 		}
 
@@ -723,6 +802,7 @@ namespace Briand {
 
 		if (this->guardNode->certRSAEd25519CrossCertificate == nullptr) {
 			ESP_LOGD(LOGTAG, "[DEBUG] The guard is missing the Ed25519 identity certificate so a CREATE2 is impossible.\n");
+			this->Cleanup();
 			return false;
 		}
 
@@ -761,7 +841,6 @@ namespace Briand {
 
 		if (!stepDone) {
 			ESP_LOGD(LOGTAG, "[DEBUG] Failed to conclude CREATE2 with guard.\n");
-			this->isCreating = false;
 			this->TearDown();
 			return false;
 		}
@@ -774,7 +853,6 @@ namespace Briand {
 
 		if (!stepDone) {
 			ESP_LOGD(LOGTAG, "[DEBUG] Failed to conclude EXTEND2 with middle node.\n");
-			this->isCreating = false;
 			this->TearDown();
 			return false;
 		}
@@ -787,7 +865,6 @@ namespace Briand {
 
 		if (!stepDone) {
 			ESP_LOGD(LOGTAG, "[DEBUG] Failed to conclude EXTEND2 with exit node.\n");
-			this->isCreating = false;
 			this->TearDown();
 			return false;
 		}
@@ -798,12 +875,9 @@ namespace Briand {
 
 		// Circuit is now OK!
 
-		this->isBuilt = true;
-		this->isClean = true;
-
-		this->isCreating = false;
-		this->isClosed = false;
-		this->isClosing = false;
+		this->StatusResetTo(CircuitStatusFlag::BUILT);
+		this->StatusSetFlag(CircuitStatusFlag::STREAM_READY);
+		this->StatusSetFlag(CircuitStatusFlag::CLEAN);
 		
 		this->createdOn = BriandUtils::GetUnixTime();
 
@@ -812,25 +886,17 @@ namespace Briand {
 		return true;
 	}
 
-	bool BriandTorCircuit::IsCircuitReadyToStream() {
-		return this->isBuilt && !this->isClosed && !this->isClosing;
-	}
-
 	bool BriandTorCircuit::TorStreamWriteData(const BriandTorCellRelayCommand& command, const unique_ptr<vector<unsigned char>>& data) {
 		// Circuit must be ready to stream
-		if (!this->isClean) this->isClean = false;
+		this->StatusUnsetFlag(CircuitStatusFlag::CLEAN);
 
-		this->isBusy = true;
-
-		if (!this->IsCircuitReadyToStream()) {
+		if (!this->StatusGetFlag(CircuitStatusFlag::STREAM_READY)) {
 			ESP_LOGW(LOGTAG, "[ERR] TorStreamWriteData called but circuit is not built and ready to stream.\n");
-			this->isBusy = false;
 			return false;
 		}
 
 		if (data == nullptr) {
 			ESP_LOGW(LOGTAG, "[ERR] TorStreamWriteData called with NULL request payload.\n");
-			this->isBusy = false;
 			return false;
 		}
 
@@ -840,7 +906,6 @@ namespace Briand {
 		// Add the payload and prepare the cell
 		if (!tempCell->AppendBytesToPayload(*data.get())) {
 			ESP_LOGW(LOGTAG, "[ERR] TorStreamWriteData called with too large payload.\n");
-			this->isBusy = false;
 			return false;
 		}
 
@@ -856,21 +921,15 @@ namespace Briand {
 		// Send cell but and do not wait any answer.
 		tempCell->SendCell(this->sClient, false, false);
 
-		// Not busy anymore
-		this->isBusy = false;
-
 		return true;
 	}
 
 	unique_ptr<BriandTorCell> BriandTorCircuit::TorStreamReadData() {
 		// Circuit must be ready to stream
-		if (!this->isClean) this->isClean = false;
+		this->StatusUnsetFlag(CircuitStatusFlag::CLEAN);
 
-		this->isBusy = true;
-
-		if (!this->IsCircuitReadyToStream()) {
+		if (!this->StatusGetFlag(CircuitStatusFlag::STREAM_READY)) {
 			ESP_LOGW(LOGTAG, "[ERR] TorStreamReadData called but circuit is not built and ready to stream.\n");
-			this->isBusy = false;
 			return nullptr;
 		}
 
@@ -884,14 +943,12 @@ namespace Briand {
 
 		if (!tempCell->BuildFromBuffer(tempData, this->LINKPROTOCOLVERSION)) {
 			ESP_LOGW(LOGTAG, "[ERR] TorStreamReadData error, response cell had invalid bytes (failed to build from buffer).\n");
-			this->isBusy = false;
 			return nullptr;
 		}
 
 		// If cell does not belong to this circuit, ignore it.
 		if (tempCell->GetCircID() != this->CIRCID) {
 			ESP_LOGD(LOGTAG, "[DEBUG] TorStreamReadData received a cell with a different CircID (this is %08X, received %08X), ignoring.\n", this->CIRCID, tempCell->GetCircID());
-			this->isBusy = false;
 			return std::move(tempCell);
 		}
 
@@ -900,7 +957,6 @@ namespace Briand {
 			ESP_LOGW(LOGTAG, "[ERR] TorStreamReadData error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
 			this->TearDown();
 			this->Cleanup();
-			this->isBusy = false;
 			return std::move(tempCell);
 		}
 
@@ -922,8 +978,6 @@ namespace Briand {
 
 				ESP_LOGW(LOGTAG, "[ERR] TorStreamReadData error, received unexpected cell from guard node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
 
-				this->isBusy = false;
-
 				return std::move(tempCell);					
 			}
 
@@ -940,8 +994,6 @@ namespace Briand {
 				}
 
 				ESP_LOGW(LOGTAG, "[ERR] TorStream error, received unexpected cell from middle node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
-				
-				this->isBusy = false;
 
 				return std::move(tempCell);					
 			}
@@ -957,8 +1009,6 @@ namespace Briand {
 				}
 
 				ESP_LOGW(LOGTAG, "[ERR] TorStream error, unrecognized cell from exit node.\n");
-				
-				this->isBusy = false;
 
 				return nullptr;
 			}
@@ -966,27 +1016,26 @@ namespace Briand {
 			// Here cell is recognized, build informations (decrypted payload etc.)
 			if (!tempCell->BuildRelayCellFromPayload(this->exitNode->KEY_BackwardDigest_Db)) {
 				ESP_LOGW(LOGTAG, "[ERR] TorStreamReadData error on rebuilding RELAY cell informations from exit node, invalid response cell.\n");
-				this->isBusy = false;
-
 				return nullptr;
 			}		
 		}
 
 		tempData.reset();
 		ESP_LOGD(LOGTAG, "[DEBUG] TorStreamReadData success.\n");
-		this->isBusy = false;
 
 		return std::move(tempCell);
 	}
 
 	unique_ptr<vector<unsigned char>> BriandTorCircuit::TorStreamSingle(const BriandTorCellRelayCommand& command, const unique_ptr<vector<unsigned char>>& requestPayload, const BriandTorCellRelayCommand& waitFor) {
 		unique_ptr<vector<unsigned char>> response = nullptr;
+
+		// Set circuit busy
+		this->StatusSetFlag(CircuitStatusFlag::BUSY);
 		
 		// Write data
 		if (!this->TorStreamWriteData(command, requestPayload)) {
 			ESP_LOGW(LOGTAG, "[ERR] TorStreamSingle error on writing request.\n");
-			this->isBusy = false;
-
+			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 			return response;
 		}
 
@@ -997,13 +1046,14 @@ namespace Briand {
 			// If nullptr => error
 			if (readCell == nullptr) {
 				ESP_LOGW(LOGTAG, "[ERR] TorStreamSingle error on reading response cell.\n");
-				this->isBusy = false;
+				this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 				return response;
 			}
 
 			// If PADDING cell or CIRCID not matching, ignore it.
 			if (readCell->GetCircID() != this->CIRCID || readCell->GetCommand() == BriandTorCellCommand::PADDING) {
 				ESP_LOGD(LOGTAG, "[DEBUG] TorStreamSingle ignoring cell.\n");
+				this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 				continue;
 			}
 
@@ -1012,13 +1062,14 @@ namespace Briand {
 				ESP_LOGW(LOGTAG, "[WARN] TorStreamRead received a non-matching StreamID (current: %04X received: %04X) Destroy with protocol violation.\n", this->CURRENT_STREAM_ID, readCell->GetStreamID());
 				this->TearDown();
 				this->Cleanup();
-				this->isBusy = false;
 				return response;
 			}
 
 			// If DESTROY, return error.
 			if (readCell->GetCommand() == BriandTorCellCommand::DESTROY) {
 				ESP_LOGW(LOGTAG, "[WARN] TorStreamSingle received circuit DESTROY.\n");
+				this->TearDown();
+				this->Cleanup();
 				return response;
 			}
 
@@ -1029,6 +1080,7 @@ namespace Briand {
 				if (readCell->GetRelayCommand() == BriandTorCellRelayCommand::RELAY_TRUNCATE || readCell->GetRelayCommand() == BriandTorCellRelayCommand::RELAY_TRUNCATED) 
 				{
 					ESP_LOGW(LOGTAG, "[WARN] TorStreamSingle received RELAY_TRUNCATE / RELAY_TRUNCATED.\n");
+					this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 					return response;
 				}
 
@@ -1039,10 +1091,9 @@ namespace Briand {
 						readCell->PrintCellPayloadToSerial();
 					}
 					
-					ESP_LOGW(LOGTAG, "[ERR] TorStreamSingle failed, received unexpected cell from exit node: %s.", BriandUtils::BriandTorRelayCellCommandToString(readCell->GetRelayCommand()).c_str());
+					ESP_LOGW(LOGTAG, "[ERR] TorStreamSingle failed, received unexpected cell from exit node: %s.\n", BriandUtils::BriandTorRelayCellCommandToString(readCell->GetRelayCommand()).c_str());
 
-					this->isBusy = false;
-
+					this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 					return response;
 				}
 
@@ -1060,14 +1111,28 @@ namespace Briand {
 
 		} while (response == nullptr);
 
-		this->isBusy = false;
+		// Unmark busy
+		this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 
 		return response;
 	}
 
 	const in_addr BriandTorCircuit::TorResolve(const string& hostname) {
+		// Mark busy
+		this->StatusSetFlag(CircuitStatusFlag::BUSY);
+
 		in_addr resolved;
 		bzero(&resolved, sizeof(resolved));
+
+		// Circuit must be ready to stream
+		if (this->StatusGetFlag(CircuitStatusFlag::STREAMING) || !this->StatusGetFlag(CircuitStatusFlag::STREAM_READY)) {
+			ESP_LOGW(LOGTAG, "[WARN] TorStreamStart error: circuit still streaming or not ready to stream.\n");
+			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
+			return resolved;
+		}
+
+		// Mark streaming
+		this->StatusSetFlag(CircuitStatusFlag::STREAMING);
 
 		/*
 			To find the address associated with a hostname, the OP sends a
@@ -1091,6 +1156,8 @@ namespace Briand {
 		auto response = this->TorStreamSingle(BriandTorCellRelayCommand::RELAY_RESOLVE, requestPayload, BriandTorCellRelayCommand::RELAY_RESOLVED);
 		if (response == nullptr) {
 			ESP_LOGW(LOGTAG, "[ERR] TorResolve error, failure on streaming tor request.\n");
+			this->StatusUnsetFlag(CircuitStatusFlag::STREAMING);
+			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 			return resolved;
 		}
 
@@ -1125,6 +1192,8 @@ namespace Briand {
 			if (type == 0xF0 || type == 0xF1) {
 				// Error.
 				ESP_LOGW(LOGTAG, "[ERR] TorResolve: host could not be resolved, error code = %02X\n", type);
+				this->StatusUnsetFlag(CircuitStatusFlag::STREAMING);
+				this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 				return resolved;
 			}
 			else if (type != 0x04) {
@@ -1146,13 +1215,20 @@ namespace Briand {
 			printf("[DEBUG] Found IPv4 address: 0x%08X / %s\n", resolved.s_addr, BriandUtils::ipv4ToString(resolved).c_str());
 		}
 
+		this->StatusUnsetFlag(CircuitStatusFlag::STREAMING);
+		this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
+
 		return resolved;
 	}
 
 	bool BriandTorCircuit::TorStreamStart(const string& hostname, const short& port) {
+		// Mark busy
+		this->StatusSetFlag(CircuitStatusFlag::BUSY);
+
 		// If circuit is busy or not ready to stream, error
-		if (this->IsCircuitBusy() || !this->IsCircuitReadyToStream()) {
-			ESP_LOGW(LOGTAG, "[WARN] TorStreamStart error: circuit busy or not ready to stream.\n");
+		if (this->StatusGetFlag(CircuitStatusFlag::STREAMING) || !this->StatusGetFlag(CircuitStatusFlag::STREAM_READY)) {
+			ESP_LOGW(LOGTAG, "[WARN] TorStreamStart error: circuit still streaming or not ready to stream.\n");
+			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 			return false;
 		}
 
@@ -1218,13 +1294,15 @@ namespace Briand {
 
 		if (response == nullptr) {
 			ESP_LOGW(LOGTAG, "[WARN] TorStreamStart error: cannot connect to required destination.\n");
+			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 			return false;
 		}
 
 		ESP_LOGD(LOGTAG, "[DEBUG] TorStreamStart success.\n");
 
-		// If success, keep the circuit BUSY
-		this->isBusy = true;
+		// If success, circuit in streaming!
+		this->StatusSetFlag(CircuitStatusFlag::STREAMING);
+		this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 
 		return true;
 	}
@@ -1235,9 +1313,12 @@ namespace Briand {
 	}
 
 	void BriandTorCircuit::TorStreamSend(const unique_ptr<vector<unsigned char>>& data, bool& sent) {
-		// Circuit here SHOULD be busy from a previous TorStreamStart()
-		if (!this->IsCircuitBusy() || !this->IsCircuitReadyToStream()) {
-			ESP_LOGW(LOGTAG, "[WARN] TorStreamStart error: circuit not busy (missing TorStreamStart()?) or not ready to stream.\n");
+		// Mark busy
+		this->StatusSetFlag(CircuitStatusFlag::BUSY);
+
+		// Circuit here SHOULD be streaming from a previous TorStreamStart()
+		if (!this->StatusGetFlag(CircuitStatusFlag::STREAM_READY) || !this->StatusGetFlag(CircuitStatusFlag::STREAMING)) {
+			ESP_LOGW(LOGTAG, "[WARN] TorStreamStart error: circuit not streaming (missing TorStreamStart()? not built?).\n");
 			sent = false;
 			return;
 		}
@@ -1246,24 +1327,28 @@ namespace Briand {
 
 		sent = this->TorStreamWriteData(BriandTorCellRelayCommand::RELAY_DATA, data);
 
-		// Keep the circuit BUSY
-		this->isBusy = true;
+		this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 	}
 
 	bool BriandTorCircuit::TorStreamRead(unique_ptr<vector<unsigned char>>& buffer, bool& finished) {
+		// Mark busy
+		this->StatusSetFlag(CircuitStatusFlag::BUSY);
+
 		finished = false;
 
 		// Buffer must be instanced
 		if (buffer == nullptr) {
 			ESP_LOGE(LOGTAG, "[ERR] TorStreamRead error: buffer argument is not instanced!\n");
 			finished = true;
+			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 			return false;
 		}
 
-		// Circuit here SHOULD be busy from a previous TorStreamStart()
-		if (!this->IsCircuitBusy() || !this->IsCircuitReadyToStream()) {
-			ESP_LOGW(LOGTAG, "[WARN] TorStreamRead error: circuit not busy (missing TorStreamStart()?) or not ready to stream.\n");
+		// Circuit here SHOULD be streaming from a previous TorStreamStart()
+		if (!this->StatusGetFlag(CircuitStatusFlag::STREAM_READY) || !this->StatusGetFlag(CircuitStatusFlag::STREAMING)) {
+			ESP_LOGW(LOGTAG, "[WARN] TorStreamRead error: circuit not streaming (missing TorStreamStart()? not built?).\n");
 			finished = true;
+			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 			return false;
 		}
 
@@ -1274,12 +1359,14 @@ namespace Briand {
 			// If nullptr => error
 			if (readCell == nullptr) {
 				ESP_LOGW(LOGTAG, "[ERR] TorStreamRead error on reading response cell.\n");
+				this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 				return false;
 			}
 
 			// If PADDING cell or CIRCID not matching, ignore it.
 			if (readCell->GetCircID() != this->CIRCID || readCell->GetCommand() == BriandTorCellCommand::PADDING) {
 				ESP_LOGD(LOGTAG, "[DEBUG] TorStreamRead ignoring cell.\n");
+				this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 				continue;
 			}
 
@@ -1287,6 +1374,8 @@ namespace Briand {
 			if (readCell->GetCommand() == BriandTorCellCommand::DESTROY) {
 				ESP_LOGW(LOGTAG, "[WARN] TorStreamRead received circuit DESTROY.\n");
 				finished = true;
+				this->TearDown();
+				this->Cleanup();
 				return false;
 			}
 
@@ -1298,6 +1387,7 @@ namespace Briand {
 				{
 					ESP_LOGW(LOGTAG, "[WARN] TorStreamRead received RELAY_TRUNCATE / RELAY_TRUNCATED.\n");
 					finished = true;
+					this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 					return false;
 				}
 
@@ -1307,7 +1397,6 @@ namespace Briand {
 					finished = true;
 					this->TearDown();
 					this->Cleanup();
-					this->isBusy = false;
 					return false;
 				}
 
@@ -1315,6 +1404,7 @@ namespace Briand {
 				if (readCell->GetRelayCommand() == BriandTorCellRelayCommand::RELAY_END) {
 					ESP_LOGD(LOGTAG, "[DEBUG] TorStreamRead received RELAY_END. Finished.\n");
 					finished = true;
+					this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 					// Exit cycle
 					break; 
 				}
@@ -1330,6 +1420,7 @@ namespace Briand {
 					}
 
 					finished = true;
+					this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 					return false;
 				}
 
@@ -1346,16 +1437,17 @@ namespace Briand {
 			}
 		} 
 		
-		// If success, keep the circuit BUSY
-		this->isBusy = true;
+		// If success, keep the circuit STREAMING
+		this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 
 		return true;
 	}
 
 	bool BriandTorCircuit::TorStreamEnd() {
-		// In each case, mark circuit as NOT BUSY
-		this->isBusy = false;
-
+		// In each case, mark circuit as NOT STREAMING anymore
+		this->StatusUnsetFlag(CircuitStatusFlag::STREAMING);
+		
+		
 		// Send a single cell with reason REASON_MISC (see tor specs 6.3)
 		// Tors SHOULD NOT send any reason except REASON_MISC for a stream that they have originated.
 
@@ -1369,9 +1461,16 @@ namespace Briand {
 	}
 
 	void BriandTorCircuit::SendPadding() {
-		if (this->isBuilt && !this->isBusy && !this->isClosed && !this->isClosing)  {
+		if (this->StatusGetFlag(CircuitStatusFlag::BUILT) && 
+			!this->StatusGetFlag(CircuitStatusFlag::BUSY) && 
+			!this->StatusGetFlag(CircuitStatusFlag::CLOSED) && 
+			!this->StatusGetFlag(CircuitStatusFlag::CLOSING) &&
+			!this->StatusGetFlag(CircuitStatusFlag::STREAMING))  
+		{
+			this->StatusSetFlag(CircuitStatusFlag::BUSY);
 			auto tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
 			auto noBuf = tempCell->SendCell(this->sClient, false, false);
+			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 			ESP_LOGD(LOGTAG, "[DEBUG] PADDING cell sent through circuit.\n");
 			this->paddingSent++;
 		}
@@ -1381,7 +1480,8 @@ namespace Briand {
 	}
 
 	void BriandTorCircuit::TearDown(BriandTorDestroyReason reason /*  = BriandTorDestroyReason::NONE */) {
-		this->isClosing = true;
+		this->StatusSetFlag(CircuitStatusFlag::CLOSING);
+		this->StatusSetFlag(CircuitStatusFlag::BUSY);
 
 		/*
 			To tear down a circuit completely, an OR or OP sends a DESTROY
@@ -1414,7 +1514,7 @@ namespace Briand {
 				12 -- NOSUCHSERVICE   (Request for unknown hidden service)
 		*/
 
-		if (this->sClient != nullptr && this->sClient->IsConnected() && (this->isBuilt || this->isCreating) && !this->isClosed) {
+		if (this->sClient != nullptr && this->sClient->IsConnected()) {
 			ESP_LOGD(LOGTAG, "[DEBUG] Sending DESTROY cell to Guard with reason %u\n", static_cast<unsigned char>(reason));
 
 			auto tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::DESTROY);
@@ -1435,38 +1535,18 @@ namespace Briand {
 
 		// However, always reset values to avoid misunderstandings
 		// after calling this function
-		this->isClosing = false;
-		this->isCreating = false;
-		this->isClean = false;
-		this->isBuilt = false;
-		this->isClosed = true;
+		this->StatusResetTo(CircuitStatusFlag::CLOSED);
 		this->paddingSent = 0;
 	}
 
 	void BriandTorCircuit::PrintCircuitInfo() {
-		if (this->isBuilt && !(this->isClosing || this->isClosed)) {
+		if (this->StatusGetFlag(CircuitStatusFlag::BUILT) && !(this->StatusGetFlag(CircuitStatusFlag::CLOSED) || this->StatusGetFlag(CircuitStatusFlag::CLOSING))) {
 			printf("[INFO] Circuit with ID %08X is operative since Unix time %lu.\n", this->CIRCID, this->createdOn);
 			printf("[INFO] You <----> G[%s] <----> M[%s] <----> E[%s] <----> Web\n", this->guardNode->nickname->c_str(), this->middleNode->nickname->c_str(), this->exitNode->nickname->c_str());
 		}
 		else {
 			printf("[INFO] Circuit is not built, closed or in closing.\n");
 		}
-	}
-
-	bool BriandTorCircuit::IsCircuitBuilt() {
-		return this->isBuilt;
-	}
-
-	bool BriandTorCircuit::IsCircuitCreating() {
-		return this->isCreating;
-	}
-
-	bool BriandTorCircuit::IsCircuitBusy() {
-		return this->isBusy;
-	}
-
-	bool BriandTorCircuit::IsCircuitClosingOrClosed() {
-		return this->isClosed || this->isClosing;
 	}
 
 	unsigned long int BriandTorCircuit::GetCreatedOn() {

@@ -3,6 +3,7 @@ Briand's project to turn an ESP32 into a Tor client "plug&amp;play"
 
 ## Development status
 
+* 07/2021 With updated [library](https://www.github.com/briand-hub/LibBriandIDF) and small modifications now this project can work both on ESP32 and Linux systems (see details below)
 * 07/2021 Working with multiple circuits (managed asynchronously): connection, hostname resolution
 * 05/2021 Switching to IDF Framework completed and obtained the first working circuit!
 * 04/2021 At the moment just a non-working draft!
@@ -31,6 +32,68 @@ The code will implement the **current** last specifications and will not support
 
 ## Dev environment
 Project is built with VSCode and PlatformIO on WEMOS LOLIND32 platform and Espressif IDF 4.3 framework.
+
+## Linux Porting
+
+Debugging and testing in ESP32 could be a very hard task. So I defined the needed IDF functions to my base [library](https://www.github.com/briand-hub/LibBriandIDF) and made the project easy to compile and debug on Linux systems (Using Debian 10.0 Buster)
+
+### Requirements
+
+* gcc/g++ with version greater than 8.4 
+* MbedTLS Library (*sudo apt install libmbedtls-dev*)
+* Sodium Library (*sudo apt install libsodium-dev*)
+* LibBriandIDF (see below)
+
+## Building project
+
+### ESP32 Environment: PlatformIO and VSCode
+
+Simply open the project with PlatformIO in VSCode, then use Build or Upload and Monitor menu. The required libraries should be automatically downloaded and installed.
+
+### Linux Environment
+
+First, clone the repo:
+
+```bash
+$ git clone https://github.com/briand-hub/toresp32
+```
+
+Install required libraries and switch the path to project root:
+
+```bash
+$ sudo apt install libsodium-dev libmbedtls-dev
+$ cd toresp32
+```
+
+Then just clone the LibBriandIDF repo in the default path, like PlatformIO would do:
+
+```bash
+toresp32$ mkdir .pio
+toresp32$ mkdir .pio/libdeps
+toresp32$ mkdir .pio/libdeps/lolin_d32
+toresp32$ cd .pio/libdeps/lolin_d32
+toresp32/.pio/libdeps/lolin_d32$ git clone https://github.com/briand-hub/LibBriandIDF
+```
+
+Ready to build, use:
+
+```bash
+toresp32$ make
+```
+
+To execute:
+
+```bash
+toresp32$ ./main_linux_exe
+```
+
+To debug with valgrind:
+
+```bash
+toresp32$ sudo apt install valgrind
+toresp32$ make
+toresp32$ valgrind ./main_linux_exe
+```
 
 ## Challenges
 

@@ -837,16 +837,11 @@ namespace Briand {
 
 		// Calculate the digest and update relay's digest forward field
 		auto digest = BriandTorCryptoUtils::GetRelayCellDigest(digestForward, this->Payload);
-		
-		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
-			printf("[DEBUG] PrepareAsRelayCell digest is: ");
-			BriandUtils::PrintByteBuffer(*digest.get());
-		}
-		
+
 		// Save the first 4 bytes to digest field
 		for (char i = 0; i < 4; i++) {
 			this->Payload->at(i + 5) = digest->at(i);
-			this->Digest += static_cast<unsigned int>( digest->at(i) << (8*i));
+			this->Digest += static_cast<unsigned int>( digest->at(i) << (8*(3-i)));
 		}
 		
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {

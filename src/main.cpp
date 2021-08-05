@@ -292,12 +292,20 @@ void TorEsp32Main(void* taskArg) {
 				// Backspace handling
 				if (in == 8 && SERIAL_INPUT_POINTER->length() > 0) {
 					SERIAL_INPUT_POINTER->resize(SERIAL_INPUT_POINTER->length() - 1);
+
+					// Mod for linux porting (not need to echo)
+					#if defined(ESP_PLATFORM)
 					// To "show" backspace print backspace, then a space and a new backspace
 					printf("%c %c", in, in);
+					#endif
 				}
 				else if (in != 8) {
 					SERIAL_INPUT_POINTER->push_back(in);
+
+					// Mod for linux porting (not need to echo)
+					#if defined(ESP_PLATFORM)
 					printf("%c", in);
+					#endif
 				}
 			}
 			else if (in == 13 || in == 10) {

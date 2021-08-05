@@ -32,15 +32,25 @@ namespace Briand {
 	 * This class manage a single Tor circuit 
 	*/
 	class BriandTorCircuit {
+		private:
+
+		/** This is the circuit general status flag mask 
+		 * The status can be managed by all extensions but
+		 * it is mandatory to set as BUSY at the beginning of each public method
+		 * and reset to not busy when returning. This will prevent tasks or threads
+		 * to kill an operation (networking operation) still executing.
+		*/
+		unsigned short CIRCUIT_STATUS;
+
 		protected:
 
 		unique_ptr<Briand::BriandTorRelaySearcher> relaySearcher;
-		bool isBuilt;						// has been built
-		bool isCreating;					// true after calling BuildCircuit()
-		bool isClean; 						// not used for any traffic
-		bool isClosing;						// it is currently closing
-		bool isClosed;						// it is closed (call destroyer and free RAM!!)
-		bool isBusy;						// Flag (currently streaming / doing something)
+		//bool isBuilt;						// has been built
+		//bool isCreating;					// true after calling BuildCircuit()
+		//bool isClean; 						// not used for any traffic
+		//bool isClosing;						// it is currently closing
+		//bool isClosed;						// it is closed (call destroyer and free RAM!!)
+		//bool isBusy;						// Flag (currently streaming / doing something)
 		unsigned long int createdOn;		// create timestamp
 		unsigned long int paddingSent;		// no. of padding cells sent
 
@@ -87,6 +97,23 @@ namespace Briand {
 		bool Extend2(bool exitNode);
 
 		public:
+
+		/**
+		 * Flags to manage circuit status
+		*/
+		enum CircuitStatusFlag : unsigned short {
+			NONE = 			0b0000000000000000, /** No status at all, just instanced */
+			BUSY = 			0b0000000000000001,	/** Busy circuit, doing something */
+			BUILDING = 		0b0000000000000010, /** Doing build */
+			BUILT = 		0b0000000000000100, /** Built */
+			STREAM_READY = 	0b0000000000001000, /** Ready to stream */
+			STREAMING = 	0b0000000000010000, /** Busy in streaming (after relay_begin, before relay_end) */
+			CLOSING = 		0b0000000000100000, /** Is going to be closed */
+			CLOSED = 		0b0000000001000000, /** Has been closed */
+			/* ...other flags here... */
+			CLEAN = 		0b0100000000000000, /** Clean, never used for any stream cell */
+			DIRT = 			0b1000000000000000, /** Dirt, INSTANCE has been used at least once */
+		};
 		
 		/** An internal additional ID, use as you wish (used by CircuitsManager class) */
 		unsigned short internalID;
@@ -110,14 +137,9 @@ namespace Briand {
 		bool BuildCircuit(bool forceTorCacheRefresh = false);
 
 		/**
-		 * Method returns true if circuit is ready for stream cells
-		 * @return true if circuit is built, ready, valid and not closing.
-		*/
-		bool IsCircuitReadyToStream();
-
-		/**
 		 * Method streams a single cell forward, ignores PADDING cells. 
-		 * StreamID must be prepared (incremented) BEFORE calling this method and a TorStreamStart() must be called BEFORE.
+		 * StreamID must be prepared (incremented) BEFORE calling this method.
+		 * Will not check RELAY_BEGIN sent, and will NOT set/unset BUSY flag.
 		 * @param command The RELAY command 
 		 * @param data The payload to stream
 		 * @return true if sent with success, false if error.
@@ -126,6 +148,7 @@ namespace Briand {
 
 		/**
 		 * Method reads a single backward, ignores PADDING cells. 
+		 * Will not check RELAY_BEGIN sent, and will NOT set/unset BUSY flag.
 		 * @return Pointer to the read cell. Nullptr if error occours.
 		*/
 		unique_ptr<BriandTorCell> TorStreamReadData();
@@ -133,6 +156,7 @@ namespace Briand {
 		/**
 		 * Method streams a single cell through an operative circuit and waits for the expected RELAY command response
 		 * or error (RELAY_END, DESTROY), ignores PADDING cells. StreamID must be prepared (incremented) BEFORE calling this method.
+		 * Will not check RELAY_BEGIN sent, and will set/unset BUSY flag.
 		 * @param command The RELAY command 
 		 * @param requestPayload The payload to stream
 		 * @param waitFor The command to wait for 
@@ -195,33 +219,6 @@ namespace Briand {
 		*/
 		void TearDown(BriandTorDestroyReason reason = BriandTorDestroyReason::NONE);
 
-		/** Prints the circuit informations to serial. Verbose mode only */
-		void PrintCircuitInfo();
-
-		/**
-		 * Returns the relative flag
-		 * @return flag status
-		*/
-		bool IsCircuitBuilt();
-
-		/**
-		 * Returns the relative flag
-		 * @return flag status
-		*/
-		bool IsCircuitCreating();
-
-		/**
-		 * Returns the relative flags
-		 * @return flags status
-		*/
-		bool IsCircuitClosingOrClosed();
-
-		/**
-		 * Returns the relative flag
-		 * @return flag status
-		*/
-		bool IsCircuitBusy();
-
 		/**
 		 * Method returns unix timestamp since circuit creation
 		 * @return Unix timestamp since circuit readyness
@@ -239,5 +236,45 @@ namespace Briand {
 		 * @return Current count of PADDING cells sent
 		*/
 		unsigned long int GetSentPadding();
+
+		/** Prints the circuit informations to serial. Verbose mode only */
+		void PrintCircuitInfo();
+
+		/** 
+		 * Set the status flag to 0 
+		 * @param flag Flag to set to 1
+		*/
+		void StatusSetFlag(const CircuitStatusFlag& flag);
+
+		/** 
+		 * Set the status flag to 0 
+		 * @param flag Flag to set to 0 
+		*/
+		void StatusUnsetFlag(const CircuitStatusFlag& flag);
+
+		/** 
+		 * Set the status to zero then adds the given flag 
+		 * @param flag Flag to set (unique) 
+		*/
+		void StatusResetTo(const CircuitStatusFlag& flag);
+
+		/**
+		 * Returns the status of a status flag
+		 * @return true if set, false otherwise
+		*/
+		bool StatusGetFlag(const CircuitStatusFlag& flag);
+
+		/**
+		 * Returns true if the instance is doing something
+		 * @return true if busy, false otherwise
+		*/
+		bool IsInstanceBusy();
+
+		/**
+		 * Methods return a string with all status flags separeted by comma (DIRT,BUSY,BUILDING)
+		 * @return string with status
+		*/
+		string StatusGetString();
+		
 	};
 }

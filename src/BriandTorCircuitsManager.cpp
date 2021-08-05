@@ -73,8 +73,14 @@ namespace Briand
                         BriandTorCircuitsManager::CIRCUITS[i]->internalID = i;
                     }
                     
-                    // A new circuit to be built?
-                    if (!BriandTorCircuitsManager::CIRCUITS[i]->IsCircuitBuilt() && !BriandTorCircuitsManager::CIRCUITS[i]->IsCircuitCreating()) {
+                    // A BUSY instance must not be touched!
+                    if (BriandTorCircuitsManager::CIRCUITS[i]->StatusGetFlag(BriandTorCircuit::CircuitStatusFlag::BUSY)) {
+                        // Don't do anything.
+                    }
+                    else if (!BriandTorCircuitsManager::CIRCUITS[i]->StatusGetFlag(BriandTorCircuit::CircuitStatusFlag::BUILT) && 
+                        !BriandTorCircuitsManager::CIRCUITS[i]->StatusGetFlag(BriandTorCircuit::CircuitStatusFlag::BUILDING)) 
+                    {
+                        // A new circuit to be built
                         ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu needs to be built, building.\n", i);
 
                         // Here circuit is not built nor in creating, so build it.
@@ -84,13 +90,13 @@ namespace Briand
                         }
                     }
                     // A circuit that should be deleted?
-                    else if (BriandTorCircuitsManager::CIRCUITS[i]->IsCircuitClosingOrClosed()) {
-                        ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is closing/closed, removing from pool.\n", i);
+                    else if (BriandTorCircuitsManager::CIRCUITS[i]->StatusGetFlag(BriandTorCircuit::CircuitStatusFlag::CLOSED)) {
+                        ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is closed, removing from pool.\n", i);
                         // Reset the pointer
                         BriandTorCircuitsManager::CIRCUITS[i].reset();
                     }   
                     // Operative circuit?
-                    else if(BriandTorCircuitsManager::CIRCUITS[i]->IsCircuitBuilt()) {
+                    else if(BriandTorCircuitsManager::CIRCUITS[i]->StatusGetFlag(BriandTorCircuit::CircuitStatusFlag::BUILT)) {
                         if (BriandUtils::GetUnixTime() >= BriandTorCircuitsManager::CIRCUITS[i]->GetCreatedOn() + BriandTorCircuitsManager::CIRCUIT_MAX_TIME) {
                             // The circuit should be closed for elapsed time
                             ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu has reached maximum life time, sending destroy.\n", i);
@@ -101,7 +107,7 @@ namespace Briand
                             ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu has reached maximum requests, sending destroy.\n", i);
                             BriandTorCircuitsManager::CIRCUITS[i]->TearDown(Briand::BriandTorDestroyReason::FINISHED);
                         }
-                        else if (!BriandTorCircuitsManager::CIRCUITS[i]->IsCircuitBusy()) {
+                        else if (!BriandTorCircuitsManager::CIRCUITS[i]->StatusGetFlag(BriandTorCircuit::CircuitStatusFlag::STREAMING)) {
                             // No problems                     
                             // Send a PADDING to keep alive!
                             ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is alive and not busy, sending PADDING.\n", i);
@@ -132,13 +138,16 @@ namespace Briand
             queue = this->CIRCUIT_POOL_SIZE;
 
             for (unsigned short i=0; i<this->CIRCUIT_POOL_SIZE; i++) {
-                if (this->CIRCUITS[i] != nullptr && !this->CIRCUITS[i]->IsCircuitCreating() && !this->CIRCUITS[i]->IsCircuitBusy()) {
+                if (this->CIRCUITS[i] != nullptr && !this->CIRCUITS[i]->StatusGetFlag(BriandTorCircuit::CircuitStatusFlag::BUSY)) {
                     this->CIRCUITS[i].reset();
                 }
                 else if (this->CIRCUITS[i] == nullptr) {
                     queue--;
                 }
             }
+
+            // Little delay to prevent wdt reset on ESP32
+            vTaskDelay(200 / portTICK_PERIOD_MS);
         } while (queue > 0);
     }
 
@@ -150,7 +159,10 @@ namespace Briand
 
             if (BriandTorCircuitsManager::CIRCUITS[testedCircuits] != nullptr) {
                 auto& circuit = BriandTorCircuitsManager::CIRCUITS[testedCircuits];
-                if (circuit->IsCircuitBuilt() && !circuit->IsCircuitBusy()) {
+                if (circuit->StatusGetFlag(BriandTorCircuit::CircuitStatusFlag::BUILT) && 
+                    !circuit->StatusGetFlag(BriandTorCircuit::CircuitStatusFlag::BUSY) &&
+                    !circuit->StatusGetFlag(BriandTorCircuit::CircuitStatusFlag::STREAMING)) 
+                {
                     this->CIRCUIT_LAST_USED = circuit->internalID;
                     return circuit.get();
                 }
@@ -164,37 +176,35 @@ namespace Briand
     }
 
     void BriandTorCircuitsManager::PrintCircuitsInfo() {
-        printf("#\tStatus\t\tPaddings\tCreatedOn\tDescription\n");
+        printf("#\tStatus\t\t\t\tPaddings\tCreatedOn\tDescription\n");
         for (unsigned short i=0; i<this->CIRCUIT_POOL_SIZE; i++) {
             printf("%u\t", i);
             if (this->CIRCUITS[i] == nullptr) {
-                printf("NONE\t\t%08lu\t%08lu\tNot instanced\n", 0L, 0L);
+                printf("NONE\t\t\t\t%08lu\t%08lu\tNot instanced\n", 0L, 0L);
             }
             else {
                 auto& circuit = this->CIRCUITS[i];
-                if (circuit->IsCircuitBuilt())
-                    printf("Built\t\t");
-                else if (circuit->IsCircuitCreating())
-                    printf("Building...\t");
-                else if (circuit->IsCircuitClosingOrClosed()) 
-                    printf("Closing/Closed\t");
-                else
-                    printf("Unknown\t\t");
+
+                string circuitStatus = circuit->StatusGetString();
+                // Indent
+                while(circuitStatus.length() < 32) circuitStatus.push_back(' ');
+
+                printf("%s", circuitStatus.c_str());
 
                 printf("%08lu\t", circuit->GetSentPadding());
                 printf("%08lu\t", circuit->GetCreatedOn());
 
-                printf("You <--> ");
+                printf("You, ");
 
                 if (circuit->guardNode != nullptr && circuit->guardNode->nickname != nullptr)
-                    printf("%s <--> ", circuit->guardNode->nickname->c_str() );
+                    printf("%s, ", circuit->guardNode->nickname->c_str() );
                 
                 if (circuit->middleNode != nullptr && circuit->middleNode->nickname != nullptr)
-                    printf("%s <--> ", circuit->middleNode->nickname->c_str() );
+                    printf("%s, ", circuit->middleNode->nickname->c_str() );
 
                 if (circuit->exitNode != nullptr && circuit->exitNode->nickname != nullptr) {
-                    printf("%s <--> ", circuit->exitNode->nickname->c_str() );
-                    printf(" THE WEB");
+                    printf("%s, ", circuit->exitNode->nickname->c_str() );
+                    printf("THE WEB");
                 }
             }
             printf("\n");
