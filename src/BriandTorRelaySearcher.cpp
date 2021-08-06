@@ -433,7 +433,7 @@ namespace Briand {
 			
 			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
 
-			ifstream file(this->NODES_FILE_GUARD, ios::in);
+			ifstream file(this->NODES_FILE_MIDDLE, ios::in);
 			auto json = make_unique<string>("");
 			string line;
 			while (file.good()) {
@@ -517,7 +517,7 @@ namespace Briand {
 			
 			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
 
-			ifstream file(this->NODES_FILE_GUARD, ios::in);
+			ifstream file(this->NODES_FILE_EXIT, ios::in);
 			auto json = make_unique<string>("");
 			string line;
 			while (file.good()) {

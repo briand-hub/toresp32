@@ -2,7 +2,7 @@
 
 ## Next steps
 
-* MUST change Relay cache with something better now (consensus). Double check not to choose same relays
+* Consider change Relay cache with something better now (consensus). Double check not to choose same relays
 * MUST implement SENDME cells as in tor-specs 7.3. Circuit-level flow control
 * Remove serial streaming and use SOCKS5 proxy only, remove unused terminal commands
 * Consider error management short/int for method errors (mbedtls style)
@@ -22,6 +22,7 @@
 * Found that crashes are due to task calling objects that are "busy" and are destroyed before finishing.
 * Added circuit status flags
 * Better task scheduling resolved crashes (on linux, still to deep test on esp32), remains one related to blocking I/O on cache files
+* Solved wrong file on RelaySearcher
 
 ## 2021-07-31
 
