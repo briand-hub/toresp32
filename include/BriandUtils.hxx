@@ -204,5 +204,12 @@ namespace Briand
 		 * @return IPv4 in_addr (unsigned int) IP
 		*/
 		static in_addr ipv4FromString(const string& ip);
+
+		/**
+		 * Converts a RELAY_END reason to human readable
+		 * @param reason RELAY_END payload
+		 * @return string containing the reason
+		*/
+		static string RelayEndReasonToString(const BriandTorRelayEndReason& reason);
 	};
 }

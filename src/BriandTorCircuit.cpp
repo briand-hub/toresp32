@@ -1090,8 +1090,14 @@ namespace Briand {
 						printf("[ERR] TorStreamSingle failed, received unexpected cell from exit node: %s, payload: ", BriandUtils::BriandTorRelayCellCommandToString(readCell->GetRelayCommand()).c_str());
 						readCell->PrintCellPayloadToSerial();
 					}
-					
-					ESP_LOGW(LOGTAG, "[ERR] TorStreamSingle failed, received unexpected cell from exit node: %s.\n", BriandUtils::BriandTorRelayCellCommandToString(readCell->GetRelayCommand()).c_str());
+
+					// If RELAY_END show reason
+					if (readCell->GetRelayCommand() == BriandTorCellRelayCommand::RELAY_END && readCell->GetPayload() != nullptr && readCell->GetPayload()->size() > 0) {
+						ESP_LOGW(LOGTAG, "[ERR] TorStreamSingle failed, received unexpected cell from exit node: %s reason: %s.\n", BriandUtils::BriandTorRelayCellCommandToString(readCell->GetRelayCommand()).c_str(), BriandUtils::RelayEndReasonToString( static_cast<BriandTorRelayEndReason>(readCell->GetPayload()->at(0)) ).c_str());
+					}
+					else {
+						ESP_LOGW(LOGTAG, "[ERR] TorStreamSingle failed, received unexpected cell from exit node: %s.\n", BriandUtils::BriandTorRelayCellCommandToString(readCell->GetRelayCommand()).c_str());
+					}
 
 					this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 					return response;
@@ -1260,8 +1266,10 @@ namespace Briand {
 			payload->push_back(static_cast<unsigned char>(c));
 		}
 		payload->push_back(static_cast<unsigned char>(':'));
-		payload->push_back(static_cast<unsigned char>( (port & 0xFF00) >> 8 ));
-		payload->push_back(static_cast<unsigned char>( (port & 0x00FF) >> 0 ));
+
+		// Also PORT in string format !!!
+		for (const char& pc: std::to_string(port)) payload->push_back(static_cast<unsigned char>(pc));
+
 		payload->push_back(0x00);
 
 		/*

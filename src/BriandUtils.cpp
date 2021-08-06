@@ -517,4 +517,25 @@ namespace Briand
 
 		return temp;
 	}
+
+	string BriandUtils::RelayEndReasonToString(const BriandTorRelayEndReason& reason) {
+		string s("(RESERVED)");
+
+		if (reason == BriandTorRelayEndReason::REASON_MISC) s = "REASON_MISC";
+		if (reason == BriandTorRelayEndReason::REASON_RESOLVEFAILED) s = "REASON_RESOLVEFAILED";
+		if (reason == BriandTorRelayEndReason::REASON_CONNECTREFUSED) s = "REASON_CONNECTREFUSED";
+		if (reason == BriandTorRelayEndReason::REASON_EXITPOLICY) s = "REASON_EXITPOLICY";
+		if (reason == BriandTorRelayEndReason::REASON_DESTROY) s = "REASON_DESTROY";
+		if (reason == BriandTorRelayEndReason::REASON_DONE) s = "REASON_DONE";
+		if (reason == BriandTorRelayEndReason::REASON_TIMEOUT) s = "REASON_TIMEOUT";
+		if (reason == BriandTorRelayEndReason::REASON_NOROUTE) s = "REASON_NOROUTE";
+		if (reason == BriandTorRelayEndReason::REASON_HIBERNATING) s = "REASON_HIBERNATING";
+		if (reason == BriandTorRelayEndReason::REASON_INTERNAL) s = "REASON_INTERNAL";
+		if (reason == BriandTorRelayEndReason::REASON_RESOURCELIMIT) s = "REASON_RESOURCELIMIT";
+		if (reason == BriandTorRelayEndReason::REASON_CONNRESET) s = "REASON_CONNRESET";
+		if (reason == BriandTorRelayEndReason::REASON_TORPROTOCOL) s = "REASON_TORPROTOCOL";
+		if (reason == BriandTorRelayEndReason::REASON_NOTDIRECTORY) s = "REASON_NOTDIRECTORY";
+
+		return s;
+	}
 }

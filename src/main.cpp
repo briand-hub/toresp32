@@ -471,6 +471,7 @@ void TorEsp32Main(void* taskArg) {
 			// Start the Proxy
 			printf("[INFO] Starting SOCKS5 Proxy.\n");
 			SOCKS5_PROXY = make_unique<Briand::BriandTorSocks5Proxy>();
+			SOCKS5_PROXY->StartProxyServer(5001, CIRCUITS_MANAGER);
 			printf("[INFO] SOCKS5 Proxy started.\n");
 
 			// Builtin led handling

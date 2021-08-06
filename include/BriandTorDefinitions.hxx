@@ -147,4 +147,22 @@ namespace Briand {
 
         // 41..42 -- Used for circuit padding; see Section 3 of padding-spec.txt.
 	};        
+
+	enum BriandTorRelayEndReason : unsigned char {
+		REASON_MISC = 1,
+		REASON_RESOLVEFAILED = 2,
+		REASON_CONNECTREFUSED = 3,
+		REASON_EXITPOLICY = 4,
+		REASON_DESTROY = 5,
+		REASON_DONE = 6,
+		REASON_TIMEOUT = 7,
+		REASON_NOROUTE = 8,
+		REASON_HIBERNATING = 9,
+		REASON_INTERNAL = 10,
+		REASON_RESOURCELIMIT = 11,
+		REASON_CONNRESET = 12,
+		REASON_TORPROTOCOL = 13,
+		REASON_NOTDIRECTORY = 14
+	};
+
 }

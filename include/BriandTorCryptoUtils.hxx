@@ -43,9 +43,8 @@ namespace Briand {
 
 		/**
 		 * Method perform the digest (SHA1) of the running bytes sent/received with relay/relay_early cells (for handling tor node digest Df/Db)
-		 * @param relayCurrentDigest The relay's digest context whom the cell is received/sent. Will be updated unless specified!
+		 * @param relayCurrentDigest The relay's digest context whom the cell is received/sent. The digest will be updated!
 		 * @param relayCellPayload The relay cell payload (full, with digest field set to all zeros when sending cell, unencrypted when receiving cell)
-		 * @param updateDigest Set it to false for calculate but not update the relay current digest 
 		 * @return Pointer to vector containing hash.
 		*/
 		static unique_ptr<vector<unsigned char>> GetRelayCellDigest(unique_ptr<mbedtls_md_context_t>& relayCurrentDigest, const unique_ptr<vector<unsigned char>>& relayCellPayload);
