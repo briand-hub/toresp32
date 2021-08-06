@@ -16,6 +16,12 @@
 
 ##
 
+* First streaming success! used curl in linux env: *curl http://ifconfig.me/all.json --socks5-hostname 127.0.0.1:5001*
+* Seems something is broken on the FetchDescriptors response (truncated at half), need debug.
+* Seems something wrong with bind() and listen() in socks5 need debug
+
+## 2021-08-01
+
 * Debugging with linux porting and valgrind: resolved some bugs
 * Testing with valgrind
 * Found that torcache has too poor nodes and sometimes the same is chosen
