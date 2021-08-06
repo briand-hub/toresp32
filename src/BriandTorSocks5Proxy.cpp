@@ -323,7 +323,7 @@ namespace Briand
                     }
                     else if (len == 0) {
                         // No other data to stream
-                        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy finished (%hu).\n");
+                        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy finished.\n");
                     }
                     else {
                         // Send data through circuit (RELAY_DATA)
@@ -345,7 +345,7 @@ namespace Briand
                         // If the length of received data is less than MAX_FREE_PAYLOAD
                         // there should be no other data to stream.
                         if (len < MAX_FREE_PAYLOAD) {
-                            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy finished (%hu).\n");
+                            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy finished.\n");
                             break; // exit cycle
                         }
                     }
