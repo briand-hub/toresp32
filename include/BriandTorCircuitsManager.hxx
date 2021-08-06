@@ -34,8 +34,13 @@ namespace Briand {
         /** Task stack size in bytes, obtained by tests. If too low task will crash! */
         static const unsigned short TASK_STACK_SIZE = 5120;
 
-        /** Task re-execution time, obtained by tests, in milliseconds. */
+        #if defined(ESP_PLATFORM)
+        /** Task re-execution time, obtained by tests, in milliseconds. (ESP, min.30 seconds) */
         static const unsigned short TASK_WAIT_BEFORE_NEXT = 30*1000;
+        #else
+        /** Task re-execution time, obtained by tests, in milliseconds. (Linux could be less, 5 seconds) */
+        static const unsigned short TASK_WAIT_BEFORE_NEXT = 5*1000;
+        #endif
 
         /** Status of the manager */
         static bool isStopped;

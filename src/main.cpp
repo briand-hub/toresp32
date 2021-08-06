@@ -138,25 +138,6 @@ void TorEsp32Setup() {
 	printf("done.\n");
 
     printf("[INFO] Entering step %d\n", nextStep);
-
-	// Builtin led handling
-	gpio_set_direction(GPIO_NUM_5, GPIO_MODE_OUTPUT);
-	if (BUILTIN_LED_MODE == 0) {
-		// Turn off
-		printf("[INFO] Turning OFF built led %d\n", GPIO_NUM_5);
-		gpio_set_level(GPIO_NUM_5, 1); // 1 => off, 0 => on
-	}
-	else if (BUILTIN_LED_MODE == 1) {
-		// Turn on
-		printf("[INFO] Turning OFF built led %d\n", GPIO_NUM_5);
-		gpio_set_level(GPIO_NUM_5, 0); // 1 => off, 0 => on
-	}
-	else {
-		// On/off delay
-		printf("[INFO] Starting blinking task for built led %d\n", GPIO_NUM_5);
-		gpio_set_level(GPIO_NUM_5, 0); // initial status ON
-		xTaskCreate(builtin_led_task, "blinkled", 512, NULL, 1000, NULL);
-	}   
     
 	// Initialize SPIFFS File System
 	
@@ -483,11 +464,33 @@ void TorEsp32Main(void* taskArg) {
 		}
 		else if (nextStep == 1000) {
 			printf("[INFO] Starting TOR Circuits Manager.\n");
-			
 			CIRCUITS_MANAGER = make_unique<Briand::BriandTorCircuitsManager>(TOR_CIRCUITS_KEEPALIVE, TOR_CIRCUITS_MAX_TIME_S, TOR_CIRCUITS_MAX_REQUESTS);
 			CIRCUITS_MANAGER->Start();
+			printf("[INFO] TOR Circuits Manager started.\n");
 
-			nextStep = 10000;
+			// Start the Proxy
+			printf("[INFO] Starting SOCKS5 Proxy.\n");
+			SOCKS5_PROXY = make_unique<Briand::BriandTorSocks5Proxy>();
+			printf("[INFO] SOCKS5 Proxy started.\n");
+
+			// Builtin led handling
+			gpio_set_direction(GPIO_NUM_5, GPIO_MODE_OUTPUT);
+			if (BUILTIN_LED_MODE == 0) {
+				// Turn off
+				printf("[INFO] Turning OFF built led %d\n", GPIO_NUM_5);
+				gpio_set_level(GPIO_NUM_5, 1); // 1 => off, 0 => on
+			}
+			else if (BUILTIN_LED_MODE == 1) {
+				// Turn on
+				printf("[INFO] Turning OFF built led %d\n", GPIO_NUM_5);
+				gpio_set_level(GPIO_NUM_5, 0); // 1 => off, 0 => on
+			}
+			else {
+				// On/off delay
+				printf("[INFO] Starting blinking task for built led %d\n", GPIO_NUM_5);
+				gpio_set_level(GPIO_NUM_5, 0); // initial status ON
+				xTaskCreate(builtin_led_task, "blinkled", 512, NULL, 1000, NULL);
+			}   
 
 			printf("\n\n[INFO] SYSTEM READY! Type help for commands.\n\n");
 
@@ -495,6 +498,8 @@ void TorEsp32Main(void* taskArg) {
 			HEAP_LEAK_CHECK = Briand::BriandESPDevice::GetFreeHep(); // TODO + Briand::BriandESPDevice::GetFreePsram();
 
 			printf("[INFO] Free heap at system start is %u bytes.\n", HEAP_LEAK_CHECK);
+
+			nextStep = 10000;
 		}
 		else if (nextStep == 10000) {
 			// Here system ready for commands

@@ -1002,7 +1002,8 @@ namespace Briand {
 		cellStreamID += static_cast<unsigned short>( this->Payload->at(3) << 8 );
 		cellStreamID += static_cast<unsigned short>( this->Payload->at(4) );
 
-		if (cellStreamID != streamID) {
+		// Cell StreamID could be zero for some cells (RELAY_TRUNCATED etc.)
+		if (cellStreamID != streamID && cellStreamID != 0x0000) {
 			if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 				printf("[DEBUG] Cell StreamID does not match the expected one, unrecognized.\n");
 			}

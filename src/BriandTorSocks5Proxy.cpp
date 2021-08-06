@@ -319,8 +319,8 @@ namespace Briand
                         continue;
                     }
                     else if (len == 0) {
-                        // No other data to stream, so send a RELAY_FINISH (???)
-                        bool result = circuit->TorStreamEnd();
+                        // No other data to stream, so send a RELAY_END (???)
+                        bool result = circuit->TorStreamEnd(); // Needed?
                         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy finished (%hu).\n", result);
                     }
                     else {
@@ -343,7 +343,7 @@ namespace Briand
                         // If the length of received data is less than MAX_FREE_PAYLOAD
                         // there should be no other data to stream.
                         if (len < MAX_FREE_PAYLOAD) {
-                            bool result = circuit->TorStreamEnd();
+                            bool result = circuit->TorStreamEnd(); // Needed??
                             ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy finished (%hu).\n", result);
                         }
                     }
@@ -353,15 +353,44 @@ namespace Briand
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy data sent, receiving response.\n");
 
                 // Read back and send to the client
+                bool streamFinish = false;
+                bool streamError = false;
 
-                //
-                // TODO
-                //
+                do {
+                    auto recvBuf = make_unique<vector<unsigned char>>();
 
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy finished.\n");
+                    streamError = circuit->TorStreamRead(recvBuf, streamFinish);
 
-                // Close the connection
-                close(clientSock);
+                    if (streamError) {
+                        // ERROR
+                        ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: read has failed. Closing connection.\n");
+                        // Close connection
+                        ErrorResponse(clientSock, nullptr, 0);
+                    }
+                    else if(recvBuf->size() > 0) {
+                        // Even if streamFinish = true check if buffer has some other bytes to return.
+                        // Return bytes to client
+                        send(clientSock, recvBuf->data(), recvBuf->size(), 0);
+                    }
+
+                    recvBuf.reset();
+
+                } while (!streamError && !streamFinish);
+
+                // If OK then close with success
+                if (!streamError && streamFinish) {
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy stream finished.\n");
+
+                    // Close the connection
+                    close(clientSock);
+
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client connection closed (success).\n");
+
+                    // Close the stream
+                    circuit->TorStreamEnd();
+
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy Tor stream closed (success).\n");
+                }
             }
 
             // Wait 1 second before next run

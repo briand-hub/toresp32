@@ -21,7 +21,7 @@
 * Found that torcache has too poor nodes and sometimes the same is chosen
 * Found that crashes are due to task calling objects that are "busy" and are destroyed before finishing.
 * Added circuit status flags
-* Better task scheduling resolved crashes (on linux, still to deep test on esp32)
+* Better task scheduling resolved crashes (on linux, still to deep test on esp32), remains one related to blocking I/O on cache files
 
 ## 2021-07-31
 

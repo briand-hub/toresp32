@@ -978,7 +978,7 @@ namespace Briand {
 
 				ESP_LOGW(LOGTAG, "[ERR] TorStreamReadData error, received unexpected cell from guard node: %s\n", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
 
-				return std::move(tempCell);					
+				return std::move(tempCell);
 			}
 
 			// Peel out the middle skin
