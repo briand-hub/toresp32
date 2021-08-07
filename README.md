@@ -3,6 +3,7 @@ Briand's project to turn an ESP32 into a Tor client "plug&amp;play"
 
 ## Development status
 
+* 08/21 Proxy working through Tor for HTTP GET requests!
 * 07/2021 With updated [library](https://www.github.com/briand-hub/LibBriandIDF) and small modifications now this project can work both on ESP32 and Linux systems (see details below)
 * 07/2021 Working with multiple circuits (managed asynchronously): connection, hostname resolution
 * 05/2021 Switching to IDF Framework completed and obtained the first working circuit!

@@ -41,10 +41,10 @@
     constexpr unsigned char NET_IO_TIMEOUT_S = 30;		    // Timeout (seconds) for socket read/write operations (0 for unlimited)
     constexpr const char* NTP_SERVER = "pool.ntp.org";    	// NTP server to use
     constexpr const char HEAP_LEAK_LIMIT = 5;				// Heap consumption since system readiness more than HEAP_LEAK_LIMIT% will warn
-    constexpr unsigned short TOR_CIRCUITS_KEEPALIVE = 3;	// No. of Tor circuits to be kept always open and ready
+    constexpr unsigned short TOR_CIRCUITS_KEEPALIVE = 2;	// No. of Tor circuits to be kept always open and ready
     constexpr unsigned short TOR_CIRCUITS_MAX_TIME_S = 900;	// Elapsed this time (seconds) the Tor circuit will be closed automatically.
     constexpr unsigned short TOR_CIRCUITS_MAX_REQUESTS = 15; // After N requests the Tor circuit will be closed and changed.
-    constexpr unsigned char TOR_NODES_CACHE_SIZE = 35;		// No. of Tor nodes, for each type (guard/exit/middle) to keep saved. (Avoid more than 50)
+    constexpr unsigned char TOR_NODES_CACHE_SIZE = 30;		// No. of Tor nodes, for each type (guard/exit/middle) to keep saved. (Avoid more than 50)
     constexpr unsigned char TOR_NODES_CACHE_VAL_H = 24;		// Hours since the chache of nodes is considered OLD and must be downloaded again
     constexpr unsigned short TOR_SOCKS5_PROXY_PORT = 5001;  // Port of the Socks5 Proxy
 
