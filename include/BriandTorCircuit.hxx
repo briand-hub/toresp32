@@ -191,9 +191,10 @@ namespace Briand {
 		 * Method reads a single RELAY_DATA cell back and ADDS to the buffer
 		 * @param buffer The buffer where data is ADDED. Max 498 bytes per session.
 		 * @param finished The value will be set to true if RELAY_END from node is encountered.
+		 * @param timeout_s The timeout (in seconds to get a valid cell response)
 		 * @return true if success, false on error (ex. TRUNCATE/DESTROY).
 		*/
-		bool TorStreamRead(unique_ptr<vector<unsigned char>>& buffer, bool& finished);
+		bool TorStreamRead(unique_ptr<vector<unsigned char>>& buffer, bool& finished, const unsigned short& timeout_s = 60);
 
 		/**
 		 * Method finishes the current data stream (write)
@@ -218,6 +219,12 @@ namespace Briand {
 		 * @param reason the reason, however should be always set to zero (NONE) if client version to avoid version leaking.
 		*/
 		void TearDown(BriandTorDestroyReason reason = BriandTorDestroyReason::NONE);
+
+		/**
+		 * Method returns this circuit ID
+		 * @return CircID
+		*/
+		unsigned int GetCircID();
 
 		/**
 		 * Method returns unix timestamp since circuit creation

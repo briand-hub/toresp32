@@ -202,7 +202,9 @@ namespace Briand {
 		this->cellTotalSizeBytes = cellBuffer->size();
 
 		ESP_LOGD(LOGTAG, "[DEBUG] %s Cell of %d bytes is going to be sent. Contents: ", Briand::BriandUtils::BriandTorCellCommandToString(this->Command).c_str(), cellBuffer->size());
-		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) Briand::BriandUtils::PrintByteBuffer( *(cellBuffer.get()), this->cellTotalSizeBytes, this->cellTotalSizeBytes );
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
+			Briand::BriandUtils::PrintByteBuffer( *(cellBuffer.get()), this->cellTotalSizeBytes, this->cellTotalSizeBytes );
+		} 
 
 		// That's all, send cell through network!
 		auto response = BriandNet::RawSecureRequest(client, cellBuffer, true, closeConnection, expectResponse); // clear cell buffer after request to save ram.

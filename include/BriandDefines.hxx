@@ -38,7 +38,7 @@
     constexpr unsigned char WIFI_AP_HIDDEN = 0;				// AP hidden Essid (1) or not (0)
     constexpr unsigned char WIFI_AP_MAX_CONN = 1;			// AP maximum connections (set to 1 for more security, just you) 
     constexpr unsigned char NET_CONNECT_TIMEOUT_S = 60;		// Elapsed this number of seconds, any connection is intended to be timed out!
-    constexpr unsigned char NET_IO_TIMEOUT_S = 30;		    // Timeout for socket read/write operations (0 for unlimited)
+    constexpr unsigned char NET_IO_TIMEOUT_S = 30;		    // Timeout (seconds) for socket read/write operations (0 for unlimited)
     constexpr const char* NTP_SERVER = "pool.ntp.org";    	// NTP server to use
     constexpr const char HEAP_LEAK_LIMIT = 5;				// Heap consumption since system readiness more than HEAP_LEAK_LIMIT% will warn
     constexpr unsigned short TOR_CIRCUITS_KEEPALIVE = 3;	// No. of Tor circuits to be kept always open and ready
@@ -88,7 +88,6 @@
         #include <esp_system.h>
         #include <esp_wifi.h>
         #include <esp_event.h>
-        #include <esp_log.h>
         #include <esp_idf_version.h>
         #include <esp_int_wdt.h>
         #include <esp_task_wdt.h>
@@ -121,6 +120,8 @@
         #ifndef LOG_LOCAL_LEVEL
             #define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
         #endif
+
+        #include <esp_log.h>
 
         void BRIAND_SET_LOG(esp_log_level_t);
 

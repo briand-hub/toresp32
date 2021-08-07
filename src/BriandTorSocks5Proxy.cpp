@@ -73,8 +73,8 @@ namespace Briand
 
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy socket binding done.\n");
 
-        // Listen for maximum 1 connection
-        if (listen(this->proxySocket, 1) != 0) {
+        // Listen for maximum TOR_CIRCUITS_KEEPALIVE connections
+        if (listen(this->proxySocket, TOR_CIRCUITS_KEEPALIVE) != 0) {
             ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy error on binding.\n");
             close(this->proxySocket);
             this->proxySocket = -1;
@@ -243,6 +243,8 @@ namespace Briand
                     continue;
                 }
 
+                ESP_LOGD(LOGTAG, "SOCKS5 Proxy using circuit with CircID=0x%08X.\n", circuit->GetCircID());
+
                 // Extract informations about host and port to connect to
                 string connectTo = "";
                 unsigned short connectPort = 0;
@@ -307,6 +309,8 @@ namespace Briand
 
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy streaming data.\n");
 
+                bool clientDataReadOk = true;
+
                 do {
                     // In order to limit tor cells size, read maximum N bytes (maximum RELAY cell payload length)
                     constexpr unsigned short MAX_FREE_PAYLOAD = 498;
@@ -319,7 +323,7 @@ namespace Briand
                         ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: read from client error. Closing connection.\n");
                         // Close connection
                         ErrorResponse(clientSock, nullptr, 0);
-                        continue;
+                        clientDataReadOk = false;
                     }
                     else if (len == 0) {
                         // No other data to stream
@@ -339,7 +343,7 @@ namespace Briand
                             ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: data NOT sent. Closing connection.\n");
                             // Close connection
                             ErrorResponse(clientSock, nullptr, 0);
-                            continue;
+                            clientDataReadOk = false;
                         }
 
                         // If the length of received data is less than MAX_FREE_PAYLOAD
@@ -350,7 +354,13 @@ namespace Briand
                         }
                     }
 
-                } while (len > 0);
+                } while (len > 0 && clientDataReadOk);
+
+                if (!clientDataReadOk) {
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy error: read from client.\n");
+                    // Socket is closed before in this case
+                    continue;
+                }
 
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy data sent, receiving response.\n");
 
@@ -360,12 +370,21 @@ namespace Briand
 
                 do {
                     auto recvBuf = make_unique<vector<unsigned char>>();
+                    
+                    // The following call with CURL will timeout, this because CURL
+                    // closes connection after a HTTP GET success (read \r\n\r\n) and this 
+                    // is not caught causing clientSocket not to be closed.
+                    // A single good cell should arrive in less than 5 seconds.
 
-                    streamOk = circuit->TorStreamRead(recvBuf, streamFinish);
+                    //
+                    // TODO : find an easy way to check client disconnected
+                    // 
+
+                    streamOk = circuit->TorStreamRead(recvBuf, streamFinish, 5);
 
                     if (!streamOk) {
                         // ERROR
-                        ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: read has failed. Closing connection.\n");
+                        ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: read has failed (client may have been disconnected). Closing connection.\n");
                         // Close connection
                         ErrorResponse(clientSock, nullptr, 0);
                     }
@@ -387,15 +406,18 @@ namespace Briand
                 }
 
                 // If OK then close with success
-                if (streamOk && streamFinish) {
+                if (streamFinish) {
                     ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy stream finished.\n");
+                }
+                else {
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy stream NOT finished.\n");
                 }
 
                 // Always close client socket
                 close(clientSock);
 
                 if (!streamOk) {
-                    ESP_LOGW(LOGTAG, "[DEBUG] SOCKS5 Proxy client connection closed (stream error).\n");
+                    ESP_LOGW(LOGTAG, "[DEBUG] SOCKS5 Proxy client connection closed (stream error or client disconnected).\n");
                 }
                 else {
                     ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client connection closed (success).\n");

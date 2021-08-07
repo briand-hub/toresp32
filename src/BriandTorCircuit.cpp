@@ -1338,9 +1338,12 @@ namespace Briand {
 		this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 	}
 
-	bool BriandTorCircuit::TorStreamRead(unique_ptr<vector<unsigned char>>& buffer, bool& finished) {
+	bool BriandTorCircuit::TorStreamRead(unique_ptr<vector<unsigned char>>& buffer, bool& finished, const unsigned short& timeout_s /* = 30*/) {
 		// Mark busy
 		this->StatusSetFlag(CircuitStatusFlag::BUSY);
+
+		// Get current time
+		unsigned long int now = BriandUtils::GetUnixTime();
 
 		finished = false;
 
@@ -1363,6 +1366,13 @@ namespace Briand {
 		// Read until a single significative cell from the stream (a RELAY cell)
 		while (1) {
 			auto readCell = this->TorStreamReadData();
+
+			// Check timeout
+			if (BriandUtils::GetUnixTime() > now+timeout_s) {
+				ESP_LOGW(LOGTAG, "[ERR] TorStreamRead TIMEOUT (%hu seconds).\n", timeout_s);
+				this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
+				return false;
+			}
 
 			// If nullptr => error
 			if (readCell == nullptr) {
@@ -1555,6 +1565,10 @@ namespace Briand {
 		else {
 			printf("[INFO] Circuit is not built, closed or in closing.\n");
 		}
+	}
+
+	unsigned int BriandTorCircuit::GetCircID() {
+		return this->CIRCID;
 	}
 
 	unsigned long int BriandTorCircuit::GetCreatedOn() {

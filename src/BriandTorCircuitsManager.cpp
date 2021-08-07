@@ -176,18 +176,20 @@ namespace Briand
     }
 
     void BriandTorCircuitsManager::PrintCircuitsInfo() {
-        printf("#\tStatus\t\t\t\tPaddings\tCreatedOn\tDescription\n");
+        printf("#\tCircID\t\tStatus\t\t\t\t\tPaddings\tCreatedOn\tDescription\n");
         for (unsigned short i=0; i<this->CIRCUIT_POOL_SIZE; i++) {
             printf("%u\t", i);
             if (this->CIRCUITS[i] == nullptr) {
-                printf("NONE\t\t\t\t%08lu\t%08lu\tNot instanced\n", 0L, 0L);
+                printf("0x00000000\tNONE\t\t\t\t\t%08lu\t%08lu\tNot instanced\n", 0L, 0L);
             }
             else {
                 auto& circuit = this->CIRCUITS[i];
 
+                printf("0x%08X\t", circuit->GetCircID());
+
                 string circuitStatus = circuit->StatusGetString();
                 // Indent
-                while(circuitStatus.length() < 32) circuitStatus.push_back(' ');
+                while(circuitStatus.length() < 40) circuitStatus.push_back(' ');
 
                 printf("%s", circuitStatus.c_str());
 

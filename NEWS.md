@@ -19,6 +19,7 @@
 * First streaming success! used curl in linux env: *curl http://ifconfig.me/all.json --socks5-hostname 127.0.0.1:5001*
 * Seems something is broken on the FetchDescriptors response (truncated at half), need debug.
 * Seems something wrong with bind() and listen() in socks5 need debug
+* Added ESP Exception decoder for command line *java -jar EspStackTraceDecoder.jar <Path to xtensa-lx106-elf-addr2line> <Elf-File> <Dump of Exception>*
 
 ## 2021-08-01
 

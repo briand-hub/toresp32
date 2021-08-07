@@ -30,6 +30,7 @@
         
         void BRIAND_SET_LOG(esp_log_level_t newLevel) { 
             CURRENT_LOG_LEVEL = newLevel; 
+            esp_log_level_set(LOGTAG, newLevel);
         }
         
         esp_log_level_t esp_log_level_get(const char* logTag) { 
