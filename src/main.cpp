@@ -541,10 +541,10 @@ void syncTimeWithNTP() {
 	//For UTC -5.00 : -5 * 60 * 60 : -18000
 	//For UTC +1.00 : 1 * 60 * 60 : 3600
 	//For UTC +0.00 : 0 * 60 * 60 : 0
-	const long  gmtOffset_sec = 0;
+	//const long  gmtOffset_sec = 0;
 
 	// to 3600 if daylight saving
-	const int daylightOffset_sec = 0; 
+	//const int daylightOffset_sec = 0; 
 
 	// MUST BE CONNECTED TO INTERNET!
 		
