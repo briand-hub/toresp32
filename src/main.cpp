@@ -106,7 +106,6 @@ void TorEsp32Setup() {
     AP_ESSID = make_unique<string>("");
     AP_PASSW = make_unique<string>("");
     COMMAND = make_unique<string>("");
-    COMMANDID = 0;
 
 	// Common for error testing
 	esp_err_t ret;
@@ -492,12 +491,8 @@ void TorEsp32Main(void* taskArg) {
 				xTaskCreate(builtin_led_task, "blinkled", 512, NULL, 1000, NULL);
 			}   
 
+			printf("[INFO] Free heap at system start is %lu bytes.\n", Briand::BriandESPDevice::GetFreeHep());
 			printf("\n\n[INFO] SYSTEM READY! Type help for commands.\n\n");
-
-			// Start heap-leak warning watch
-			HEAP_LEAK_CHECK = Briand::BriandESPDevice::GetFreeHep(); // TODO + Briand::BriandESPDevice::GetFreePsram();
-
-			printf("[INFO] Free heap at system start is %u bytes.\n", HEAP_LEAK_CHECK);
 
 			nextStep = 10000;
 		}
