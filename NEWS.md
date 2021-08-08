@@ -14,6 +14,12 @@
 * Simplify code in TorCircuit class
 * Authenticate cell? => Prepare stub method to authenticate client
 
+## 2021-08-08
+
+* Need to change a little Socks5Proxy not catching client disconnect for http request and keeping socket opened. (main thread + one thread per accept())
+* Removed COMMANDID and leak testing, switching to full socks5 proxy
+
+
 ## 2021-08-07
 
 * First streaming success! used curl in linux env: *curl http://ifconfig.me/all.json --socks5-hostname 127.0.0.1:5001*

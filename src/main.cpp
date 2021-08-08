@@ -55,7 +55,6 @@ unique_ptr<string> AP_PASSW = nullptr;
 unique_ptr<string> COMMAND = nullptr;
 unique_ptr<Briand::BriandTorCircuitsManager> CIRCUITS_MANAGER = nullptr;
 unique_ptr<Briand::BriandTorSocks5Proxy> SOCKS5_PROXY = nullptr;
-unsigned long long int COMMANDID = 0;
 unsigned int HEAP_LEAK_CHECK = 0;
 
 /* Early declarations */
@@ -607,16 +606,7 @@ void startSerialRead(string* sPtr) {
 
 void executeCommand(string& cmd) {
 	// Get heap size before command
-	int heapBefore = static_cast<int>( esp_get_free_heap_size() );
-
-    // Assign a command ID for external processing (will reset after max value for long tasks)
-    if ( COMMANDID == ULLONG_MAX)
-        COMMANDID = 0;
-    else 
-        COMMANDID++;
-
-    printf("\n[CMD][0x%016llx]: %s\n", COMMANDID, cmd.c_str());
-    printf("[EXE][0x%016llx]\n", COMMANDID);
+	//int heapBefore = static_cast<int>( esp_get_free_heap_size() );
 
 	if (cmd.compare("help") == 0) {
         printf("COMMAND : description\n");
@@ -638,7 +628,6 @@ void executeCommand(string& cmd) {
 			printf("search-exit : if DEBUG active, search and display info for an exit node.\n");
 			printf("search-middle : if DEBUG active, search and display info for a middle node.\n");
 			printf("testcircuit : if DEBUG active, build a new circuit, resolve ifconfig.me IP then destroy just for testing.\n");
-			printf("heapleak : if DEBUG active, leaks the heap to test leak warning.\n");
 		}
 
 		printf("TOR TESTING-----------------------------------------------------------------------\n");
@@ -652,7 +641,6 @@ void executeCommand(string& cmd) {
 		printf("torcircuits [restart|stop] : Invalidate all circuits pool, if restart rebuild again.\n");
 		printf("torproxy [restart|stop] : Starts/Stops SOCKS5 Proxy.\n");
 		printf("tor resolve [hostname] : Resolve IPv4 address through tor.\n");
-		printf("tor http get [url] : Tor HTTP/GET request to url. Resulting response printed to console.\n");
     }
     else if (cmd.compare("time") == 0) {
         printLocalTime();
@@ -780,12 +768,6 @@ void executeCommand(string& cmd) {
 		else 
 			printf("FAILED to build a circuit.\n");
     }
-	else if (cmd.compare("heapleak") == 0 && (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG))  {
-		auto leakingHeap = make_unique<unsigned char[]>(2048);
-		// release instead of reset
-		leakingHeap.release();
-		printf("Heap has been leaked for 2048 bytes.\n");
-    }
 	else if (cmd.compare("ifconfig.me") == 0)  {
 		string info = Briand::BriandUtils::BriandIfConfigMe();
 		printf("\nInfo about your real identity:\n\n%s\n", info.c_str());
@@ -851,34 +833,9 @@ void executeCommand(string& cmd) {
 			printf("IPv4 address: %s\n", Briand::BriandUtils::ipv4ToString(circuit->TorResolve(cmd)).c_str());
 		}
 	}
-	else if (cmd.substr(0, 13).compare("tor http get ") == 0) {
-		cmd.erase(cmd.begin(), cmd.begin() + 13);
-		//
-		// TODO
-		//
-	}
 	// other commands implementation...
     else {
         printf("Unknown command.\n");
-    }
-
-    printf("[EXE][0x%016llx][END]\n", COMMANDID);
-
-	// Debug: print memory used by command
-    int consumption = (heapBefore - static_cast<int>(esp_get_free_heap_size()));
-	ESP_LOGD(LOGTAG, "[DEBUG] Heap consumption: %d (from %d to %d) bytes.\n", consumption, heapBefore, esp_get_free_heap_size());
-
-    // Always useful: check if code has heap leaks 
-    // sometimes I do the mistake to use .release() insted of .reset() on smart pointers :P	
-
-	double testHeapLeak = static_cast<double>( HEAP_LEAK_CHECK - esp_get_free_heap_size() );
-	testHeapLeak = testHeapLeak / static_cast<double>(HEAP_LEAK_CHECK);
-	testHeapLeak = testHeapLeak * 100.0;
-	
-    if ( static_cast<char>( testHeapLeak ) >= HEAP_LEAK_LIMIT ){
-        printf("[HEAP WARNING] !!!!!!!!!!WARNING!!!!!!!!! Heap is decreasing!\n");
-		// reset
-		HEAP_LEAK_CHECK = esp_get_free_heap_size();
     }
     
     // Clear COMMAND for next
