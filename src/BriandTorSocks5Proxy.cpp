@@ -380,6 +380,26 @@ namespace Briand
                     // TODO : find an easy way to check client disconnected
                     // 
 
+                    // not working well
+                    // fd_set fd_filter;
+                    // struct timeval timeout;
+                    // bzero(&timeout, sizeof(timeout));
+                    // timeout.tv_usec = 2*1000; // 200ms
+                    // FD_ZERO(&fd_filter);
+                    // FD_SET(clientSock, &fd_filter);
+                    // int selectResult = select(clientSock+1, 0, &fd_filter, 0, &timeout);
+                    // ESP_LOGW(LOGTAG, "Select result is: %d and set is: %d\n", selectResult, FD_ISSET(clientSock, &fd_filter));
+
+                    // not working
+                    // char temp = 0x00;
+                    // int status = recv(clientSock, &temp, 1, MSG_PEEK | MSG_DONTWAIT);
+                    // printf("SOCK#%d STATUS = %d\n", clientSock, status);
+                    // if (status == 0) {
+                    //     streamFinish = true;
+                    //     streamOk = true;
+                    //     break;
+                    // }
+
                     streamOk = circuit->TorStreamRead(recvBuf, streamFinish, 5);
 
                     if (!streamOk) {
