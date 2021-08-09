@@ -39,7 +39,7 @@ namespace Briand {
 		unsigned short port;
 		unique_ptr<string> fingerprint;
 		/** @deprecated unused! */
-		unique_ptr<string> effective_family;
+		// unique_ptr<string> effective_family;
 		
 		// TODO : add exit policy summary accept/reject
 		// TODO: handle more fields (minimum necessary if needed!)

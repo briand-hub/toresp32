@@ -67,7 +67,7 @@ namespace Briand {
 		virtual void randomize();
 		
 		/**
-		 * Method to query Onionoo service.
+		 * Method to query Onionoo service. DEPRECATED.
 		 * @param type "relay" or "bridge"
 		 * @param fields comma-separated fields to retrieve
 		 * @param flagMask mask of required flags
@@ -75,13 +75,21 @@ namespace Briand {
 		 * @param overrideLimit set it if you want to override a random (max 5) download limit
 		 * @return Pointer with response body if success
 		*/
-		virtual unique_ptr<string> GetOnionooJson(const string& type, const string& fields, const unsigned short& flagsMask, bool& success, const unsigned short overrideLimit = 0);
+		// [[deprecated("Switching to directory server enquiry")]]
+		/*DELETED virtual unique_ptr<string> GetOnionooJson(const string& type, const string& fields, const unsigned short& flagsMask, bool& success, const unsigned short overrideLimit = 0); */
 
 		/**
-		 * Method refreshed nodes cache. No checks, just redownload data again. 
+		 * Method refreshed nodes cache. No checks, just redownload data again.  DEPRECATED.
 		 * @param maxTentatives if a download error occours, retry maxTenatives times.
 		*/
-		virtual void RefreshOnionooCache(const short maxTentatives = 5);
+		// [[deprecated("Switching to directory server enquiry")]]
+		/*DELETED virtual void RefreshOnionooCache(const short maxTentatives = 5);*/
+
+		/**
+		 * Method refreshed node cache by downloading a new consensus.
+		 * At the moment using MICRODESCRIPTORS (ESP32 has low performances)
+		*/
+		virtual void RefreshNodesCache();
 
 		/**
 		 * Method check the file cache validity.

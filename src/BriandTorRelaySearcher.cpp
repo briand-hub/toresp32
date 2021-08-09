@@ -23,7 +23,8 @@
 #include "BriandNet.hxx"
 #include "BriandTorCertificates.hxx"
 #include "BriandTorRelay.hxx"
-
+#include "BriandTorDirAuthority.hxx"
+#include "BriandTorCryptoUtils.hxx"
 
 namespace Briand {
 
@@ -56,7 +57,7 @@ namespace Briand {
 		*/
 	}
 
-	unique_ptr<string> BriandTorRelaySearcher::GetOnionooJson(const string& type, const string& fields, const unsigned short& flagsMask, bool& success, const unsigned short overrideLimit /* = 0*/) {
+	/*DELETED unique_ptr<string> BriandTorRelaySearcher::GetOnionooJson(const string& type, const string& fields, const unsigned short& flagsMask, bool& success, const unsigned short overrideLimit) {
 		// Randomize for subsequent method invoke
 		this->randomize();
 
@@ -124,15 +125,16 @@ namespace Briand {
 
 		return std::move(response);
 	}
+	*/
 
-	void BriandTorRelaySearcher::RefreshOnionooCache(const short maxTentatives) {
-		/*
-			CACHE FILE FORMAT:
-			Json file contaning downloaded Onionoo informations PLUS a header field called
-			"cachecreatedon":00000000
-			it contains the timestamp of the last download. If this timestamp is older
-			than TOR_NODES_CACHE_VAL_H than cache must be considered invalid.
-		*/
+	/*DELETED  void BriandTorRelaySearcher::RefreshOnionooCache(const short maxTentatives) {
+		
+		// CACHE FILE FORMAT:
+		// Json file contaning downloaded Onionoo informations PLUS a header field called
+		// "cachecreatedon":00000000
+		// it contains the timestamp of the last download. If this timestamp is older
+		// than TOR_NODES_CACHE_VAL_H than cache must be considered invalid.
+		
 
 		this->cacheValid = false;
 
@@ -271,6 +273,244 @@ namespace Briand {
 		// of course....
 		this->cacheValid = true;
 	}
+	*/
+
+	void BriandTorRelaySearcher::RefreshNodesCache() {
+		/*
+			NEW CACHE FILES FORMAT (ascii formats!):
+			[TIMESTAMP]\n
+			[NICKNAME]\t[FINGERPRINT]\t[IPV4ADDRESS]\t[OR PORT]\t[FLAGS MASK]\n
+
+			each row (except first) is a router. All ASCII format, including integers (port, mask etc.)
+
+		*/
+
+		ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache invoked.\n");
+		
+
+		// Connect to an authority, check not to start an infinite loop 
+		unsigned short loopStartsWith = TOR_DIR_LAST_USED;
+		bool cacheCreated = false;
+		auto client = make_unique<BriandIDFSocketClient>();
+
+		do {
+			auto curDir = TOR_DIR_AUTHORITIES[TOR_DIR_LAST_USED];
+			
+			// If a previous call did not create good files, restart!
+
+			ofstream fExit(NODES_FILE_EXIT, ios::out | ios::trunc);
+			fExit << std::to_string(BriandUtils::GetUnixTime()) << "\n";
+			unsigned char fExitNodes = 0;
+			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache recreated exit cache.\n");
+			ofstream fMiddle(NODES_FILE_MIDDLE, ios::out | ios::trunc);
+			fMiddle << std::to_string(BriandUtils::GetUnixTime()) << "\n";
+			unsigned char fMiddleNodes = 0;
+			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache recreated middle cache.\n");
+			ofstream fGuard(NODES_FILE_GUARD, ios::out | ios::trunc);
+			fGuard << std::to_string(BriandUtils::GetUnixTime()) << "\n";
+			unsigned char fGuardNodes = 0;
+			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache recreated guard cache.\n");
+
+			// Connect
+			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache Connecting to dir #%hu (%s)\n", TOR_DIR_LAST_USED, curDir.nickname);
+			if (!client->Connect(curDir.host, curDir.port)) {
+				ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache Failed to connect to dir #%hu (%s)\n", TOR_DIR_LAST_USED, curDir.nickname);
+				TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED+1) % TOR_DIR_AUTHORITIES_NUMBER;
+				client->Disconnect();
+				continue;
+			}
+
+			ostringstream ss("");
+			ss << "GET /tor/status-vote/current/consensus-microdesc HTTP/1.1\r\n";
+			ss << "Host: " << curDir.host << "\r\n";
+			ss << "User-Agent: " << BriandUtils::GetRandomHostName().get() << "\r\n";
+			ss << "Connection: close\r\n";
+			ss << "\r\n\r\n";
+	
+			auto requestV = BriandUtils::HexStringToVector("", ss.str());
+
+			if (!client->WriteData(requestV)) {
+				ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache Failed to write request to dir #%hu (%s)\n", TOR_DIR_LAST_USED, curDir.nickname);
+				TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED+1) % TOR_DIR_AUTHORITIES_NUMBER;
+				client->Disconnect();
+				continue;
+			}
+
+			// Now read results (example: http://128.31.0.34:9131/tor/status-vote/current/consensus-microdesc)
+			// Searching for "r " string (a row for a starting node)
+			bool newLine = false;
+			unique_ptr<vector<unsigned char>> rawData = nullptr;
+
+			// This variable is useful: if after a "r " read, while extracting the other lines
+			// another unexpected "r " is found, then this variable will be populated and
+			// will not read another time.
+			unique_ptr<vector<unsigned char>> lostR = nullptr;
+
+			do {
+				if (lostR == nullptr) {
+					rawData = client->ReadDataUntil('\n', 512, newLine);
+				}
+				else {
+					rawData = std::move(lostR);
+					lostR.reset();
+				}
+					
+				if (!newLine || rawData->size() < 2) {
+					// something is wrong!
+					break;
+				}
+
+				// Get a string and free memory
+				unique_ptr<string> sData = make_unique<string>();
+				for (auto&& c : *rawData.get()) { sData->push_back(static_cast<char>(c)); }
+				rawData.reset();
+
+				// If line is a "r " then read informations
+				if (sData->substr(0, 2).compare("r ") == 0) {
+					sData->erase(0, 2);
+					// [NAME] [FINGERPRINT_BASE64] [DATE] [TIME] [IPv4] [ORPORT] 0
+					auto pos = sData->find(' ');
+					
+					if (pos == string::npos) continue;
+					
+					string rName = sData->substr(0, pos);
+					sData->erase(0, pos+1);
+					
+					pos = sData->find(' ');
+					if (pos == string::npos) continue;
+
+					auto rFingerprintV = BriandTorCryptoUtils::Base64Decode(sData->substr(0, pos));
+					sData->erase(0, pos+1);
+					
+					pos = sData->find(' ');
+					if (pos == string::npos) continue;
+					// Date: ignore
+					sData->erase(0, pos+1);
+
+					pos = sData->find(' ');
+					if (pos == string::npos) continue;
+					// Time: ignore
+					sData->erase(0, pos+1);
+
+					pos = sData->find(' ');
+					if (pos == string::npos) continue;
+					string rIP = sData->substr(0, pos);
+					sData->erase(0, pos+1);
+
+					pos = sData->find(' ');
+					if (pos == string::npos) continue;
+					string rPort = sData->substr(0, pos);
+					sData->erase(0, pos+1);
+
+					// OK! Now there shuld be an "m " line (ignorable)
+					rawData = client->ReadDataUntil('\n', 512, newLine);
+					if (!newLine || rawData->size() < 2) {
+						// error occoured!
+						continue;
+					}
+					if (static_cast<char>(rawData->at(0)) == 'r' && static_cast<char>(rawData->at(1) == ' ')) {
+						// a new router line !?!?
+						lostR = std::move(rawData);
+						rawData.reset();
+						continue;
+					} 
+
+					// OK! Now there shuld be an "s " line (contains flags!!)
+					rawData = client->ReadDataUntil('\n', 512, newLine);
+					if (!newLine || rawData->size() < 2) {
+						// error occoured!
+						continue;
+					}
+					if (static_cast<char>(rawData->at(0)) == 'r' && static_cast<char>(rawData->at(1) == ' ')) {
+						// a new router line !?!?
+						lostR = std::move(rawData);
+						rawData.reset();
+						continue;
+					}
+					
+					// Get a string and free memory
+					sData = make_unique<string>();
+					for (auto&& c : *rawData.get()) { sData->push_back(static_cast<char>(c)); }
+					rawData.reset();
+
+					// This line should begin with "s "
+					if (sData->substr(0, 2).compare("s ") == 0) {
+						unsigned short rFlags = 0x00;
+
+						// rewrite string to uppercase
+						for (char& c: *sData.get()) c = std::toupper(c);
+
+						// Check flags
+						if (sData->find("AUTHORITY") != string::npos) rFlags = rFlags | BriandTorRelayFlag::AUTHORITY;
+						if (sData->find("BADEXIT") != string::npos) rFlags = rFlags | BriandTorRelayFlag::BADEXIT;
+						if (sData->find("EXIT") != string::npos) rFlags = rFlags | BriandTorRelayFlag::EXIT;
+						if (sData->find("FAST") != string::npos) rFlags = rFlags | BriandTorRelayFlag::FAST;
+						if (sData->find("GUARD") != string::npos) rFlags = rFlags | BriandTorRelayFlag::GUARD;
+						if (sData->find("HSDIR") != string::npos) rFlags = rFlags | BriandTorRelayFlag::HSDIR;
+						if (sData->find("NOEDCONSENSUS") != string::npos) rFlags = rFlags | BriandTorRelayFlag::NOEDCONSENSUS;
+						if (sData->find("RUNNING") != string::npos) rFlags = rFlags | BriandTorRelayFlag::RUNNING;
+						if (sData->find("STABLE") != string::npos) rFlags = rFlags | BriandTorRelayFlag::STABLE;
+						if (sData->find("STABLEDESC") != string::npos) rFlags = rFlags | BriandTorRelayFlag::STABLEDESC;
+						if (sData->find("V2DIR") != string::npos) rFlags = rFlags | BriandTorRelayFlag::V2DIR;
+						if (sData->find("VALID") != string::npos) rFlags = rFlags | BriandTorRelayFlag::VALID;
+
+						// Check if this node is suitable as EXIT, GUARD or MIDDLE
+						if ( (rFlags & TOR_FLAGS_EXIT_MUST_HAVE) == TOR_FLAGS_EXIT_MUST_HAVE ) {
+							fExit << rName << "\t";
+							for (auto&& c : *rFingerprintV.get()) fExit << c;
+							fExit << "\t";
+							fExit << rIP << "\t";
+							fExit << rPort << "\t";
+							fExit << std::to_string(rFlags) << "\t";
+							if (fExitNodes+1 < TOR_NODES_CACHE_SIZE) fExit << "\n"; // skip last \n
+							fExitNodes++;
+						}
+						else if ( (rFlags & TOR_FLAGS_GUARD_MUST_HAVE) == TOR_FLAGS_GUARD_MUST_HAVE ) {
+							fGuard << rName << "\t";
+							for (auto&& c : *rFingerprintV.get()) fGuard << c;
+							fGuard << "\t";
+							fGuard << rIP << "\t";
+							fGuard << rPort << "\t";
+							fGuard << std::to_string(rFlags) << "\t";
+							if (fGuardNodes+1 < TOR_NODES_CACHE_SIZE) fGuard << "\n"; // skip last \n
+							fGuardNodes++;
+						}
+						else if ( (rFlags & TOR_FLAGS_MIDDLE_MUST_HAVE) == TOR_FLAGS_MIDDLE_MUST_HAVE ) {
+							fMiddle << rName << "\t";
+							for (auto&& c : *rFingerprintV.get()) fMiddle << c;
+							fMiddle << "\t";
+							fMiddle << rIP << "\t";
+							fMiddle << rPort << "\t";
+							fMiddle << std::to_string(rFlags) << "\t";
+							if (fMiddleNodes+1 < TOR_NODES_CACHE_SIZE) fMiddle << "\n"; // skip last \n
+							fMiddleNodes++;
+						}
+					}
+				}
+
+				// Cache ready?
+				cacheCreated = (fExitNodes >= TOR_NODES_CACHE_SIZE && fMiddleNodes >= TOR_NODES_CACHE_SIZE && fGuardNodes >= TOR_NODES_CACHE_SIZE);
+
+			} while (rawData->size() > 0 && !cacheCreated);
+
+			// Disconnect the client
+			client->Disconnect();
+
+			// Close files
+			fExit.flush();
+			fExit.close();
+			fMiddle.flush();
+			fMiddle.close();
+			fGuard.flush();
+			fGuard.close();
+
+		} while (!cacheCreated && loopStartsWith != TOR_DIR_LAST_USED);
+
+		// If all dirs fault
+		if (loopStartsWith == TOR_DIR_LAST_USED && !cacheCreated) {
+			ESP_LOGE(LOGTAG, "[ERR] RefreshNodesCache FATAL ERROR: all directories failed to build a cache. Too many TOR Nodes required in cache? Network down? TOR dirs all down?\n");
+		}
+	}
 
 	bool BriandTorRelaySearcher::CheckCacheFile(const char* filename) {
 		bool valid = false;
@@ -278,6 +518,7 @@ namespace Briand {
 		ifstream file(filename, ios::in);
 
 		if (file.good()) {
+			/* OLD Onionoo implementation
 			auto json = make_unique<string>("");
 			string line;
 
@@ -312,6 +553,17 @@ namespace Briand {
 			}
 
 			cJSON_Delete(root);
+			*/
+
+			// Check just the first line
+			string firstLine("");
+			getline(file, firstLine, '\n');
+			file.close();
+
+			unsigned long int cacheAge = stoul(firstLine);
+			if ( (cacheAge + (TOR_NODES_CACHE_VAL_H*3600)) >= BriandUtils::GetUnixTime() ) {
+				valid = true;
+			}
 		}
 		else {
 			ESP_LOGD(LOGTAG, "[DEBUG] %s cache file does not exist.\n", filename);
@@ -355,7 +607,10 @@ namespace Briand {
 
 		if (!this->cacheValid) {
 			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache invalid, download and rebuilding.\n");
+			/* OLD Onionoo implementation
 			RefreshOnionooCache();
+			*/
+			RefreshNodesCache();
 		}
 		if (this->cacheValid) {
 			// randomize for random picking
@@ -364,6 +619,56 @@ namespace Briand {
 			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
 
 			ifstream file(this->NODES_FILE_GUARD, ios::in);
+
+			// Skip the first line
+			string line; 
+			getline(file, line, '\n');
+
+			// Try to reach line number, if fails randomize again
+			bool validLine = false;
+			unsigned char fileLines = 0;
+			while (!validLine) {
+				if (file.eof()) {
+					// Here file is EOF but line was not reached, so check.
+					while (this->randomPick >= fileLines) 
+						this->randomize();
+
+					// restart
+					fileLines = 0;
+					file.seekg(0);
+					getline(file, line, '\n');
+				}
+
+				if (fileLines != this->randomPick) {
+					getline(file, line, '\n');
+					fileLines++;
+				}
+				else {
+					// We're in the right line
+					validLine = true;
+				}
+			}
+
+			file.close();
+
+			// At this point (should always arrive there!) create the relay object
+			auto relay = make_unique<Briand::BriandTorRelay>();
+			
+			relay->nickname->assign( line.substr(0, line.find(' ')) );
+			line.erase(0, line.find(' ')+1);
+			
+			relay->fingerprint->assign( line.substr(0, line.find(' ')) );
+			line.erase(0, line.find(' ')+1);
+			
+			relay->address->assign( line.substr(0, line.find(' ')) );
+			line.erase(0, line.find(' ')+1);
+
+			relay->port = std::stoi( line.substr(0, line.find(' ')) );
+			// unecessary till new fields to manage
+			// line.erase(0, line.find(' ')+1);
+			
+
+			/* OLD Onionoo implementation
 			auto json = make_unique<string>("");
 			string line;
 			while (file.good()) {
@@ -412,6 +717,7 @@ namespace Briand {
 				relay->effective_family->assign(effective_family->valuestring);
 			
 			cJSON_Delete(root);
+			*/
 		}
 		else {
 			ESP_LOGW(LOGTAG, "[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
@@ -425,9 +731,77 @@ namespace Briand {
 
 		if (!this->cacheValid) {
 			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache invalid, download and rebuilding.\n");
+			/* OLD Onionoo implementation
 			RefreshOnionooCache();
+			*/
 		}
 		if (this->cacheValid) {
+			bool sameFamily = true;
+
+			do {
+				// randomize for random picking
+				this->randomize();
+				
+				ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
+
+				ifstream file(this->NODES_FILE_MIDDLE, ios::in);
+
+				// Skip the first line
+				string line; 
+				getline(file, line, '\n');
+
+				// Try to reach line number, if fails randomize again
+				bool validLine = false;
+				unsigned char fileLines = 0;
+				while (!validLine) {
+					if (file.eof()) {
+						// Here file is EOF but line was not reached, so check.
+						while (this->randomPick >= fileLines) 
+							this->randomize();
+
+						// restart
+						fileLines = 0;
+						file.seekg(0);
+						getline(file, line, '\n');
+					}
+
+					if (fileLines != this->randomPick) {
+						getline(file, line, '\n');
+						fileLines++;
+					}
+					else {
+						// We're in the right line
+						validLine = true;
+					}
+				}
+
+				file.close();
+
+				// At this point (should always arrive there!) create the relay object
+				auto relay = make_unique<Briand::BriandTorRelay>();
+				
+				relay->nickname->assign( line.substr(0, line.find(' ')) );
+				line.erase(0, line.find(' ')+1);
+				
+				relay->fingerprint->assign( line.substr(0, line.find(' ')) );
+				line.erase(0, line.find(' ')+1);
+				
+				relay->address->assign( line.substr(0, line.find(' ')) );
+				line.erase(0, line.find(' ')+1);
+
+				relay->port = std::stoi( line.substr(0, line.find(' ')) );
+				// unecessary till new fields to manage
+				// line.erase(0, line.find(' ')+1);
+
+				// Check if in the same family
+				if (avoidGuardIp.length() > 0) {
+					sameFamily = this->IPsInSameFamily(avoidGuardIp, *relay->address.get());
+				}
+
+			} while (sameFamily);
+
+			/* OLD Onionoo implementation
+			
 			// randomize for random picking
 			this->randomize();
 			
@@ -496,6 +870,7 @@ namespace Briand {
 			
 			
 			cJSON_Delete(root);
+			*/
 		}
 		else {
 			ESP_LOGW(LOGTAG, "[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
@@ -509,9 +884,83 @@ namespace Briand {
 
 		if (!this->cacheValid) {
 			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache invalid, download and rebuilding.\n");
+			/* OLD Onionoo implementation
 			RefreshOnionooCache();
+			*/
 		}
 		if (this->cacheValid) {
+			bool sameFamily = false;
+
+			do {
+				// randomize for random picking
+				this->randomize();
+				
+				ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
+
+				ifstream file(this->NODES_FILE_EXIT, ios::in);
+
+				// Skip the first line
+				string line; 
+				getline(file, line, '\n');
+
+				// Try to reach line number, if fails randomize again
+				bool validLine = false;
+				unsigned char fileLines = 0;
+				while (!validLine) {
+					if (file.eof()) {
+						// Here file is EOF but line was not reached, so check.
+						while (this->randomPick >= fileLines) 
+							this->randomize();
+
+						// restart
+						fileLines = 0;
+						file.seekg(0);
+						getline(file, line, '\n');
+					}
+
+					if (fileLines != this->randomPick) {
+						getline(file, line, '\n');
+						fileLines++;
+					}
+					else {
+						// We're in the right line
+						validLine = true;
+					}
+				}
+
+				file.close();
+
+				// At this point (should always arrive there!) create the relay object
+				auto relay = make_unique<Briand::BriandTorRelay>();
+				
+				relay->nickname->assign( line.substr(0, line.find(' ')) );
+				line.erase(0, line.find(' ')+1);
+				
+				relay->fingerprint->assign( line.substr(0, line.find(' ')) );
+				line.erase(0, line.find(' ')+1);
+				
+				relay->address->assign( line.substr(0, line.find(' ')) );
+				line.erase(0, line.find(' ')+1);
+
+				relay->port = std::stoi( line.substr(0, line.find(' ')) );
+				// unecessary till new fields to manage
+				// line.erase(0, line.find(' ')+1);
+
+				// Check if in the same family with guard
+				if (avoidGuardIp.length() > 0) {
+					sameFamily = this->IPsInSameFamily(avoidGuardIp, *relay->address.get());
+				}
+				// Check if in the same family with middle
+				if (avoidMiddleIp.length() > 0) {
+					sameFamily = sameFamily || this->IPsInSameFamily(avoidMiddleIp, *relay->address.get());
+				}
+
+			} while (sameFamily);
+
+			/* OLD Onionoo implementation
+
+
+
 			// randomize for random picking
 			this->randomize();
 			
@@ -572,7 +1021,7 @@ namespace Briand {
 				}
 				// Check if in the same family with middle
 				if (avoidMiddleIp.length() > 0) {
-					sameFamily = this->IPsInSameFamily(avoidMiddleIp, *relay->address.get());
+					sameFamily = sameFamily || this->IPsInSameFamily(avoidMiddleIp, *relay->address.get());
 				}
 				
 				// Could not be here
@@ -583,6 +1032,8 @@ namespace Briand {
 			} while (sameFamily);
 			
 			cJSON_Delete(root);
+			
+			*/
 		}
 		else {
 			ESP_LOGW(LOGTAG, "[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
@@ -595,7 +1046,12 @@ namespace Briand {
 		std::remove(this->NODES_FILE_GUARD);
 		std::remove(this->NODES_FILE_MIDDLE);
 		std::remove(this->NODES_FILE_EXIT);
-		if (forceRefresh) this->RefreshOnionooCache();
+		if (forceRefresh) {
+			/* OLD Onionoo implementation
+			RefreshOnionooCache();
+			*/
+			this->RefreshNodesCache();
+		}
 	}
 
 	void BriandTorRelaySearcher::PrintCacheContents() {
