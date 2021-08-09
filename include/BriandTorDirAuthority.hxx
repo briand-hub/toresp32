@@ -48,5 +48,5 @@ constexpr Briand::BriandTorDirAuthority TOR_DIR_AUTHORITIES[TOR_DIR_AUTHORITIES_
 	//, { "dannenberg", "", "193.23.244.244", 80}
 };
 
-// Static member for the last responding authority
-unsigned short TOR_DIR_LAST_USED = 0x0000;
+// Defined after in BriandTorDirAuthority.cpp
+extern unsigned short TOR_DIR_LAST_USED;

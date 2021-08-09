@@ -2,15 +2,10 @@
 
 ## Next steps
 
-* Consider change Relay cache with something better now (consensus). Double check not to choose same relays
-* MUST implement SENDME cells as in tor-specs 7.3. Circuit-level flow control
-* Remove serial streaming and use SOCKS5 proxy only, remove unused terminal commands
 * Consider error management short/int for method errors (mbedtls style)
 * Consider adding TIMEOUT seconds to Stream methods.
 * Implement a vector of nodes.
-* Add CircID verification and other verification stuff
 * Change the "old" buffer-copy to vector->data() to optimize memory usage
-* Find a way to get a small-size official consensus from directories
 * Simplify code in TorCircuit class
 * Authenticate cell? => Prepare stub method to authenticate client
 
@@ -18,7 +13,7 @@
 
 * Need to change a little Socks5Proxy not catching client disconnect for http request and keeping socket opened. (main thread + one thread per accept())
 * Removed COMMANDID and leak testing, switching to full socks5 proxy
-
+* Moving to another cache implementation using microdescriptors from Authorities
 
 ## 2021-08-07
 
