@@ -34,7 +34,7 @@ namespace Briand {
 		this->address = make_unique<string>("");
 		this->fingerprint = make_unique<string>("");
 		this->flags = 0x0000;
-		this->effective_family = make_unique<string>("");
+		//this->effective_family = make_unique<string>("");
 		this->descriptorNtorOnionKey = make_unique<string>("");
 		this->certLinkKey = nullptr;
 		this->certRsa1024Identity = nullptr;
@@ -61,7 +61,7 @@ namespace Briand {
 		this->nickname.reset();
 		this->address.reset();
 		this->fingerprint.reset();
-		this->effective_family.reset();
+		//this->effective_family.reset();
 
 		if(this->certLinkKey != nullptr) this->certLinkKey.reset();
 		if(this->certRsa1024Identity != nullptr) this->certRsa1024Identity.reset();
@@ -476,7 +476,7 @@ namespace Briand {
 			printf("[DEBUG] Address: %s\n", this->address->c_str());
 			printf("[DEBUG] OR Port: %u\n", this->port);
 			printf("[DEBUG] Fingerprint: %s\n", this->fingerprint->c_str());
-			printf("[DEBUG] Effective Family (raw contents): %s\n", this->effective_family->c_str());
+			//printf("[DEBUG] Effective Family (raw contents): %s\n", this->effective_family->c_str());
 			printf("[DEBUG] Encoded descriptor NTOR onion key: %s\n", this->descriptorNtorOnionKey->c_str());
 			printf("[DEBUG] Decoded descriptor NTOR onion key: ");
 			auto dec = BriandTorCryptoUtils::Base64Decode(*this->descriptorNtorOnionKey.get());
