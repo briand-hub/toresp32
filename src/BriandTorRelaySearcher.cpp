@@ -299,15 +299,34 @@ namespace Briand {
 			// If a previous call did not create good files, restart!
 
 			ofstream fExit(NODES_FILE_EXIT, ios::out | ios::trunc);
+			if (!fExit.good()) {
+				ESP_LOGE(LOGTAG, "[ERR] RefreshNodesCache FATAL ERROR: Cannot write guard cache file.\n");
+				return;
+			}
 			fExit << std::to_string(BriandUtils::GetUnixTime()) << "\n";
 			unsigned char fExitNodes = 0;
 			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache recreated exit cache.\n");
+			
 			ofstream fMiddle(NODES_FILE_MIDDLE, ios::out | ios::trunc);
+			if (!fMiddle.good()) {
+				ESP_LOGE(LOGTAG, "[ERR] RefreshNodesCache FATAL ERROR: Cannot write guard cache file.\n");
+				return;
+			}
 			fMiddle << std::to_string(BriandUtils::GetUnixTime()) << "\n";
 			unsigned char fMiddleNodes = 0;
 			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache recreated middle cache.\n");
+			
 			ofstream fGuard(NODES_FILE_GUARD, ios::out | ios::trunc);
+			if (!fGuard.good()) {
+				ESP_LOGE(LOGTAG, "[ERR] RefreshNodesCache FATAL ERROR: Cannot write guard cache file.\n");
+				return;
+			}
 			fGuard << std::to_string(BriandUtils::GetUnixTime()) << "\n";
+			if (!fGuard.good()) {
+				ESP_LOGE(LOGTAG, "[ERR] RefreshNodesCache FATAL ERROR: Cannot write guard cache file.\n");
+				return;
+			}
+
 			unsigned char fGuardNodes = 0;
 			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache recreated guard cache.\n");
 
@@ -363,10 +382,10 @@ namespace Briand {
 				// Get a string and free memory
 				unique_ptr<string> sData = make_unique<string>();
 				for (auto&& c : *rawData.get()) { sData->push_back(static_cast<char>(c)); }
-				rawData.reset();
 
 				// If line is a "r " then read informations
 				if (sData->substr(0, 2).compare("r ") == 0) {
+
 					sData->erase(0, 2);
 					// [NAME] [FINGERPRINT_BASE64] [DATE] [TIME] [IPv4] [ORPORT] 0
 					auto pos = sData->find(' ');
@@ -379,8 +398,24 @@ namespace Briand {
 					pos = sData->find(' ');
 					if (pos == string::npos) continue;
 
-					auto rFingerprintV = BriandTorCryptoUtils::Base64Decode(sData->substr(0, pos));
+					string fingerprintBase64 = sData->substr(0, pos);
 					sData->erase(0, pos+1);
+
+					// WARNING: base64 fields could be without the ending '=' but this could be not
+					// recognized by a decoding library. So, add the ending '='/'==' to fit
+					// the base64 multiples of 4 as required.
+
+					while (fingerprintBase64.length() % 4 != 0)
+						fingerprintBase64.push_back('=');
+
+					auto rFingerprintV = BriandTorCryptoUtils::Base64Decode(fingerprintBase64);
+					string rFingerprint("");
+					for (auto&& c : *rFingerprintV.get()) {
+						char buf[3] = {0x00};
+						snprintf(buf, 3, "%02X", c);
+						rFingerprint.append(buf);
+					}
+					rFingerprintV.reset();
 					
 					pos = sData->find(' ');
 					if (pos == string::npos) continue;
@@ -411,7 +446,6 @@ namespace Briand {
 					if (static_cast<char>(rawData->at(0)) == 'r' && static_cast<char>(rawData->at(1) == ' ')) {
 						// a new router line !?!?
 						lostR = std::move(rawData);
-						rawData.reset();
 						continue;
 					} 
 
@@ -424,14 +458,12 @@ namespace Briand {
 					if (static_cast<char>(rawData->at(0)) == 'r' && static_cast<char>(rawData->at(1) == ' ')) {
 						// a new router line !?!?
 						lostR = std::move(rawData);
-						rawData.reset();
 						continue;
 					}
 					
-					// Get a string and free memory
+					// Get a string
 					sData = make_unique<string>();
 					for (auto&& c : *rawData.get()) { sData->push_back(static_cast<char>(c)); }
-					rawData.reset();
 
 					// This line should begin with "s "
 					if (sData->substr(0, 2).compare("s ") == 0) {
@@ -457,8 +489,7 @@ namespace Briand {
 						// Check if this node is suitable as EXIT, GUARD or MIDDLE
 						if ( (rFlags & TOR_FLAGS_EXIT_MUST_HAVE) == TOR_FLAGS_EXIT_MUST_HAVE ) {
 							fExit << rName << "\t";
-							for (auto&& c : *rFingerprintV.get()) fExit << c;
-							fExit << "\t";
+							fExit << rFingerprint << "\t";
 							fExit << rIP << "\t";
 							fExit << rPort << "\t";
 							fExit << std::to_string(rFlags) << "\t";
@@ -467,8 +498,7 @@ namespace Briand {
 						}
 						else if ( (rFlags & TOR_FLAGS_GUARD_MUST_HAVE) == TOR_FLAGS_GUARD_MUST_HAVE ) {
 							fGuard << rName << "\t";
-							for (auto&& c : *rFingerprintV.get()) fGuard << c;
-							fGuard << "\t";
+							fGuard << rFingerprint << "\t";
 							fGuard << rIP << "\t";
 							fGuard << rPort << "\t";
 							fGuard << std::to_string(rFlags) << "\t";
@@ -477,8 +507,7 @@ namespace Briand {
 						}
 						else if ( (rFlags & TOR_FLAGS_MIDDLE_MUST_HAVE) == TOR_FLAGS_MIDDLE_MUST_HAVE ) {
 							fMiddle << rName << "\t";
-							for (auto&& c : *rFingerprintV.get()) fMiddle << c;
-							fMiddle << "\t";
+							fMiddle << rFingerprint << "\t";
 							fMiddle << rIP << "\t";
 							fMiddle << rPort << "\t";
 							fMiddle << std::to_string(rFlags) << "\t";
@@ -560,10 +589,12 @@ namespace Briand {
 			getline(file, firstLine, '\n');
 			file.close();
 
-			unsigned long int cacheAge = stoul(firstLine);
-			if ( (cacheAge + (TOR_NODES_CACHE_VAL_H*3600)) >= BriandUtils::GetUnixTime() ) {
-				valid = true;
-			}
+			if (firstLine.size() > 3) {
+				unsigned long int cacheAge = stoul(firstLine);
+				if ( (cacheAge + (TOR_NODES_CACHE_VAL_H*3600)) >= BriandUtils::GetUnixTime() ) {
+					valid = true;
+				}
+			}	
 		}
 		else {
 			ESP_LOGD(LOGTAG, "[DEBUG] %s cache file does not exist.\n", filename);
@@ -652,20 +683,20 @@ namespace Briand {
 			file.close();
 
 			// At this point (should always arrive there!) create the relay object
-			auto relay = make_unique<Briand::BriandTorRelay>();
+			relay = make_unique<Briand::BriandTorRelay>();
 			
-			relay->nickname->assign( line.substr(0, line.find(' ')) );
-			line.erase(0, line.find(' ')+1);
+			relay->nickname->assign( line.substr(0, line.find('\t')) );
+			line.erase(0, line.find('\t')+1);
 			
-			relay->fingerprint->assign( line.substr(0, line.find(' ')) );
-			line.erase(0, line.find(' ')+1);
+			relay->fingerprint->assign( line.substr(0, line.find('\t')) );
+			line.erase(0, line.find('\t')+1);
 			
-			relay->address->assign( line.substr(0, line.find(' ')) );
-			line.erase(0, line.find(' ')+1);
+			relay->address->assign( line.substr(0, line.find('\t')) );
+			line.erase(0, line.find('\t')+1);
 
-			relay->port = std::stoi( line.substr(0, line.find(' ')) );
+			relay->port = std::stoi( line.substr(0, line.find('\t')) );
 			// unecessary till new fields to manage
-			// line.erase(0, line.find(' ')+1);
+			// line.erase(0, line.find('\t')+1);
 			
 
 			/* OLD Onionoo implementation
@@ -778,20 +809,20 @@ namespace Briand {
 				file.close();
 
 				// At this point (should always arrive there!) create the relay object
-				auto relay = make_unique<Briand::BriandTorRelay>();
+				relay = make_unique<Briand::BriandTorRelay>();
 				
-				relay->nickname->assign( line.substr(0, line.find(' ')) );
-				line.erase(0, line.find(' ')+1);
+				relay->nickname->assign( line.substr(0, line.find('\t')) );
+				line.erase(0, line.find('\t')+1);
 				
-				relay->fingerprint->assign( line.substr(0, line.find(' ')) );
-				line.erase(0, line.find(' ')+1);
+				relay->fingerprint->assign( line.substr(0, line.find('\t')) );
+				line.erase(0, line.find('\t')+1);
 				
-				relay->address->assign( line.substr(0, line.find(' ')) );
-				line.erase(0, line.find(' ')+1);
+				relay->address->assign( line.substr(0, line.find('\t')) );
+				line.erase(0, line.find('\t')+1);
 
-				relay->port = std::stoi( line.substr(0, line.find(' ')) );
+				relay->port = std::stoi( line.substr(0, line.find('\t')) );
 				// unecessary till new fields to manage
-				// line.erase(0, line.find(' ')+1);
+				// line.erase(0, line.find('\t')+1);
 
 				// Check if in the same family
 				if (avoidGuardIp.length() > 0) {
@@ -931,20 +962,20 @@ namespace Briand {
 				file.close();
 
 				// At this point (should always arrive there!) create the relay object
-				auto relay = make_unique<Briand::BriandTorRelay>();
+				relay = make_unique<Briand::BriandTorRelay>();
 				
-				relay->nickname->assign( line.substr(0, line.find(' ')) );
-				line.erase(0, line.find(' ')+1);
+				relay->nickname->assign( line.substr(0, line.find('\t')) );
+				line.erase(0, line.find('\t')+1);
 				
-				relay->fingerprint->assign( line.substr(0, line.find(' ')) );
-				line.erase(0, line.find(' ')+1);
+				relay->fingerprint->assign( line.substr(0, line.find('\t')) );
+				line.erase(0, line.find('\t')+1);
 				
-				relay->address->assign( line.substr(0, line.find(' ')) );
-				line.erase(0, line.find(' ')+1);
+				relay->address->assign( line.substr(0, line.find('\t')) );
+				line.erase(0, line.find('\t')+1);
 
-				relay->port = std::stoi( line.substr(0, line.find(' ')) );
+				relay->port = std::stoi( line.substr(0, line.find('\t')) );
 				// unecessary till new fields to manage
-				// line.erase(0, line.find(' ')+1);
+				// line.erase(0, line.find('\t')+1);
 
 				// Check if in the same family with guard
 				if (avoidGuardIp.length() > 0) {
