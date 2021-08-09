@@ -487,7 +487,7 @@ namespace Briand {
 						if (sData->find("VALID") != string::npos) rFlags = rFlags | BriandTorRelayFlag::VALID;
 
 						// Check if this node is suitable as EXIT, GUARD or MIDDLE
-						if ( (rFlags & TOR_FLAGS_EXIT_MUST_HAVE) == TOR_FLAGS_EXIT_MUST_HAVE ) {
+						if (fExitNodes < TOR_NODES_CACHE_SIZE && (rFlags & TOR_FLAGS_EXIT_MUST_HAVE) == TOR_FLAGS_EXIT_MUST_HAVE ) {
 							fExit << rName << "\t";
 							fExit << rFingerprint << "\t";
 							fExit << rIP << "\t";
@@ -496,7 +496,7 @@ namespace Briand {
 							if (fExitNodes+1 < TOR_NODES_CACHE_SIZE) fExit << "\n"; // skip last \n
 							fExitNodes++;
 						}
-						else if ( (rFlags & TOR_FLAGS_GUARD_MUST_HAVE) == TOR_FLAGS_GUARD_MUST_HAVE ) {
+						else if (fGuardNodes < TOR_NODES_CACHE_SIZE && (rFlags & TOR_FLAGS_GUARD_MUST_HAVE) == TOR_FLAGS_GUARD_MUST_HAVE ) {
 							fGuard << rName << "\t";
 							fGuard << rFingerprint << "\t";
 							fGuard << rIP << "\t";
@@ -505,7 +505,7 @@ namespace Briand {
 							if (fGuardNodes+1 < TOR_NODES_CACHE_SIZE) fGuard << "\n"; // skip last \n
 							fGuardNodes++;
 						}
-						else if ( (rFlags & TOR_FLAGS_MIDDLE_MUST_HAVE) == TOR_FLAGS_MIDDLE_MUST_HAVE ) {
+						else if (fMiddleNodes < TOR_NODES_CACHE_SIZE && (rFlags & TOR_FLAGS_MIDDLE_MUST_HAVE) == TOR_FLAGS_MIDDLE_MUST_HAVE ) {
 							fMiddle << rName << "\t";
 							fMiddle << rFingerprint << "\t";
 							fMiddle << rIP << "\t";
