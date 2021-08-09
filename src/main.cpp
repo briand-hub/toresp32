@@ -466,6 +466,12 @@ void TorEsp32Main(void* taskArg) {
 			CIRCUITS_MANAGER->Start();
 			printf("[INFO] TOR Circuits Manager started.\n");
 
+			printf("[INFO] Waiting for at least one suitable circuit, may take some time...\n");
+
+			while (CIRCUITS_MANAGER->GetCircuit() == nullptr) {
+				vTaskDelay(1000/portTICK_PERIOD_MS);
+			}
+
 			// Start the Proxy
 			printf("[INFO] Starting SOCKS5 Proxy.\n");
 			SOCKS5_PROXY = make_unique<Briand::BriandTorSocks5Proxy>();
@@ -589,6 +595,10 @@ void reboot() {
 
     // Serial stop
     fflush(stdout);
+
+	// Turn off led
+	gpio_set_direction(GPIO_NUM_5, GPIO_MODE_OUTPUT);
+	gpio_set_level(GPIO_NUM_5, 1);
     
     // Restart
     esp_restart();
@@ -605,7 +615,7 @@ void executeCommand(string& cmd) {
 
 	if (cmd.compare("help") == 0) {
         printf("COMMAND : description\n");
-		printf("SYSTEM---------------------------------------------------------------------------\n");
+		printf("SYSTEM-------------------------------------------------------------------------------\n");
 		printf("help : display this.\n");
         printf("time : display date and time.\n");
 		printf("devinfo : display device information.\n");
@@ -618,23 +628,23 @@ void executeCommand(string& cmd) {
 		printf("reboot : restart device.\n");
 
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
-			printf("TESTING (active in DEBUG)-----------------------------------------------------\n");
+			printf("TESTING (active in DEBUG)---------------------------------------------------------\n");
 			printf("search-guard : if DEBUG active, search and display info for a guard node.\n");
 			printf("search-exit : if DEBUG active, search and display info for an exit node.\n");
 			printf("search-middle : if DEBUG active, search and display info for a middle node.\n");
-			printf("testcircuit : if DEBUG active, build a new circuit, resolve ifconfig.me IP then destroy just for testing.\n");
+			printf("testcircuit : if DEBUG active, build a new circuit, resolve www.torproject.org IP then destroy just for testing.\n");
 		}
 
-		printf("TOR TESTING-----------------------------------------------------------------------\n");
-		printf("ifconfig.me : Show **REAL** ifconfig.me information (NON-TOR REQUEST, REAL ADDRESS).\n");
-		printf("tortest : Make a TorResolve request for ifconfig.me then sends PADDING cells then another resolve.\n");
+		printf("TOR TESTING---------------------------------------------------------------------------\n");
+		printf("myrealip : Show **REAL** IP address using (NON-TOR REQUEST).\n");
+		printf("torip : Show **TOR** IP address (TOR REQUEST).\n");
 
-		printf("TOR COMMANDS----------------------------------------------------------------------\n");
+		printf("TOR COMMANDS--------------------------------------------------------------------------\n");
 		printf("torcache : print out the local node cache, all 3 files.\n");
         printf("torcache refresh : refresh the tor cache.\n");
 		printf("torcircuits : print out the current tor circuit status.\n");
 		printf("torcircuits [restart|stop] : Invalidate all circuits pool, if restart rebuild again.\n");
-		printf("torproxy [restart|stop] : Starts/Stops SOCKS5 Proxy.\n");
+		printf("torproxy [start|stop] : Starts/Stops SOCKS5 Proxy.\n");
 		printf("tor resolve [hostname] : Resolve IPv4 address through tor.\n");
     }
     else if (cmd.compare("time") == 0) {
@@ -763,9 +773,22 @@ void executeCommand(string& cmd) {
 		else 
 			printf("FAILED to build a circuit.\n");
     }
-	else if (cmd.compare("ifconfig.me") == 0)  {
-		string info = Briand::BriandUtils::BriandIfConfigMe();
-		printf("\nInfo about your real identity:\n\n%s\n", info.c_str());
+	else if (cmd.compare("myrealip") == 0)  {
+		printf("Your real public ip is: %s", Briand::BriandUtils::GetPublicIPFromIPFY().c_str());
+    }
+	else if (cmd.compare("torip") == 0)  {
+		auto circuit = CIRCUITS_MANAGER->GetCircuit();
+		if (circuit == nullptr) {
+			printf("No suitable circuit found.\n");
+		}
+		else {
+			printf("Using circuit #%hu\n", circuit->internalID);
+			
+			//
+			// TODO
+			//
+
+		}
     }
 	// TOR commands
 	else if (cmd.compare("torcircuits") == 0) {
@@ -803,20 +826,6 @@ void executeCommand(string& cmd) {
         auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
         relaySearcher->InvalidateCache(true);
     }
-	else if (cmd.compare("tortest") == 0) {
-		auto circuit = CIRCUITS_MANAGER->GetCircuit();
-		if (circuit == nullptr) {
-			printf("No suitable circuit found.\n");
-		}
-		else {
-			printf("Using circuit #%hu\n", circuit->internalID);
-			printf("FISRT RESOLVED TO: %s\n", Briand::BriandUtils::ipv4ToString(circuit->TorResolve("ifconfig.me")).c_str());
-			circuit->SendPadding();
-			circuit->SendPadding();
-			circuit->SendPadding();
-			printf("SECOND RESOLVED TO: %s\n", Briand::BriandUtils::ipv4ToString(circuit->TorResolve("ifconfig.me")).c_str());
-		}
-	}
 	else if (cmd.substr(0, 12).compare("tor resolve ") == 0) {
 		cmd.erase(cmd.begin(), cmd.begin() + 12);
 		auto circuit = CIRCUITS_MANAGER->GetCircuit();
@@ -825,7 +834,7 @@ void executeCommand(string& cmd) {
 		}
 		else {
 			printf("Using circuit #%hu\n", circuit->internalID);
-			printf("IPv4 address: %s\n", Briand::BriandUtils::ipv4ToString(circuit->TorResolve(cmd)).c_str());
+			printf("IPv4 address: %s\n", Briand::BriandUtils::IPv4ToString(circuit->TorResolve(cmd)).c_str());
 		}
 	}
 	// other commands implementation...

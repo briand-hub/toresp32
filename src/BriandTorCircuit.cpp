@@ -402,7 +402,7 @@ namespace Briand {
 
 		tempCell = make_unique<BriandTorCell>( this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::NETINFO );
 		struct in_addr public_ip;
-		inet_aton(BriandUtils::BriandGetPublicIPFromIPFY().c_str(), &public_ip);
+		inet_aton(BriandUtils::GetPublicIPFromIPFY().c_str(), &public_ip);
 		tempCell->BuildAsNETINFO( public_ip );
 
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
@@ -1218,7 +1218,7 @@ namespace Briand {
 		}
 
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
-			printf("[DEBUG] Found IPv4 address: 0x%08X / %s\n", resolved.s_addr, BriandUtils::ipv4ToString(resolved).c_str());
+			printf("[DEBUG] Found IPv4 address: 0x%08X / %s\n", resolved.s_addr, BriandUtils::IPv4ToString(resolved).c_str());
 		}
 
 		this->StatusUnsetFlag(CircuitStatusFlag::STREAMING);
@@ -1317,7 +1317,7 @@ namespace Briand {
 
 	bool BriandTorCircuit::TorStreamStart(const in_addr& ipv4, const short& port) {
 		// where  ADDRESS can be a DNS hostname, or an IPv4 address in dotted-quad format
-		return this->TorStreamStart(BriandUtils::ipv4ToString(ipv4), port);
+		return this->TorStreamStart(BriandUtils::IPv4ToString(ipv4), port);
 	}
 
 	void BriandTorCircuit::TorStreamSend(const unique_ptr<vector<unsigned char>>& data, bool& sent) {
@@ -1369,7 +1369,7 @@ namespace Briand {
 
 			// Check timeout
 			if (BriandUtils::GetUnixTime() > now+timeout_s) {
-				ESP_LOGW(LOGTAG, "[ERR] TorStreamRead TIMEOUT (%hu seconds).\n", timeout_s);
+				ESP_LOGD(LOGTAG, "[DEBUG] TorStreamRead TIMEOUT (%hu seconds).\n", timeout_s);
 				this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 				return false;
 			}

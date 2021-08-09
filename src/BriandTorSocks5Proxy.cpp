@@ -83,7 +83,7 @@ namespace Briand
 
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy listening.\n");
 
-        xTaskCreate(this->HandleRequest, "TorProxy", 4096, reinterpret_cast<void*>(this->proxySocket), 300, &this->proxyTaskHandle);
+        xTaskCreate(this->HandleRequest, "TorProxy", 2048, reinterpret_cast<void*>(this->proxySocket), 5, &this->proxyTaskHandle);
 
         this->proxyStarted = true;
 
@@ -103,11 +103,14 @@ namespace Briand
         // IDF task cannot return
         while (1) {
             if (serverSocket == NULL || serverSocket == nullptr) {
+                ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy: null server socket! Closing task.\n");
                 vTaskDelete(NULL);
             }
             else {
                 // Convert parameter
                 int serverSock = (int)serverSocket;
+
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: accepting connections.\n");
 
                 // Wait a connection
                 struct sockaddr_in clientAddr;
@@ -119,11 +122,37 @@ namespace Briand
                     continue;
                 }
 
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy accepted incoming connection from %s\n", BriandUtils::ipv4ToString(clientAddr.sin_addr).c_str());
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy accepted incoming connection from %s\n", BriandUtils::IPv4ToString(clientAddr.sin_addr).c_str());
 
+                // Start task to handle this client
+                xTaskCreate(HandleClient, "TorProxyReq", 2048, reinterpret_cast<void*>(clientSock), 6, NULL);
+            }
+
+            // Wait before next run
+            vTaskDelay(500 / portTICK_PERIOD_MS);
+        }
+    }
+
+    /* static */ void BriandTorSocks5Proxy::HandleClient(void* clientSocket) {
+         // IDF task cannot return
+        while (1) {
+            if (clientSocket == NULL ||  reinterpret_cast<int>(clientSocket) < 0) {
+                //ESP_LOGW(LOGTAG, "[DEBUG] SOCKS5 Proxy HandleClient shutdown (no socket)\n");
+                // If clientSocket == -1 then this is the call for terminate this task.
+                if (clientSocket != NULL && reinterpret_cast<int>(clientSocket) == -1) {
+                    clientSocket = reinterpret_cast<void*>(-2);
+                    vTaskDelete(NULL);
+                }
+                vTaskDelay(500/portTICK_PERIOD_MS);
+            }
+            else {
+                // Convert parameter
+                int clientSock = reinterpret_cast<int>(clientSocket);
                 //
                 // Very good example: https://www.programmersought.com/article/85795017726/
                 // 
+
+                ESP_LOGW(LOGTAG, "[DEBUG] SOCKS5 Proxy HandleClient with clientSock = %d\n", clientSock);
 
                 auto recBuf = make_unique<unsigned char[]>(258);
                 ssize_t len;
@@ -143,6 +172,9 @@ namespace Briand
                     ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy methods receiving error. Closing connection.\n");
                     // Close client socket
                     ErrorResponse(clientSock, nullptr, 0);
+                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
+                    clientSocket = reinterpret_cast<void*>(-1);
+                    // vTaskDelete will be called by next cycle.
                     continue;
                 }
                 
@@ -150,6 +182,9 @@ namespace Briand
                     ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy methods receiving error: less than 3 bytes. Closing connection.\n");
                     // Close client socket
                     ErrorResponse(clientSock, nullptr, 0);
+                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
+                    clientSocket = reinterpret_cast<void*>(-1);
+                    // vTaskDelete will be called by next cycle.
                     continue;
                 }
 
@@ -158,6 +193,9 @@ namespace Briand
                     // Write back unsupported version / unsupported method and close
                     unsigned char temp[2] = { 0x05, 0xFF };
                     ErrorResponse(clientSock, temp, 2);
+                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
+                    clientSocket = reinterpret_cast<void*>(-1);
+                    // vTaskDelete will be called by next cycle.
                     continue;
                 }
 
@@ -175,6 +213,9 @@ namespace Briand
                     // Write back unsupported version / unsupported method and close
                     unsigned char temp[2] = { 0x05, 0xFF };
                     ErrorResponse(clientSock, temp, 2);
+                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
+                    clientSocket = reinterpret_cast<void*>(-1);
+                    // vTaskDelete will be called by next cycle.
                     continue;
                 }
 
@@ -202,6 +243,9 @@ namespace Briand
                     ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy connect request receiving error. Closing connection.\n");
                     // Close client socket
                     ErrorResponse(clientSock, nullptr, 0);
+                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
+                    clientSocket = reinterpret_cast<void*>(-1);
+                    // vTaskDelete will be called by next cycle.
                     continue;
                 }
 
@@ -211,6 +255,9 @@ namespace Briand
                     // Write back unsupported command and close
                     unsigned char temp[4] = { 0x05, 0x07, 0x00, 0x01 /* omitted */ };
                     ErrorResponse(clientSock, temp, 4);
+                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
+                    clientSocket = reinterpret_cast<void*>(-1);
+                    // vTaskDelete will be called by next cycle.
                     continue;
                 }
 
@@ -220,6 +267,9 @@ namespace Briand
                     // Write back unsupported address type and close
                     unsigned char temp[4] = { 0x05, 0x08, 0x00, 0x01 /* omitted */ };
                     ErrorResponse(clientSock, temp, 4);
+                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
+                    clientSocket = reinterpret_cast<void*>(-1);
+                    // vTaskDelete will be called by next cycle.
                     continue;
                 }
 
@@ -230,6 +280,9 @@ namespace Briand
                     // Write back network unreachable
                     unsigned char temp[4] = { 0x05, 0x03, 0x00, 0x01 /* omitted */ };
                     ErrorResponse(clientSock, temp, 4);
+                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
+                    clientSocket = reinterpret_cast<void*>(-1);
+                    // vTaskDelete will be called by next cycle.
                     continue;
                 }
 
@@ -240,6 +293,9 @@ namespace Briand
                     // Write back network unreachable
                     unsigned char temp[4] = { 0x05, 0x03, 0x00, 0x01 /* omitted */ };
                     ErrorResponse(clientSock, temp, 4);
+                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
+                    clientSocket = reinterpret_cast<void*>(-1);
+                    // vTaskDelete will be called by next cycle.
                     continue;
                 }
 
@@ -258,7 +314,7 @@ namespace Briand
                     ip.s_addr += recBuf[6] << 16;
                     ip.s_addr += recBuf[7] << 24;
 
-                    connectTo = BriandUtils::ipv4ToString(ip);
+                    connectTo = BriandUtils::IPv4ToString(ip);
 
                     // Port
                     connectPort += recBuf[8] << 8;
@@ -284,6 +340,9 @@ namespace Briand
                     // Write back unsupported address type and close
                     unsigned char temp[4] = { 0x05, 0x08, 0x00, 0x01 /* omitted */ };
                     ErrorResponse(clientSock, temp, 4);
+                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
+                    clientSocket = reinterpret_cast<void*>(-1);
+                    // vTaskDelete will be called by next cycle.
                     continue;
                 }
 
@@ -295,6 +354,9 @@ namespace Briand
                     // Write back unable to connect (refused) and close
                     unsigned char temp[4] = { 0x05, 0x05, 0x00, 0x01 /* omitted */ };
                     ErrorResponse(clientSock, temp, 4);
+                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
+                    clientSocket = reinterpret_cast<void*>(-1);
+                    // vTaskDelete will be called by next cycle.
                     continue;
                 }
 
@@ -309,143 +371,149 @@ namespace Briand
 
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy streaming data.\n");
 
-                bool clientDataReadOk = true;
+                bool torStreamOk = true;
+                bool torStreamFinished = false;
 
                 do {
+                    // Set the default timeout 
+                    struct timeval timeout;
+                    bzero(&timeout, sizeof(timeout));
+                    timeout.tv_sec = TOR_SOCKS5_PROXY_TIMEOUT_S;
+
+                    // Using select() (more compatible) to check if bytes are available.
+                    // If timeout is reached, then close the channel.
+
+                    fd_set filter_read;
+                    FD_ZERO(&filter_read);
+                    FD_SET(clientSock, &filter_read);
+
+                    // Call a fake recv in order to speed-up select() without waiting for timeout in each case.
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: doing fake recv()\n");
+                    recv(clientSock, NULL, 0, MSG_PEEK | MSG_DONTWAIT);
+
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: doing select()\n");
+
+                    // Check for read readyness until timeout
+                    if (select(clientSock+1, &filter_read, NULL, NULL, &timeout) < 0) {
+                        ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy timeout: read from client (select() failed). Closing connection\n");
+                        break;
+                    }
+
+                    // Bytes available
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: select() success.\n");
+                    
                     // In order to limit tor cells size, read maximum N bytes (maximum RELAY cell payload length)
                     constexpr unsigned short MAX_FREE_PAYLOAD = 498;
                     recBuf = make_unique<unsigned char[]>(MAX_FREE_PAYLOAD);
-                    
-                    // Read from client
-                    len = recv(clientSock, recBuf.get(), MAX_FREE_PAYLOAD, 0);
-                    if (len < 0) {
-                        // ERROR
-                        ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: read from client error. Closing connection.\n");
-                        // Close connection
-                        ErrorResponse(clientSock, nullptr, 0);
-                        clientDataReadOk = false;
-                    }
-                    else if (len == 0) {
-                        // No other data to stream
-                        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy finished.\n");
+
+                    // Check if more bytes are available before blocking socket!
+                    ssize_t bytesAvail = 0;
+                    ioctl(clientSock, FIONREAD, &bytesAvail);
+                    if (bytesAvail > 0) {
+                        len = recv(clientSock, recBuf.get(), MAX_FREE_PAYLOAD, 0);
                     }
                     else {
-                        // Send data through circuit (RELAY_DATA)
+                        len = 0;
+                    }
 
+                    // If zero-sized here (after the select()) the client is disconnected. So close connection
+                    if (len == 0) {
+                        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: client disconnected. Closing connection\n");
+                        break;
+                    }
+                    else if (len < 0) {
+                        ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: read from client error. Closing connection\n");
+                        break;
+                    }
+
+                    // Otherwise read chunks of data until there are bytes and send through TOR
+                    do {
+                        // The client sent bytes are to be redirected through TOR
                         auto sendBuf = make_unique<vector<unsigned char>>();
-                        bool sent = false;
 
                         sendBuf->insert(sendBuf->begin(), recBuf.get(), recBuf.get() + len);
-                        circuit->TorStreamSend(sendBuf, sent);
+                        circuit->TorStreamSend(sendBuf, torStreamOk);
 
-                        if (!sent) {
-                            // ERROR
-                            ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: data NOT sent. Closing connection.\n");
-                            // Close connection
-                            ErrorResponse(clientSock, nullptr, 0);
-                            clientDataReadOk = false;
+                        if (!torStreamOk) {
+                            ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: TOR streaming write error. Closing connection\n");
+                            break;
                         }
 
-                        // If the length of received data is less than MAX_FREE_PAYLOAD
-                        // there should be no other data to stream.
-                        if (len < MAX_FREE_PAYLOAD) {
-                            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy finished.\n");
-                            break; // exit cycle
+                        // Prepare new buffer and read
+                        recBuf.reset();
+                        recBuf = make_unique<unsigned char[]>(MAX_FREE_PAYLOAD);
+
+                        // Check if more bytes are available before blocking socket!
+                        ssize_t bytesAvail = 0;
+                        ioctl(clientSock, FIONREAD, &bytesAvail);
+                        if (bytesAvail > 0) {
+                            len = recv(clientSock, recBuf.get(), MAX_FREE_PAYLOAD, 0);
                         }
-                    }
-
-                } while (len > 0 && clientDataReadOk);
-
-                if (!clientDataReadOk) {
-                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy error: read from client.\n");
-                    // Socket is closed before in this case
-                    continue;
-                }
-
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy data sent, receiving response.\n");
-
-                // Read back and send to the client
-                bool streamFinish = false;
-                bool streamOk = true;
-
-                do {
-                    auto recvBuf = make_unique<vector<unsigned char>>();
+                        else {
+                            len = 0;
+                        }
+                    } while (len > 0);
                     
-                    // The following call with CURL will timeout, this because CURL
-                    // closes connection after a HTTP GET success (read \r\n\r\n) and this 
-                    // is not caught causing clientSocket not to be closed.
-                    // A single good cell should arrive in less than 5 seconds.
+                    // Reset the used buffer and free memory
+                    recBuf.reset();
 
-                    //
-                    // TODO : find an easy way to check client disconnected
-                    // 
-
-                    // not working well
-                    // fd_set fd_filter;
-                    // struct timeval timeout;
-                    // bzero(&timeout, sizeof(timeout));
-                    // timeout.tv_usec = 2*1000; // 200ms
-                    // FD_ZERO(&fd_filter);
-                    // FD_SET(clientSock, &fd_filter);
-                    // int selectResult = select(clientSock+1, 0, &fd_filter, 0, &timeout);
-                    // ESP_LOGW(LOGTAG, "Select result is: %d and set is: %d\n", selectResult, FD_ISSET(clientSock, &fd_filter));
-
-                    // not working
-                    // char temp = 0x00;
-                    // int status = recv(clientSock, &temp, 1, MSG_PEEK | MSG_DONTWAIT);
-                    // printf("SOCK#%d STATUS = %d\n", clientSock, status);
-                    // if (status == 0) {
-                    //     streamFinish = true;
-                    //     streamOk = true;
-                    //     break;
-                    // }
-
-                    streamOk = circuit->TorStreamRead(recvBuf, streamFinish, 5);
-
-                    if (!streamOk) {
-                        // ERROR
-                        ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: read has failed (client may have been disconnected). Closing connection.\n");
-                        // Close connection
-                        ErrorResponse(clientSock, nullptr, 0);
-                    }
-                    else if(recvBuf->size() > 0) {
-                        // Even if streamFinish = true check if buffer has some other bytes to return.
-                        // Return bytes to client
-                        send(clientSock, recvBuf->data(), recvBuf->size(), 0);
+                    // If a TOR stream error occoured when writing to TOR circuit the client read data, close and exit.
+                    if (!torStreamOk) {
+                        break;
                     }
 
-                    recvBuf.reset();
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: client data has been fully read. Entering in TOR reading cycle.\n");
 
-                } while (streamOk && !streamFinish);
+                    // If not, read from the TOR the response
 
+                    do {
+                        auto torRecBuf = make_unique<vector<unsigned char>>();
+
+                        // A single, good, cell must be received within few seconds (1s?) otherwise this call
+                        // could take a very long time and client could timeout 
+                        // (maybe data is enough and the client should read and write again back)
+                        torStreamOk = circuit->TorStreamRead(torRecBuf, torStreamFinished, TOR_SOCKS5_PROXY_TIMEOUT_S);
+
+                        // Can ignore errors (timeout), see below.
+                        // if (!torStreamOk) {
+                        //     ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: TOR streaming reading error or timeout. Closing connection\n");
+                        //     break;
+                        // }
+
+                        // Write the received data back to client
+                        if(torStreamOk && torRecBuf->size() > 0) {
+                            len = send(clientSock, torRecBuf->data(), torRecBuf->size(), 0);
+                            if (len < 0) {
+                                ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: writing data back to client failed. Closing connection\n");
+                                break;
+                            }
+                        }
+                    } while (torStreamOk && !torStreamFinished);
+
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: TOR data has been fully read.\n");
+
+                    // Next cycle client read and back will start.
+                    // The data stream finish from the satisfied client will led to select() in error at next cycle 
+                    // so the socket will be closed.
+                }
+                while(1);
+
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: clean-up and closing.\n");
+
+                // Cycle ended, close socket and terminate task after a while.
                 if (openedStream) {
-                    // Close the stream
+                    // Close the TOR stream
                     circuit->TorStreamEnd();
-
-                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy Tor stream closed (success).\n");
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy Tor stream closed.\n");
                 }
 
-                // If OK then close with success
-                if (streamFinish) {
-                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy stream finished.\n");
-                }
-                else {
-                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy stream NOT finished.\n");
-                }
-
-                // Always close client socket
+                shutdown(clientSock, SHUT_RDWR);
                 close(clientSock);
-
-                if (!streamOk) {
-                    ESP_LOGW(LOGTAG, "[DEBUG] SOCKS5 Proxy client connection closed (stream error or client disconnected).\n");
-                }
-                else {
-                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client connection closed (success).\n");
-                }
+                // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
+                clientSocket = reinterpret_cast<void*>(-1);
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client connection closed.");
+                // This will be called by next cycle: vTaskDelete(NULL);
             }
-
-            // Wait 1 second before next run
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
         }
     }
 

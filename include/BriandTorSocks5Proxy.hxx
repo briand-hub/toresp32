@@ -43,9 +43,14 @@ namespace Briand
         static BriandTorCircuitsManager* torCircuits;
 
         /**
-         * Handles a single request to this proxy
+         * Handles a single request to this proxy (accept() and starts HandleClient)
         */
         static void HandleRequest(void* serverSocket);
+
+        /**
+         * Handles a single client (async)
+        */
+        static void HandleClient(void* clientSocket);
 
         /**
          * Method sends an error response and close client connection

@@ -73,19 +73,19 @@ namespace Briand
 		 * Method to query ifconfig.me and obtain headers/ip info
 		 * @return string with main informations, empty if fails
 		*/
-		static string BriandIfConfigMe();
+		/* DELETED static string BriandIfConfigMe(); */
 
 		/**
 		 * Method to get public IP address from ifconfig.me
 		 * @return string with IP, empty if fails
 		*/
-		static string BriandGetPublicIPFromIfConfigMe();
+		/* DELETED static string BriandGetPublicIPFromIfConfigMe(); */
 
 		/**
 		 * Method to get public IP address from ipify API
 		 * @return string with IP, empty if fails
 		*/
-		static string BriandGetPublicIPFromIPFY();
+		static string GetPublicIPFromIPFY();
 
 		/**
 		 * DEBUG Method to print raw bytes to serial output (hex format)
@@ -196,14 +196,14 @@ namespace Briand
 		 * @param ip in_addr (unsigned int) IP
 		 * @return IPv4 in string format (123.456.789.000)
 		*/
-		static string ipv4ToString(const in_addr& ip);
+		static string IPv4ToString(const in_addr& ip);
 
 		/**
 		 * Converts an IPv4 readable format to an in_addr struct
 		 * @param IPv4 in string format (123.456.789.000)
 		 * @return IPv4 in_addr (unsigned int) IP
 		*/
-		static in_addr ipv4FromString(const string& ip);
+		static in_addr IPv4FromString(const string& ip);
 
 		/**
 		 * Converts a RELAY_END reason to human readable

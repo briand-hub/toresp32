@@ -189,6 +189,7 @@ namespace Briand
 		return output;
 	}
 
+	/* DELETED
 	string BriandUtils::BriandIfConfigMe() {
 		bool success = false;
 		short httpCode = 0;
@@ -264,7 +265,9 @@ namespace Briand
 
 		return output;
 	}
+	*/
 
+	/* DELETED
 	string BriandUtils::BriandGetPublicIPFromIfConfigMe() {
 		bool success = false;
 		short httpCode = 0;
@@ -290,8 +293,9 @@ namespace Briand
 
 		return output;
 	}
+	*/
 
-	string BriandUtils::BriandGetPublicIPFromIPFY() {
+	string BriandUtils::GetPublicIPFromIPFY() {
 		short httpCode = 0;
 		string randomAgent = string( Briand::BriandUtils::GetRandomHostName().get() );
 
@@ -506,11 +510,11 @@ namespace Briand
 		input.erase(std::remove(input.begin(), input.end(), c),input.end());
 	}
 
-	string BriandUtils::ipv4ToString(const in_addr& ip) {
+	string BriandUtils::IPv4ToString(const in_addr& ip) {
 		return string(inet_ntoa(ip));
 	}
 
-	in_addr BriandUtils::ipv4FromString(const string& ip) {
+	in_addr BriandUtils::IPv4FromString(const string& ip) {
 		in_addr temp;
 		bzero(&temp, sizeof(temp));
 		inet_aton(ip.c_str(), &temp);
