@@ -1058,7 +1058,6 @@ namespace Briand {
 					sendMePayload->push_back(0x01); // version 1 authenticated cell
 					sendMePayload->push_back(static_cast<unsigned char>(this->RSD->md_info->size));
 
-					// Calculate current digest
 					// Make a copy of the current digest and calculate the digest without updating.
 					auto digestCopy = make_unique<mbedtls_md_context_t>();
 					auto outBuf = BriandUtils::GetOneOldBuffer(this->RSD->md_info->size);
