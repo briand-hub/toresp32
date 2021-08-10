@@ -26,16 +26,16 @@ using namespace std;
 
 namespace Briand
 {
-
 	unsigned char BriandUtils::GetRandomByte() {
-		// default_random_engine generator;	
-		// uniform_int_distribution<int> distribution(0x00, 0xFF); 
-		// return distribution(generator);
+		
+		// NOT working in ESP:
 
-		// return static_cast<unsigned char>( esp_random() );
+		//default_random_engine generator;	
+		//uniform_int_distribution<int> distribution(0x00, 0xFF); 
+		//return static_cast<unsigned char>( distribution(generator) % 0x100 );
 
 		// Better implementation, best if wifi is enabled
-
+		// return static_cast<unsigned char>( esp_random() );
 		return static_cast<unsigned char>( esp_random() % 0x100 );
 	}
 

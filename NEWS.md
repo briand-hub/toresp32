@@ -2,6 +2,7 @@
 
 ## Next steps
 
+* Implement SENDME windows and cells
 * Consider error management short/int for method errors (mbedtls style)
 * Consider adding TIMEOUT seconds to Stream methods.
 * Implement a vector of nodes.
@@ -14,6 +15,8 @@
 * Need to change a little Socks5Proxy not catching client disconnect for http request and keeping socket opened. (main thread + one thread per accept())
 * Removed COMMANDID and leak testing, switching to full socks5 proxy
 * Moving to another cache implementation using microdescriptors from Authorities
+* Added heap monitor to meminfo command
+* Moved to microdescriptor cache and more efficient FetchDescriptorsFromAuthorities with readLine method of LibBriandIDF
 
 ## 2021-08-07
 

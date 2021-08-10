@@ -278,6 +278,90 @@ namespace Briand {
 	}
 
 	bool BriandTorRelay::FetchDescriptorsFromAuthority() {
+		// Start from the last used dir, do not create infinite loop
+		bool success = false;
+		unsigned short startingDir = TOR_DIR_LAST_USED;
+		auto client = make_unique<BriandIDFSocketClient>();
+		client->SetVerbose(false);
+		client->SetID(100);
+		client->SetTimeout(NET_CONNECT_TIMEOUT_S, NET_IO_TIMEOUT_S);
+
+		do {
+			success = false;
+			this->descriptorNtorOnionKey->assign("");
+			auto curDir = TOR_DIR_AUTHORITIES[TOR_DIR_LAST_USED];
+
+			if (!client->Connect(string(curDir.host), curDir.port)) {
+				ESP_LOGD(LOGTAG, "[DEBUG] FetchDescriptorsFromAuthority Failed to connect to dir #%hu (%s)\n", TOR_DIR_LAST_USED, curDir.nickname);
+				TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED+1) % TOR_DIR_AUTHORITIES_NUMBER;
+				client->Disconnect();
+				continue;
+			}
+
+			string agent = string(BriandUtils::GetRandomHostName().get());
+
+			auto request = make_unique<string>();
+			request->append("GET /tor/server/fp/" + *this->fingerprint.get() + " HTTP/1.1\r\n");
+			request->append("Host: " + string(curDir.host) + "\r\n");
+			request->append("User-Agent: " + agent);
+			request->append("\r\n");
+			request->append("Connection: close\r\n");
+			request->append("\r\n");
+
+			auto requestV = BriandNet::StringToUnsignedCharVector(request, true);
+
+			if (!client->WriteData(requestV)) {
+				ESP_LOGD(LOGTAG, "[DEBUG] FetchDescriptorsFromAuthority Failed to write request to dir #%hu (%s)\n", TOR_DIR_LAST_USED, curDir.nickname);
+				TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED+1) % TOR_DIR_AUTHORITIES_NUMBER;
+				client->Disconnect();
+				continue;
+			}
+
+			// free ram
+			requestV.reset();
+
+			ESP_LOGD(LOGTAG, "[DEBUG] FetchDescriptorsFromAuthority request sent.\n");
+
+			bool newLine;
+			do {
+				auto lineV = client->ReadDataUntil('\n', 512, newLine);
+				if (newLine) {
+					auto line = BriandNet::UnsignedCharVectorToString(lineV, true);
+					// Remove any \r
+					BriandUtils::StringTrimAll(*line.get(), '\r');
+					size_t starts;
+					// Find the ntor-onion-key 
+					starts = line->find("ntor-onion-key ");
+					if (starts != string::npos) {
+						starts = starts + 15;
+						line->erase(0, starts);
+						// If line has \n or \r remove
+						BriandUtils::StringTrimAll(*line.get(), '\r');
+						BriandUtils::StringTrimAll(*line.get(), '\n');
+						this->descriptorNtorOnionKey->assign( line->c_str() );
+						success = true;
+					}
+				}
+			} while (newLine);
+
+			// Disconnect client
+			client->Disconnect();
+
+			if (!success) TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED+1) % TOR_DIR_AUTHORITIES_NUMBER;
+		} while (!success && startingDir != TOR_DIR_LAST_USED);
+
+		// WARNING: base64 fields could be without the ending '=' but this could be not
+		// recognized by a decoding library. So, add the ending '='/'==' to fit
+		// the base64 multiples of 4 as required. (occours in ntor-onion-key)
+
+		if (this->descriptorNtorOnionKey->length() > 0) {
+			while (this->descriptorNtorOnionKey->length() % 4 != 0)
+				this->descriptorNtorOnionKey->push_back('=');
+		}
+
+		return success;
+
+		/* OLD IMPLEMENTATION
 		// Call via http
 		unique_ptr<string> response = nullptr;
 		string agent = string( BriandUtils::GetRandomHostName().get() );
@@ -355,6 +439,7 @@ namespace Briand {
 		}
 
 		return true;
+		*/
 	}
 
 	bool BriandTorRelay::FinishHandshake(const unique_ptr<vector<unsigned char>>& created2_extended2_payload) {

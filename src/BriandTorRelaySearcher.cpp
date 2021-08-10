@@ -44,6 +44,11 @@ namespace Briand {
 		// Random picking for the array (see method GetGuard etc.)
 		this->randomPick = BriandUtils::GetRandomByte() % TOR_NODES_CACHE_SIZE;
 
+		// Auth dir enquiry : choose a random one then enquiry another if one fails
+		if (TOR_DIR_LAST_USED == 0x0000) {
+			TOR_DIR_LAST_USED = BriandUtils::GetRandomByte() % TOR_DIR_AUTHORITIES_NUMBER;
+		}
+
 		/* DELTED old implementation
 		this->limitRandom = 0;
 
@@ -288,10 +293,15 @@ namespace Briand {
 		ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache invoked.\n");
 		
 
-		// Connect to an authority, check not to start an infinite loop 
-		unsigned short loopStartsWith = TOR_DIR_LAST_USED;
+		// Start with the first authority, check not to start an infinite loop 
+		unsigned short loopStartsWith = 0;
+		TOR_DIR_LAST_USED = 1 % TOR_DIR_AUTHORITIES_NUMBER;
+
 		bool cacheCreated = false;
 		auto client = make_unique<BriandIDFSocketClient>();
+		client->SetVerbose(false);
+		client->SetID(100);
+		client->SetTimeout(NET_CONNECT_TIMEOUT_S, NET_IO_TIMEOUT_S);
 
 		do {
 			auto curDir = TOR_DIR_AUTHORITIES[TOR_DIR_LAST_USED];
@@ -322,31 +332,30 @@ namespace Briand {
 				return;
 			}
 			fGuard << std::to_string(BriandUtils::GetUnixTime()) << "\n";
-			if (!fGuard.good()) {
-				ESP_LOGE(LOGTAG, "[ERR] RefreshNodesCache FATAL ERROR: Cannot write guard cache file.\n");
-				return;
-			}
-
 			unsigned char fGuardNodes = 0;
 			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache recreated guard cache.\n");
 
 			// Connect
-			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache Connecting to dir #%hu (%s)\n", TOR_DIR_LAST_USED, curDir.nickname);
-			if (!client->Connect(curDir.host, curDir.port)) {
+			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache Connecting to dir #%hu (%s) %s:%hu\n", TOR_DIR_LAST_USED, curDir.nickname, curDir.host, curDir.port);
+			if (!client->Connect(string(curDir.host), curDir.port)) {
 				ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache Failed to connect to dir #%hu (%s)\n", TOR_DIR_LAST_USED, curDir.nickname);
 				TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED+1) % TOR_DIR_AUTHORITIES_NUMBER;
 				client->Disconnect();
 				continue;
 			}
 
-			ostringstream ss("");
-			ss << "GET /tor/status-vote/current/consensus-microdesc HTTP/1.1\r\n";
-			ss << "Host: " << curDir.host << "\r\n";
-			ss << "User-Agent: " << BriandUtils::GetRandomHostName().get() << "\r\n";
-			ss << "Connection: close\r\n";
-			ss << "\r\n\r\n";
-	
-			auto requestV = BriandUtils::HexStringToVector("", ss.str());
+			string path = "/tor/status-vote/current/consensus-microdesc";
+			string agent = string(BriandUtils::GetRandomHostName().get());
+
+			auto request = make_unique<string>();
+			request->append("GET " + path + " HTTP/1.1\r\n");
+			request->append("Host: " + string(curDir.host) + "\r\n");
+			request->append("User-Agent: " + agent);
+			request->append("\r\n");
+			request->append("Connection: close\r\n");
+			request->append("\r\n");
+
+			auto requestV = BriandNet::StringToUnsignedCharVector(request, true);
 
 			if (!client->WriteData(requestV)) {
 				ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache Failed to write request to dir #%hu (%s)\n", TOR_DIR_LAST_USED, curDir.nickname);
@@ -354,6 +363,11 @@ namespace Briand {
 				client->Disconnect();
 				continue;
 			}
+
+			// free ram
+			requestV.reset();
+
+			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache request sent.\n");
 
 			// Now read results (example: http://128.31.0.34:9131/tor/status-vote/current/consensus-microdesc)
 			// Searching for "r " string (a row for a starting node)
@@ -376,6 +390,8 @@ namespace Briand {
 					
 				if (!newLine || rawData->size() < 2) {
 					// something is wrong!
+					ESP_LOGD(LOGTAG, "[DEBUG] Wrong read from directory response, newline %s, line is: ", (newLine ? "found" : "not found"));
+					if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) BriandUtils::PrintByteBuffer(*rawData.get());
 					break;
 				}
 
@@ -522,6 +538,11 @@ namespace Briand {
 
 			} while (rawData->size() > 0 && !cacheCreated);
 
+			// If cache not ready, go to next dir
+			if (!cacheCreated) {
+				TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED+1) % TOR_DIR_AUTHORITIES_NUMBER;
+			}
+
 			// Disconnect the client
 			client->Disconnect();
 
@@ -584,15 +605,26 @@ namespace Briand {
 			cJSON_Delete(root);
 			*/
 
-			// Check just the first line
+			// Check just the first line timestamp and how many lines are in the file
 			string firstLine("");
-			getline(file, firstLine, '\n');
-			file.close();
+			std::getline(file, firstLine, '\n');
+			unsigned int lines = 0;
+			string temp;
+			while (!file.eof()) { 
+				std::getline(file, temp, '\n');
+				lines++;
+			}
+			file.close(); 
+
+			ESP_LOGD(LOGTAG, "[DEBUG] %s cache file has %u rows.\n", filename, lines);
 
 			if (firstLine.size() > 3) {
 				unsigned long int cacheAge = stoul(firstLine);
 				if ( (cacheAge + (TOR_NODES_CACHE_VAL_H*3600)) >= BriandUtils::GetUnixTime() ) {
 					valid = true;
+				}
+				if (lines < TOR_NODES_CACHE_SIZE) {
+					valid = false;
 				}
 			}	
 		}
@@ -653,7 +685,7 @@ namespace Briand {
 
 			// Skip the first line
 			string line; 
-			getline(file, line, '\n');
+			std::getline(file, line, '\n');
 
 			// Try to reach line number, if fails randomize again
 			bool validLine = false;
@@ -667,11 +699,11 @@ namespace Briand {
 					// restart
 					fileLines = 0;
 					file.seekg(0);
-					getline(file, line, '\n');
+					std::getline(file, line, '\n');
 				}
 
 				if (fileLines != this->randomPick) {
-					getline(file, line, '\n');
+					std::getline(file, line, '\n');
 					fileLines++;
 				}
 				else {
@@ -681,6 +713,13 @@ namespace Briand {
 			}
 
 			file.close();
+
+			// If line is empty or not valid, error
+			if (line.size() < 32) {
+				ESP_LOGW(LOGTAG, "[WARN] Cache file is not valid.\n");
+				std::remove(NODES_FILE_MIDDLE);
+				return relay;
+			}
 
 			// At this point (should always arrive there!) create the relay object
 			relay = make_unique<Briand::BriandTorRelay>();
@@ -779,7 +818,7 @@ namespace Briand {
 
 				// Skip the first line
 				string line; 
-				getline(file, line, '\n');
+				std::getline(file, line, '\n');
 
 				// Try to reach line number, if fails randomize again
 				bool validLine = false;
@@ -793,11 +832,11 @@ namespace Briand {
 						// restart
 						fileLines = 0;
 						file.seekg(0);
-						getline(file, line, '\n');
+						std::getline(file, line, '\n');
 					}
 
 					if (fileLines != this->randomPick) {
-						getline(file, line, '\n');
+						std::getline(file, line, '\n');
 						fileLines++;
 					}
 					else {
@@ -807,6 +846,13 @@ namespace Briand {
 				}
 
 				file.close();
+
+				// If line is empty or not valid, error
+				if (line.size() < 32) {
+					ESP_LOGW(LOGTAG, "[WARN] Cache file is not valid.\n");
+					std::remove(NODES_FILE_MIDDLE);
+					return relay;
+				}
 
 				// At this point (should always arrive there!) create the relay object
 				relay = make_unique<Briand::BriandTorRelay>();
@@ -932,7 +978,7 @@ namespace Briand {
 
 				// Skip the first line
 				string line; 
-				getline(file, line, '\n');
+				std::getline(file, line, '\n');
 
 				// Try to reach line number, if fails randomize again
 				bool validLine = false;
@@ -946,11 +992,11 @@ namespace Briand {
 						// restart
 						fileLines = 0;
 						file.seekg(0);
-						getline(file, line, '\n');
+						std::getline(file, line, '\n');
 					}
 
 					if (fileLines != this->randomPick) {
-						getline(file, line, '\n');
+						std::getline(file, line, '\n');
 						fileLines++;
 					}
 					else {
@@ -960,6 +1006,13 @@ namespace Briand {
 				}
 
 				file.close();
+
+				// If line is empty or not valid, error
+				if (line.size() < 32) {
+					ESP_LOGW(LOGTAG, "[WARN] Cache file is not valid.\n");
+					std::remove(NODES_FILE_EXIT);
+					return relay;
+				}
 
 				// At this point (should always arrive there!) create the relay object
 				relay = make_unique<Briand::BriandTorRelay>();
@@ -1086,7 +1139,7 @@ namespace Briand {
 	}
 
 	void BriandTorRelaySearcher::PrintCacheContents() {
-		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
+		if (true || esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] GUARDS CACHE:\n");
 			BriandUtils::PrintFileContent(this->NODES_FILE_GUARD);
 			printf("\n");

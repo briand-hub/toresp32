@@ -55,7 +55,8 @@ unique_ptr<string> AP_PASSW = nullptr;
 unique_ptr<string> COMMAND = nullptr;
 unique_ptr<Briand::BriandTorCircuitsManager> CIRCUITS_MANAGER = nullptr;
 unique_ptr<Briand::BriandTorSocks5Proxy> SOCKS5_PROXY = nullptr;
-unsigned int HEAP_LEAK_CHECK = 0;
+unsigned long HEAP_MAX = 0;
+unsigned long HEAP_MIN = ULONG_MAX;
 
 /* Early declarations */
 void reboot();
@@ -64,6 +65,7 @@ void printLocalTime();
 void printLogo();
 void startSerialRead(string*);
 void executeCommand(string&);
+void heapStats(void*);
 
 // Early declarations for setup/application
 void TorEsp32Setup();
@@ -74,9 +76,11 @@ void app_main() {
 	// Call setup
 	TorEsp32Setup();
 
+	// Start Heap monitor
+	xTaskCreate(heapStats, "HeapStats", 1024, NULL, 1000, NULL);
+
 	// Start application loop
 	xTaskCreate(TorEsp32Main, "TorEsp32", 8192, NULL, 15, NULL);
-	// TODO: verify stack size
 }
 
 void builtin_led_task(void* p) {
@@ -113,9 +117,9 @@ void TorEsp32Setup() {
 	// Disable default ESP log to Error only, set the log of this code to WARNING by default
 	printf("[INFO] Setting ESP default log level to none...\n");
 	esp_log_level_set("*", ESP_LOG_NONE);
-	printf("[INFO] Setting the TorEsp32 default log level to warning...\n");
-	esp_log_level_set(LOGTAG, ESP_LOG_WARN);
-	BRIAND_SET_LOG(ESP_LOG_WARN);
+	printf("[INFO] Setting the TorEsp32 default log level to error...\n");
+	esp_log_level_set(LOGTAG, ESP_LOG_ERROR);
+	BRIAND_SET_LOG(ESP_LOG_ERROR);
 
 	// Initialize the NVS
 	printf("[INFO] Initializing NVS...");
@@ -668,7 +672,7 @@ void executeCommand(string& cmd) {
     }
 	else if (cmd.compare("meminfo") == 0) {
         // TODO printf("HEAP FREE: %u / %u bytes. PSRAM FREE: %u / %u bytes.\n", esp_get_free_heap_size(), Briand::BriandESPDevice::GetHeapSize(), Briand::BriandESPDevice::GetFreePsram(), Briand::BriandESPDevice::GetPsramSize());
-		printf("HEAP FREE: %u / %lu bytes.\n", esp_get_free_heap_size(), Briand::BriandESPDevice::GetHeapSize());
+		printf("HEAP FREE: %u / %lu bytes. MAX FREE %lu MIN FREE %lu\n", esp_get_free_heap_size(), Briand::BriandESPDevice::GetHeapSize(), HEAP_MAX, HEAP_MIN);
     }
 	else if (cmd.compare("netinfo") == 0) {
         printf("AP Hostname: %s\n", AP_HOSTNAME->c_str());
@@ -846,3 +850,12 @@ void executeCommand(string& cmd) {
     COMMAND->clear();
 }
 
+void heapStats(void* param) {
+	// IDF Task cannot return
+	while (1) {
+		unsigned long currentHeap = esp_get_free_heap_size();
+		if (currentHeap > HEAP_MAX) HEAP_MAX = currentHeap;
+		if (currentHeap < HEAP_MIN) HEAP_MIN = currentHeap;
+		vTaskDelay(500 / portTICK_PERIOD_MS);
+	}
+}

@@ -83,7 +83,7 @@ namespace Briand
 
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy listening.\n");
 
-        xTaskCreate(this->HandleRequest, "TorProxy", 2048, reinterpret_cast<void*>(this->proxySocket), 5, &this->proxyTaskHandle);
+        xTaskCreate(this->HandleRequest, "TorProxy", 2560, reinterpret_cast<void*>(this->proxySocket), 5, &this->proxyTaskHandle);
 
         this->proxyStarted = true;
 
