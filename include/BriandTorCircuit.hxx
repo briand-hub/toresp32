@@ -53,11 +53,14 @@ namespace Briand {
 		//bool isBusy;						// Flag (currently streaming / doing something)
 		unsigned long int createdOn;		// create timestamp
 		unsigned long int paddingSent;		// no. of padding cells sent
+		unsigned long int paddingSentOn;	// timestamp of last sent padding
 
 		// Tor specific
 		unsigned int CIRCID;					// the CIRCID of this circuit
 		unsigned short LINKPROTOCOLVERSION; 	// the version of this circuit
 		unsigned short CURRENT_STREAM_ID; 		// the current StreamID (also used for N request used)
+		short CURRENT_STREAM_WINDOW;			// the current stream window. Each 100 RELAY_DATA cell are exchanged a RELAY_SENDME is needed
+		unique_ptr<mbedtls_md_context_t> RSD;	// the rolling stream digest for the RELAY_SENDME cells
 
 		unique_ptr<BriandIDFSocketTlsClient> sClient;	// Client used for communications
 

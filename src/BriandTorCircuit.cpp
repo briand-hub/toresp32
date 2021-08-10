@@ -33,9 +33,12 @@ namespace Briand {
 		this->CIRCID = 0;
 		this->LINKPROTOCOLVERSION = 0;
 		this->CURRENT_STREAM_ID = 0;
+		this->CURRENT_STREAM_WINDOW = 1000;
+		this->RSD = nullptr;
 
 		this->internalID = -1;
 		this->paddingSent = 0;
+		this->paddingSentOn = 0;
 
 		this->sClient = nullptr;
 		this->CIRCUIT_STATUS = CircuitStatusFlag::NONE;
@@ -141,6 +144,11 @@ namespace Briand {
 		if (this->middleNode != nullptr) this->middleNode.reset();
 		if (this->exitNode != nullptr) this->exitNode.reset();
 		if (this->relaySearcher != nullptr) this->relaySearcher.reset();
+
+		if (this->RSD != nullptr) {
+			mbedtls_md_free(this->RSD.get());
+			this->RSD.reset();
+		}
 
 		this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 	}
@@ -1013,11 +1021,76 @@ namespace Briand {
 				return nullptr;
 			}
 
-			// Here cell is recognized, build informations (decrypted payload etc.)
+			// Here cell is recognized
+
+			// If this is a RELAY_DATA remember to update the window and the rolling digest!
+			if (tempCell->GetRelayCommand() == BriandTorCellRelayCommand::RELAY_DATA) {
+				// Update current window
+				this->CURRENT_STREAM_WINDOW--;
+
+				// Start the digest if not done before
+				if (this->RSD == nullptr) {
+					this->RSD = make_unique<mbedtls_md_context_t>();
+					mbedtls_md_init(this->RSD.get());
+					mbedtls_md_setup(this->RSD.get(), mbedtls_md_info_from_type(MBEDTLS_MD_SHA1), 0);
+					mbedtls_md_starts(this->RSD.get());
+					ESP_LOGD(LOGTAG, "[DEBUG] Circuit Stream Rolling Digest started.\n");
+				}
+
+				// Update the digest
+				mbedtls_md_update(this->RSD.get(), tempCell->GetPayload()->data(), tempCell->GetPayload()->size());
+				
+				ESP_LOGD(LOGTAG, "[DEBUG] Circuit Stream Rolling Digest updated.\n");
+
+				// Check if a new RELAY_SENDME is required
+				if (this->CURRENT_STREAM_WINDOW <= 990) {
+					ESP_LOGD(LOGTAG, "[DEBUG] A RELAY_SENDME is required.\n");
+
+					/*
+						The RELAY_SENDME payload contains the following:
+
+						VERSION     [1 byte]
+						DATA_LEN    [2 bytes]
+						DATA        [DATA_LEN bytes]
+					*/
+
+					auto sendMePayload = make_unique<vector<unsigned char>>();
+					sendMePayload->push_back(0x01); // version 1 authenticated cell
+					sendMePayload->push_back(static_cast<unsigned char>(this->RSD->md_info->size));
+
+					// Calculate current digest
+					// Make a copy of the current digest and calculate the digest without updating.
+					auto digestCopy = make_unique<mbedtls_md_context_t>();
+					auto outBuf = BriandUtils::GetOneOldBuffer(this->RSD->md_info->size);
+					mbedtls_md_init(digestCopy.get());
+					mbedtls_md_setup(digestCopy.get(), this->RSD->md_info, 0);
+					mbedtls_md_clone(digestCopy.get(), this->RSD.get());
+					mbedtls_md_finish(digestCopy.get(), outBuf.get());
+					mbedtls_md_free(digestCopy.get());
+					digestCopy.reset();
+
+					for (unsigned char i = 0; i<this->RSD->md_info->size; i++)
+						sendMePayload->push_back(outBuf[i]);
+
+					// Send the cell
+					if (!this->TorStreamWriteData(BriandTorCellRelayCommand::RELAY_SENDME, sendMePayload)) {
+						ESP_LOGD(LOGTAG, "[DEBUG] RELAY_SENDME cell NOT sent (errors). Circuit will be torn down.\n");
+						this->TearDown();
+					}
+					else {
+						ESP_LOGD(LOGTAG, "[DEBUG] RELAY_SENDME sent.\n");
+					}
+
+					// Re-increment by 100 the window
+					this->CURRENT_STREAM_WINDOW += 100;
+				}
+			}
+
+			// Build informations (decrypted payload etc.)
 			if (!tempCell->BuildRelayCellFromPayload(this->exitNode->KEY_BackwardDigest_Db)) {
 				ESP_LOGW(LOGTAG, "[ERR] TorStreamReadData error on rebuilding RELAY cell informations from exit node, invalid response cell.\n");
 				return nullptr;
-			}		
+			}
 		}
 
 		tempData.reset();
@@ -1483,7 +1556,8 @@ namespace Briand {
 			!this->StatusGetFlag(CircuitStatusFlag::BUSY) && 
 			!this->StatusGetFlag(CircuitStatusFlag::CLOSED) && 
 			!this->StatusGetFlag(CircuitStatusFlag::CLOSING) &&
-			!this->StatusGetFlag(CircuitStatusFlag::STREAMING))  
+			!this->StatusGetFlag(CircuitStatusFlag::STREAMING) &&
+			this->paddingSentOn + 60 < BriandUtils::GetUnixTime())  
 		{
 			this->StatusSetFlag(CircuitStatusFlag::BUSY);
 			auto tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
@@ -1491,9 +1565,7 @@ namespace Briand {
 			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 			ESP_LOGD(LOGTAG, "[DEBUG] PADDING cell sent through circuit.\n");
 			this->paddingSent++;
-		}
-		else if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
-			printf("[DEBUG] SendPadding failed because circuit is not built/is busy/is closing or closed.\n");
+			this->paddingSentOn = BriandUtils::GetUnixTime();
 		}
 	}
 
@@ -1555,6 +1627,12 @@ namespace Briand {
 		// after calling this function
 		this->StatusResetTo(CircuitStatusFlag::CLOSED);
 		this->paddingSent = 0;
+		this->CURRENT_STREAM_WINDOW = 1000;
+
+		if (this->RSD != nullptr) {
+			mbedtls_md_free(this->RSD.get());
+			this->RSD.reset();
+		}
 	}
 
 	void BriandTorCircuit::PrintCircuitInfo() {

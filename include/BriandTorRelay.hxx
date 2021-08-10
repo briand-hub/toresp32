@@ -34,15 +34,16 @@ namespace Briand {
 		public:
 
 		unique_ptr<string> nickname;
-		//unique_ptr<string> first_address;
 		unique_ptr<string> address;
 		unsigned short port;
 		unique_ptr<string> fingerprint;
+
 		/** @deprecated unused! */
 		// unique_ptr<string> effective_family;
+		// unique_ptr<string> first_address;
 		
 		// TODO : add exit policy summary accept/reject
-		// TODO: handle more fields (minimum necessary if needed!)
+		// TODO : handle more fields (minimum necessary if needed!)
 
 		unsigned short flags;
 
