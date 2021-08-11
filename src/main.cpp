@@ -887,7 +887,6 @@ void checkStaHealth(void* param) {
 			if ((STA_ACTIONFLAGS & 0b00000001) == 0b00000001) {
 				// Check if disconnected or IP is 0.0.0.0 (happens on low memory, does not fire any event)
 				if (WiFi != nullptr && (!WiFi->IsConnected() || WiFi->GetStaIP().compare("0.0.0.0")==0)) {
-					printf("**************ENTERING RECONNECT!**************\n");
 					WiFi->DisconnectStation(); // clean-up!
 					if (!WiFi->ConnectStation(*STA_ESSID.get(), *STA_PASSW.get(), WIFI_CONNECTION_TIMEOUT, *STA_HOSTNAME.get(), CHANGE_MAC_TO_RANDOM)) {
 						ESP_LOGE(LOGTAG, "[ERR] WiFi Re-connect failed.\n");
