@@ -43,7 +43,7 @@
     constexpr unsigned char TOR_NODES_CACHE_SIZE = 30;		    // No. of Tor nodes, for each type (guard/exit/middle) to keep saved. (Avoid more than 100 on ESP Platform!)
     constexpr unsigned char TOR_NODES_CACHE_VAL_H = 24;		    // Hours since the chache of nodes is considered OLD and must be downloaded again
     constexpr unsigned short TOR_SOCKS5_PROXY_PORT = 5001;      // Port of the Socks5 Proxy
-    constexpr unsigned short TOR_SOCKS5_PROXY_TIMEOUT_S = 1;    // Timeout in seconds the Socks5 Proxy select/read/write calls
+    constexpr unsigned short TOR_SOCKS5_PROXY_TIMEOUT_S = 15;   // Timeout in seconds the Socks5 Proxy select/read/write calls
 
     // Includes needed (with linux porting enabled)
 
@@ -109,7 +109,7 @@
         #include "BriandIDFWifiManager.hxx"
         #include "BriandIDFSocketClient.hxx"
         #include "BriandIDFSocketTlsClient.hxx"
-        #include <cJSON.h>
+        // CJSON NOT NEEDED ANYMORE #include <cJSON.h>
 
         // Early declarations of ESP logging functions trick (see BriandEspLogging.cpp)
         
@@ -138,7 +138,7 @@
         #include "BriandIDFWifiManager.hxx"
         #include "BriandIDFSocketClient.hxx"
         #include "BriandIDFSocketTlsClient.hxx"
-        #include <cJSON.h>
+        // CJSON NOT NEEDED ANYMORE #include <cJSON.h>
         
         // #include <mbedtls/aes.h> gives linker error on ESP_PLATFORM!
         #include <mbedtls/aes.h>

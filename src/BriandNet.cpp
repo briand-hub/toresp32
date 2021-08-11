@@ -253,7 +253,7 @@ namespace Briand
 		}
 	}
 
-	cJSON* BriandNet::HttpsGetJson(const string& host, const short& port, const string& path, short& httpReturnCode, bool& deserializationSuccess, const string& agent  /* = "empty"*/, const unique_ptr<string>& pemCAcert /*= nullptr*/, const unique_ptr<vector<unsigned char>>& derCAcert /*= nullptr*/) {
+	/* DELETED cJSON* BriandNet::HttpsGetJson(const string& host, const short& port, const string& path, short& httpReturnCode, bool& deserializationSuccess, const string& agent, const unique_ptr<string>& pemCAcert, const unique_ptr<vector<unsigned char>>& derCAcert) {
 		ESP_LOGD(LOGTAG, "[DEBUG] HttpsGetJson called to https://%s:%d/%s\n", host.c_str(), port, path.c_str());
 		
 		deserializationSuccess = false;
@@ -293,6 +293,7 @@ namespace Briand
 			return NULL;
 		}
 	}
+	*/
 
 	unique_ptr<string> BriandNet::HttpInsecureGet(const string& host, const short& port, const string& path, short& httpReturnCode, const string& agent /* = "empty"*/, const bool& returnBodyOnly /* = false*/) {
 		ESP_LOGD(LOGTAG, "[DEBUG] HttpInsecureGet called to http://%s:%d%s\n", host.c_str(), port, path.c_str());

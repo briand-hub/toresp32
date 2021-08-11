@@ -542,4 +542,24 @@ namespace Briand
 
 		return s;
 	}
+
+	string BriandUtils::RelayTruncatedReasonToString(const BriandTorDestroyReason& reason) {
+		string s("(RESERVED)");
+
+		if (reason == BriandTorDestroyReason::CHANNEL_CLOSED) s = "CHANNEL_CLOSED";
+		if (reason == BriandTorDestroyReason::CONNECTFAILED) s = "CONNECTFAILED";
+		if (reason == BriandTorDestroyReason::DESTROYED) s = "DESTROYED";
+		if (reason == BriandTorDestroyReason::FINISHED) s = "FINISHED";
+		if (reason == BriandTorDestroyReason::HIBERNATING) s = "HIBERNATING";
+		if (reason == BriandTorDestroyReason::INTERNAL) s = "INTERNAL";
+		if (reason == BriandTorDestroyReason::NONE) s = "NONE";
+		if (reason == BriandTorDestroyReason::NOSUCHSERVICE) s = "NOSUCHSERVICE";
+		if (reason == BriandTorDestroyReason::OR_IDENTITY) s = "OR_IDENTITY";
+		if (reason == BriandTorDestroyReason::PROTOCOL) s = "PROTOCOL";
+		if (reason == BriandTorDestroyReason::REQUESTED) s = "REQUESTED";
+		if (reason == BriandTorDestroyReason::RESOURCELIMIT) s = "RESOURCELIMIT";
+		if (reason == BriandTorDestroyReason::TIMEOUT) s = "TIMEOUT";
+
+		return s;
+	}
 }

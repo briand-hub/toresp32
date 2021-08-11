@@ -152,7 +152,7 @@ namespace Briand
                 // Very good example: https://www.programmersought.com/article/85795017726/
                 // 
 
-                ESP_LOGW(LOGTAG, "[DEBUG] SOCKS5 Proxy HandleClient with clientSock = %d\n", clientSock);
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy HandleClient with clientSock = %d\n", clientSock);
 
                 auto recBuf = make_unique<unsigned char[]>(258);
                 ssize_t len;
@@ -275,6 +275,7 @@ namespace Briand
 
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy finding suitable circuit.\n");
 
+
                 if (BriandTorSocks5Proxy::torCircuits == nullptr) {
                     ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: circuits manager not ready. Closing connection.\n");
                     // Write back network unreachable
@@ -286,10 +287,19 @@ namespace Briand
                     continue;
                 }
 
-                BriandTorCircuit* circuit = BriandTorSocks5Proxy::torCircuits->GetCircuit();
+                BriandTorCircuit* circuit = nullptr; 
 
+                // Keep waiting until one circuit becomes ready, with a timeout.
+                unsigned long int stopTimeout = NET_CONNECT_TIMEOUT_S + BriandUtils::GetUnixTime();
+                while (BriandUtils::GetUnixTime() < stopTimeout) {
+                    circuit = BriandTorSocks5Proxy::torCircuits->GetCircuit();
+                    if (circuit != nullptr) break;
+                    vTaskDelay(200/portTICK_PERIOD_MS);
+                }
+
+                // If still no circuit found after timeout, error.
                 if (circuit == nullptr) {
-                    ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: no suitable circuit. Closing connection.\n");
+                    ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: no suitable circuit found in time. Closing connection.\n");
                     // Write back network unreachable
                     unsigned char temp[4] = { 0x05, 0x03, 0x00, 0x01 /* omitted */ };
                     ErrorResponse(clientSock, temp, 4);
@@ -426,6 +436,19 @@ namespace Briand
                         break;
                     }
 
+                    // If a *previous* RELAY_END (or else) has set torStreamFinished = true, do not write any other byte
+                    // to TOR circuit. Just read all the other bytes from the client (if available) and then close.
+                    if (torStreamFinished) {
+                        while (len > 0 && bytesAvail > 0) {
+                            size_t readSize = (bytesAvail > MAX_FREE_PAYLOAD ? MAX_FREE_PAYLOAD : bytesAvail);
+                            len = recv(clientSock, recBuf.get(), readSize, MSG_DONTWAIT); // this operation must not block!
+                            bytesAvail = 0;
+                            ioctl(clientSock, FIONREAD, &bytesAvail);
+                        }
+                        // exit the cycle
+                        break;
+                    }
+
                     // Otherwise read chunks of data until there are bytes and send through TOR
                     do {
                         // The client sent bytes are to be redirected through TOR
@@ -469,7 +492,13 @@ namespace Briand
                     do {
                         auto torRecBuf = make_unique<vector<unsigned char>>();
 
-                        // A single, good, cell must be received within few seconds (1s?) otherwise this call
+                        // Check circuit still available (maybe previously destroyed while task waiting).
+                        // If so, exit cycle immediately
+                        if (circuit == nullptr) {
+                            break;
+                        }
+
+                        // A single, good, cell must be received within few seconds otherwise this call
                         // could take a very long time and client could timeout 
                         // (maybe data is enough and the client should read and write again back)
                         torStreamOk = circuit->TorStreamRead(torRecBuf, torStreamFinished, TOR_SOCKS5_PROXY_TIMEOUT_S);
@@ -495,13 +524,14 @@ namespace Briand
                     // Next cycle client read and back will start.
                     // The data stream finish from the satisfied client will led to select() in error at next cycle 
                     // so the socket will be closed.
+                    // Even if a RELAY_END (or some other cells that leds to torStreamFinished = true) will end the cycle
                 }
                 while(1);
 
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: clean-up and closing.\n");
 
                 // Cycle ended, close socket and terminate task after a while.
-                if (openedStream) {
+                if (openedStream && circuit != nullptr) {
                     // Close the TOR stream
                     circuit->TorStreamEnd();
                     ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy Tor stream closed.\n");

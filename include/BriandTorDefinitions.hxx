@@ -108,7 +108,7 @@ namespace Briand {
 		ntor_extra_encryption_key_corss_certifies_descriptor_key = 0xB
 	};
 
-	/** Circuit destroy reason */
+	/** Circuit destroy reason (or RELAY_TRUNCATED reason) */
 	enum BriandTorDestroyReason : unsigned char {
 		NONE = 0, 				// -- NONE            (No reason given.)
 		PROTOCOL = 1, 			// -- PROTOCOL        (Tor protocol violation.)
@@ -148,6 +148,7 @@ namespace Briand {
         // 41..42 -- Used for circuit padding; see Section 3 of padding-spec.txt.
 	};        
 
+	/** Enums reasons for RELAY_END cells */
 	enum BriandTorRelayEndReason : unsigned char {
 		REASON_MISC = 1,
 		REASON_RESOLVEFAILED = 2,
@@ -164,5 +165,4 @@ namespace Briand {
 		REASON_TORPROTOCOL = 13,
 		REASON_NOTDIRECTORY = 14
 	};
-
 }

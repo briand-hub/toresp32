@@ -555,6 +555,16 @@ namespace Briand {
 		}
 	}
 
+	void BriandTorRelay::ResetCertificates() {
+		if(this->certLinkKey != nullptr) this->certLinkKey.reset();
+		if(this->certRsa1024Identity != nullptr) this->certRsa1024Identity.reset();
+		if(this->certRsa1024AuthenticateCell != nullptr) this->certRsa1024AuthenticateCell.reset();
+		if(this->certEd25519SigningKey != nullptr) this->certEd25519SigningKey.reset();
+		if(this->certTLSLink != nullptr) this->certTLSLink.reset();
+		if(this->certEd25519AuthenticateCellLink != nullptr) this->certEd25519AuthenticateCellLink.reset();
+		if(this->certRSAEd25519CrossCertificate != nullptr) this->certRSAEd25519CrossCertificate.reset();
+	}
+
 	void BriandTorRelay::PrintRelayInfo() {
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Nickame: %s\n", this->nickname->c_str());

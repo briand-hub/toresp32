@@ -34,7 +34,6 @@ namespace Briand {
 		this->LINKPROTOCOLVERSION = 0;
 		this->CURRENT_STREAM_ID = 0;
 		this->CURRENT_STREAM_WINDOW = 1000;
-		this->RSD = nullptr;
 
 		this->internalID = -1;
 		this->paddingSent = 0;
@@ -144,11 +143,6 @@ namespace Briand {
 		if (this->middleNode != nullptr) this->middleNode.reset();
 		if (this->exitNode != nullptr) this->exitNode.reset();
 		if (this->relaySearcher != nullptr) this->relaySearcher.reset();
-
-		if (this->RSD != nullptr) {
-			mbedtls_md_free(this->RSD.get());
-			this->RSD.reset();
-		}
 
 		this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 	}
@@ -461,7 +455,7 @@ namespace Briand {
 		
 		// If a DESTROY given, tell me why
 		if (tempCell->GetCommand() == BriandTorCellCommand::DESTROY) {
-			ESP_LOGW(LOGTAG, "[ERR] Error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
+			ESP_LOGW(LOGTAG, "[ERR] Error, DESTROY received! Reason = 0x%02X (%s)\n", tempCell->GetPayload()->at(0), BriandUtils::RelayTruncatedReasonToString(static_cast<BriandTorDestroyReason>(tempCell->GetPayload()->at(0))).c_str());
 			this->Cleanup();
 			return false;
 		}
@@ -566,7 +560,7 @@ namespace Briand {
 		
 		// If a DESTROY given, tell me why
 		if (tempCell->GetCommand() == BriandTorCellCommand::DESTROY) {
-			ESP_LOGW(LOGTAG, "[ERR] Error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
+			ESP_LOGW(LOGTAG, "[ERR] Error, DESTROY received! Reason = 0x%02X (%s)\n", tempCell->GetPayload()->at(0), BriandUtils::RelayTruncatedReasonToString(static_cast<BriandTorDestroyReason>(tempCell->GetPayload()->at(0))).c_str());
 			this->TearDown();
 			this->Cleanup();
 			return false;
@@ -886,6 +880,11 @@ namespace Briand {
 		this->StatusResetTo(CircuitStatusFlag::BUILT);
 		this->StatusSetFlag(CircuitStatusFlag::STREAM_READY);
 		this->StatusSetFlag(CircuitStatusFlag::CLEAN);
+
+		// Clear certificates to save RAM
+		this->guardNode->ResetCertificates();
+		this->middleNode->ResetCertificates();
+		this->exitNode->ResetCertificates();
 		
 		this->createdOn = BriandUtils::GetUnixTime();
 
@@ -944,13 +943,25 @@ namespace Briand {
 		// Read the socket, as all RELAY/DESTROY/PADDING cells are fixed-length cells, this is easy...
 		this->sClient->SetReceivingBufferSize(514); 
 		auto tempData = this->sClient->ReadData(true);
+		// Sometimes truncated data occours, so check all 514 bytes has been read
+		if (tempData->size() < 514) {
+			unsigned short remainingBytes = 514 - static_cast<unsigned short>(tempData->size());
+			ESP_LOGD(LOGTAG, "[DEBUG] Received %zu bytes instead of 514 expected. Reading remaining %hu bytes.\n", tempData->size(), remainingBytes);
+			this->sClient->SetReceivingBufferSize(remainingBytes); 
+			auto lostData = this->sClient->ReadData(true);
+			tempData->insert(tempData->end(), lostData->begin(), lostData->end());
+			this->sClient->SetReceivingBufferSize(514);
+		}
 		ESP_LOGD(LOGTAG, "[DEBUG] TorStreamReadData %d bytes read.\n", tempData->size());
-
+		
 		// Build the basic cell from received data
 		auto tempCell = make_unique<BriandTorCell>(this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::PADDING);
 
 		if (!tempCell->BuildFromBuffer(tempData, this->LINKPROTOCOLVERSION)) {
 			ESP_LOGW(LOGTAG, "[ERR] TorStreamReadData error, response cell had invalid bytes (failed to build from buffer).\n");
+			// During a stream this error leds to fatal error: the digest will not be anymore valid! So tear down!
+			this->TearDown();
+			this->Cleanup();
 			return nullptr;
 		}
 
@@ -962,7 +973,7 @@ namespace Briand {
 
 		// If a DESTROY given must tear down, tell me why
 		if (tempCell->GetCommand() == BriandTorCellCommand::DESTROY) {
-			ESP_LOGW(LOGTAG, "[ERR] TorStreamReadData error, DESTROY received! Reason = 0x%02X\n", tempCell->GetPayload()->at(0));
+			ESP_LOGW(LOGTAG, "[ERR] TorStreamReadData error, DESTROY received! Reason = 0x%02X (%s)\n", tempCell->GetPayload()->at(0), BriandUtils::RelayTruncatedReasonToString(static_cast<BriandTorDestroyReason>(tempCell->GetPayload()->at(0))).c_str());
 			this->TearDown();
 			this->Cleanup();
 			return std::move(tempCell);
@@ -1023,27 +1034,19 @@ namespace Briand {
 
 			// Here cell is recognized
 
-			// If this is a RELAY_DATA remember to update the window and the rolling digest!
+			// Build informations (decrypted payload etc.)
+			if (!tempCell->BuildRelayCellFromPayload(this->exitNode->KEY_BackwardDigest_Db)) {
+				ESP_LOGW(LOGTAG, "[ERR] TorStreamReadData error on rebuilding RELAY cell informations from exit node, invalid response cell.\n");
+				return nullptr;
+			}
+
+			// If this is a RELAY_DATA remember to update the window!
 			if (tempCell->GetRelayCommand() == BriandTorCellRelayCommand::RELAY_DATA) {
 				// Update current window
 				this->CURRENT_STREAM_WINDOW--;
 
-				// Start the digest if not done before
-				if (this->RSD == nullptr) {
-					this->RSD = make_unique<mbedtls_md_context_t>();
-					mbedtls_md_init(this->RSD.get());
-					mbedtls_md_setup(this->RSD.get(), mbedtls_md_info_from_type(MBEDTLS_MD_SHA1), 0);
-					mbedtls_md_starts(this->RSD.get());
-					ESP_LOGD(LOGTAG, "[DEBUG] Circuit Stream Rolling Digest started.\n");
-				}
-
-				// Update the digest
-				mbedtls_md_update(this->RSD.get(), tempCell->GetPayload()->data(), tempCell->GetPayload()->size());
-				
-				ESP_LOGD(LOGTAG, "[DEBUG] Circuit Stream Rolling Digest updated.\n");
-
 				// Check if a new RELAY_SENDME is required
-				if (this->CURRENT_STREAM_WINDOW <= 990) {
+				if (this->CURRENT_STREAM_WINDOW <= 950) {
 					ESP_LOGD(LOGTAG, "[DEBUG] A RELAY_SENDME is required.\n");
 
 					/*
@@ -1052,43 +1055,50 @@ namespace Briand {
 						VERSION     [1 byte]
 						DATA_LEN    [2 bytes]
 						DATA        [DATA_LEN bytes]
+
+						--------- NOTE: in this case this is a STREAM sendme between edge nodes!
+
+						Edge nodes use RELAY_SENDME cells to implement end-to-end flow
+						control for individual connections across circuits. Similarly to
+						circuit-level flow control, edge nodes begin with a window of cells
+						(500) per stream, and increment the window by a fixed value (50)
+						upon receiving a RELAY_SENDME cell. Edge nodes initiate RELAY_SENDME
+						cells when both a) the window is <= 450, and b) there are less than
+						ten cell payloads remaining to be flushed at that edge.
+
+						Stream-level RELAY_SENDME cells are distinguished by having nonzero
+						StreamID. They are still empty; the body still SHOULD be ignored.
 					*/
 
 					auto sendMePayload = make_unique<vector<unsigned char>>();
 					sendMePayload->push_back(0x01); // version 1 authenticated cell
-					sendMePayload->push_back(static_cast<unsigned char>(this->RSD->md_info->size));
 
-					// Make a copy of the current digest and calculate the digest without updating.
-					auto digestCopy = make_unique<mbedtls_md_context_t>();
-					auto outBuf = BriandUtils::GetOneOldBuffer(this->RSD->md_info->size);
-					mbedtls_md_init(digestCopy.get());
-					mbedtls_md_setup(digestCopy.get(), this->RSD->md_info, 0);
-					mbedtls_md_clone(digestCopy.get(), this->RSD.get());
-					mbedtls_md_finish(digestCopy.get(), outBuf.get());
-					mbedtls_md_free(digestCopy.get());
-					digestCopy.reset();
+					if (tempCell->GetRelayCellDigest() == nullptr) {
+						ESP_LOGE(LOGTAG, "[ERR] ERROR! A RELAY_DATA is received but FullDigest field is not populated for the RELAY_SENDME cell.\n");
+						return std::move(tempCell);
+					}
 
-					for (unsigned char i = 0; i<this->RSD->md_info->size; i++)
-						sendMePayload->push_back(outBuf[i]);
+					// Append the size
+					sendMePayload->push_back(static_cast<unsigned char>(tempCell->GetRelayCellDigest()->size()));
+
+					// Append the received cell digest (that is the last RELAY_DATA received cell)
+					sendMePayload->insert(sendMePayload->end(), tempCell->GetRelayCellDigest()->begin(), tempCell->GetRelayCellDigest()->end());
+
+					// This is a Stream-sendme cell, so StreamID remains
 
 					// Send the cell
 					if (!this->TorStreamWriteData(BriandTorCellRelayCommand::RELAY_SENDME, sendMePayload)) {
-						ESP_LOGD(LOGTAG, "[DEBUG] RELAY_SENDME cell NOT sent (errors). Circuit will be torn down.\n");
+						ESP_LOGW(LOGTAG, "[WARN] RELAY_SENDME cell NOT sent (errors). Circuit will be torn down.\n");
 						this->TearDown();
+						return nullptr;
 					}
 					else {
 						ESP_LOGD(LOGTAG, "[DEBUG] RELAY_SENDME sent.\n");
 					}
 
-					// Re-increment by 100 the window
-					this->CURRENT_STREAM_WINDOW += 100;
+					// Re-increment by 50 the window
+					this->CURRENT_STREAM_WINDOW += 50;
 				}
-			}
-
-			// Build informations (decrypted payload etc.)
-			if (!tempCell->BuildRelayCellFromPayload(this->exitNode->KEY_BackwardDigest_Db)) {
-				ESP_LOGW(LOGTAG, "[ERR] TorStreamReadData error on rebuilding RELAY cell informations from exit node, invalid response cell.\n");
-				return nullptr;
 			}
 		}
 
@@ -1125,12 +1135,11 @@ namespace Briand {
 			// If PADDING cell or CIRCID not matching, ignore it.
 			if (readCell->GetCircID() != this->CIRCID || readCell->GetCommand() == BriandTorCellCommand::PADDING) {
 				ESP_LOGD(LOGTAG, "[DEBUG] TorStreamSingle ignoring cell.\n");
-				this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 				continue;
 			}
 
 			// Check if the stream id is the right one (otherwise is a protocol violation!)
-			if (readCell->GetStreamID() != this->CURRENT_STREAM_ID) {
+			if (readCell->GetStreamID() != this->CURRENT_STREAM_ID && readCell->GetStreamID() != 0x0000) {
 				ESP_LOGW(LOGTAG, "[WARN] TorStreamRead received a non-matching StreamID (current: %04X received: %04X) Destroy with protocol violation.\n", this->CURRENT_STREAM_ID, readCell->GetStreamID());
 				this->TearDown();
 				this->Cleanup();
@@ -1151,9 +1160,22 @@ namespace Briand {
 				// If RELAY cell but command is TRUNCATE => error
 				if (readCell->GetRelayCommand() == BriandTorCellRelayCommand::RELAY_TRUNCATE || readCell->GetRelayCommand() == BriandTorCellRelayCommand::RELAY_TRUNCATED) 
 				{
-					ESP_LOGW(LOGTAG, "[WARN] TorStreamSingle received RELAY_TRUNCATE / RELAY_TRUNCATED.\n");
-					this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
+					ESP_LOGW(LOGTAG, "[WARN] TorStreamSingle received RELAY_TRUNCATE / RELAY_TRUNCATED, reason = %s.\n", BriandUtils::RelayTruncatedReasonToString(static_cast<BriandTorDestroyReason>(readCell->GetPayload()->at(0))).c_str());
+					this->TearDown();
+					this->Cleanup();
 					return response;
+				}
+
+				// If RELAY_SENDME then continue the cycle
+				if (readCell->GetRelayCommand() == BriandTorCellRelayCommand::RELAY_SENDME) 
+				{
+					ESP_LOGD(LOGTAG, "[DEBUG] TorStreamSingle received RELAY_SENDME.\n");
+
+					//
+					// TODO : Something to do?
+					//
+
+					continue;
 				}
 
 				// Check if this is the desidered command
@@ -1475,9 +1497,10 @@ namespace Briand {
 				// If RELAY cell but command is TRUNCATE => error
 				if (readCell->GetRelayCommand() == BriandTorCellRelayCommand::RELAY_TRUNCATE || readCell->GetRelayCommand() == BriandTorCellRelayCommand::RELAY_TRUNCATED) 
 				{
-					ESP_LOGW(LOGTAG, "[WARN] TorStreamRead received RELAY_TRUNCATE / RELAY_TRUNCATED.\n");
+					ESP_LOGW(LOGTAG, "[WARN] TorStreamRead received RELAY_TRUNCATE / RELAY_TRUNCATED, reason = %s.\n", BriandUtils::RelayTruncatedReasonToString(static_cast<BriandTorDestroyReason>(readCell->GetPayload()->at(0))).c_str());
 					finished = true;
-					this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
+					this->TearDown();
+					this->Cleanup();
 					return false;
 				}
 
@@ -1627,11 +1650,6 @@ namespace Briand {
 		this->StatusResetTo(CircuitStatusFlag::CLOSED);
 		this->paddingSent = 0;
 		this->CURRENT_STREAM_WINDOW = 1000;
-
-		if (this->RSD != nullptr) {
-			mbedtls_md_free(this->RSD.get());
-			this->RSD.reset();
-		}
 	}
 
 	void BriandTorCircuit::PrintCircuitInfo() {

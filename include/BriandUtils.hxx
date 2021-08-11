@@ -211,5 +211,12 @@ namespace Briand
 		 * @return string containing the reason
 		*/
 		static string RelayEndReasonToString(const BriandTorRelayEndReason& reason);
+
+		/**
+		 * Converts a RELAY_TRUNCATED or DESTROY reason to human readable
+		 * @param reason RELAY_TRUNCATED or DESTROY payload
+		 * @return string containing the reason
+		*/
+		static string RelayTruncatedReasonToString(const BriandTorDestroyReason& reason);
 	};
 }

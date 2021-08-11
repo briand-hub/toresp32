@@ -106,7 +106,7 @@ namespace Briand
 		 * @param derCAcert The DER-format certificate CA root. If nullptr, INSECURE mode will be used (unless PEM certificate furnished)
 		 * @return JSON objects with fields if success, NULL if fails.
 		*/
-		static cJSON* HttpsGetJson(const string& host, const short& port, const string& path, short& httpReturnCode, bool& deserializationSuccess, const string& agent = "empty", const unique_ptr<string>& pemCAcert = nullptr, const unique_ptr<vector<unsigned char>>& derCAcert = nullptr);
+		// DELETED static cJSON* HttpsGetJson(const string& host, const short& port, const string& path, short& httpReturnCode, bool& deserializationSuccess, const string& agent = "empty", const unique_ptr<string>& pemCAcert = nullptr, const unique_ptr<vector<unsigned char>>& derCAcert = nullptr);
 
 		/**
 		 * Method send an Http (NOT HTTPS!) request and returns contents in string format

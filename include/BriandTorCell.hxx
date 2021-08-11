@@ -68,6 +68,9 @@ namespace Briand {
 		/* RELAY cell Digest (first 4 bytes) */
 		unsigned int Digest;
 
+		/* RELAY cell Digest (all bytes) */
+		unique_ptr<vector<unsigned char>> FullDigest;
+
 		/** Pads the payload (if needed) */
 		void PadPayload();
 
@@ -224,14 +227,12 @@ namespace Briand {
 		 * Method applies the onion skin (AES128CTR) to the cell's payload with the given key.
 		 * @param key Encryption key
 		*/
-		//void ApplyOnionSkin(const unique_ptr<vector<unsigned char>>& key);
 		void ApplyOnionSkin(BriandTorRelay& relay);
 
 		/**
 		 * Method peels out the onion skin (AES128CTR) to the cell's payload with the given key.
 		 * @param key Decryption key
 		*/
-		//void PeelOnionSkin(const unique_ptr<vector<unsigned char>>& key);
 		void PeelOnionSkin(BriandTorRelay& relay);
 
 		/** 
@@ -245,6 +246,12 @@ namespace Briand {
 		 * @return the stream ID
 		*/
 		unsigned short GetRecognized();
+
+		/** 
+		 * Returns the relay cell's Digest
+		 * @return Pointer to digest, nullptr if not available
+		*/
+		unique_ptr<vector<unsigned char>>& GetRelayCellDigest();
 
 		/** 
 		 * Prepare this as a RELAY cell header for sending a relay cell, based on the current cell->Payload that MUST be ready (not encrypted)  

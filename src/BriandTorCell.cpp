@@ -92,12 +92,16 @@ namespace Briand {
 		this->Payload = make_unique<vector<unsigned char>>();
 
 		this->cellTotalSizeBytes = 0;
+
+		this->FullDigest = nullptr;
+		this->StreamID = USHRT_MAX;
 	}
 
 	BriandTorCell::~BriandTorCell() {
 		this->Payload->clear();
 		this->Payload->resize(1);
 		this->Payload.reset();
+		if (this->FullDigest != nullptr) this->FullDigest.reset();
 	}
 
 	bool BriandTorCell::AppendToPayload(const unsigned char& byte) {
@@ -295,8 +299,18 @@ namespace Briand {
 		}
 		else {
 			// All the rest, for a maximum of PAYLOAD_LEN, is payload
-			this->Payload->insert(this->Payload->begin(), buffer->begin() + nextFrom, buffer->begin() + nextFrom + PAYLOAD_LEN);
-			ESP_LOGD(LOGTAG, "[DEBUG] Fixed cell payload of %d bytes.\n", this->Payload->size());
+
+			// Check if buffer is invalid in size.
+			if (buffer->size() < nextFrom+PAYLOAD_LEN) {
+				ESP_LOGW(LOGTAG, "[WARN] An invalid size cell of %zu bytes received instead of expected %d bytes. Saving only the available payload.\n", buffer->size(), nextFrom+PAYLOAD_LEN);
+				// Save just the available payload
+				this->Payload->insert(this->Payload->begin(), buffer->begin() + nextFrom, buffer->end());
+			}
+			else {
+				// Save the full payload
+				this->Payload->insert(this->Payload->begin(), buffer->begin() + nextFrom, buffer->begin() + nextFrom + PAYLOAD_LEN);
+				ESP_LOGD(LOGTAG, "[DEBUG] Fixed cell payload of %d bytes.\n", this->Payload->size());
+			}
 		}
 
 		cellTotalSizeBytes += this->Payload->size();
@@ -744,6 +758,10 @@ namespace Briand {
 		return this->RelayCommand;
 	}
 
+	unique_ptr<vector<unsigned char>>& BriandTorCell::GetRelayCellDigest() {
+		return this->FullDigest;
+	}
+
 	void BriandTorCell::PrepareAsRelayCell(const BriandTorCellRelayCommand& command, const unsigned short& streamID, unique_ptr<mbedtls_md_context_t>& digestForward) {
 		
 		// Assume payload ready
@@ -838,17 +856,17 @@ namespace Briand {
 		}
 
 		// Calculate the digest and update relay's digest forward field
-		auto digest = BriandTorCryptoUtils::GetRelayCellDigest(digestForward, this->Payload);
+		this->FullDigest = BriandTorCryptoUtils::GetRelayCellDigest(digestForward, this->Payload);
 
 		// Save the first 4 bytes to digest field
 		for (char i = 0; i < 4; i++) {
-			this->Payload->at(i + 5) = digest->at(i);
-			this->Digest += static_cast<unsigned int>( digest->at(i) << (8*(3-i)));
+			this->Payload->at(i + 5) = this->FullDigest->at(i);
+			this->Digest += static_cast<unsigned int>( this->FullDigest->at(i) << (8*(3-i)));
 		}
 		
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] PrepareAsRelayCell digest is: ");
-			BriandUtils::PrintByteBuffer(*digest.get());
+			BriandUtils::PrintByteBuffer(*this->FullDigest.get());
 			printf("[DEBUG] Relay cell saved digest: %08X\n", this->Digest);
 		}
 	}
@@ -924,12 +942,12 @@ namespace Briand {
 			this->Payload->at(i) = 0x00;
 
 		// Calculate digest and update Backward digest
-		auto digest = BriandTorCryptoUtils::GetRelayCellDigest(digestBackward, this->Payload);
+		this->FullDigest = BriandTorCryptoUtils::GetRelayCellDigest(digestBackward, this->Payload);
 		unsigned int calculatedDigest = 0x00000000;
-		calculatedDigest += static_cast<unsigned int>( digest->at(0) << 24 );
-		calculatedDigest += static_cast<unsigned int>( digest->at(1) << 16 );
-		calculatedDigest += static_cast<unsigned int>( digest->at(2) << 8 );
-		calculatedDigest += static_cast<unsigned int>( digest->at(3) );
+		calculatedDigest += static_cast<unsigned int>( this->FullDigest->at(0) << 24 );
+		calculatedDigest += static_cast<unsigned int>( this->FullDigest->at(1) << 16 );
+		calculatedDigest += static_cast<unsigned int>( this->FullDigest->at(2) << 8 );
+		calculatedDigest += static_cast<unsigned int>( this->FullDigest->at(3) );
 
 		// Check the digest matching
 		if (this->Digest != calculatedDigest) {
