@@ -57,6 +57,8 @@ unique_ptr<Briand::BriandTorCircuitsManager> CIRCUITS_MANAGER = nullptr;
 unique_ptr<Briand::BriandTorSocks5Proxy> SOCKS5_PROXY = nullptr;
 unsigned long HEAP_MAX = 0;
 unsigned long HEAP_MIN = ULONG_MAX;
+/** Flags for STA: LSB (bit 1) = autoreconnect, bit 2 set = disconnect, bit 3 set = connect/reconnect, MSB => reserved for not fire event each time before completed  */
+unsigned char STA_ACTIONFLAGS = 0b00000001;
 
 /* Early declarations */
 void reboot();
@@ -66,6 +68,7 @@ void printLogo();
 void startSerialRead(string*);
 void executeCommand(string&);
 void heapStats(void*);
+void checkStaHealth(void*);
 
 // Early declarations for setup/application
 void TorEsp32Setup();
@@ -396,6 +399,9 @@ void TorEsp32Main(void* taskArg) {
 			printf("[INFO] STA MAC: %s\n", WiFi->GetStaMAC().c_str());
 			printf("[INFO] LAN IP Address: %s\n", WiFi->GetStaIP().c_str());
 
+			// Start WiFi Check
+			xTaskCreate(checkStaHealth, "StaCheck", 1024, NULL, 1000, NULL);
+
 			nextStep = 7;
 		}
 		else if (nextStep == 7) {
@@ -426,8 +432,6 @@ void TorEsp32Main(void* taskArg) {
 
 			// Now cleanup not anymore needed infos
 			CONFIG_PASSWORD.reset();
-			STA_ESSID.reset();
-			STA_PASSW.reset();
 
 			// Initialize AP interface
 
@@ -625,6 +629,9 @@ void executeCommand(string& cmd) {
 		printf("devinfo : display device information.\n");
 		printf("meminfo : display short memory information.\n");
 		printf("netinfo : display network STA/AP interfaces information.\n");
+		printf("staoff : disconnect STA.\n");
+		printf("staon : connect/reconnect STA.\n");
+		printf("stareconnect [on|off] : autoreconnect/do not autoreconnect STA.\n");
 		printf("apoff : turn off AP interface.\n");
 		printf("apon : turn on AP interface (will keep intact hostname/essid/password).\n");
         printf("synctime : sync localtime time with NTP.\n");
@@ -641,14 +648,14 @@ void executeCommand(string& cmd) {
 
 		printf("TOR TESTING---------------------------------------------------------------------------\n");
 		printf("myrealip : Show **REAL** IP address using (NON-TOR REQUEST).\n");
-		printf("torip : Show **TOR** IP address (TOR REQUEST).\n");
+		printf("torip : Show **TOR** IP address (TOR REQUEST, uses proxy on 127.0.0.1).\n");
 
 		printf("TOR COMMANDS--------------------------------------------------------------------------\n");
 		printf("torcache : print out the local node cache, all 3 files.\n");
         printf("torcache refresh : refresh the tor cache.\n");
 		printf("torcircuits : print out the current tor circuit status.\n");
 		printf("torcircuits [restart|stop] : Invalidate all circuits pool, if restart rebuild again.\n");
-		printf("torproxy [start|stop] : Starts/Stops SOCKS5 Proxy.\n");
+		printf("torproxy [start|stop] : Starts/Stops SOCKS5 Proxy SelfTest does a \"torip\".\n");
 		printf("tor resolve [hostname] : Resolve IPv4 address through tor.\n");
     }
     else if (cmd.compare("time") == 0) {
@@ -720,6 +727,20 @@ void executeCommand(string& cmd) {
         printf("Device will reboot now.\n");
 		reboot();
     }
+	else if (cmd.compare("staoff") == 0)  {
+		STA_ACTIONFLAGS = STA_ACTIONFLAGS | 0b00000010;
+    }
+	else if (cmd.compare("staon") == 0)  {
+		STA_ACTIONFLAGS = STA_ACTIONFLAGS | 0b00000100;
+    }
+	else if (cmd.compare("stareconnect on") == 0)  {
+		STA_ACTIONFLAGS = STA_ACTIONFLAGS | 0b00000001;
+		printf("Queued. See DEBUG/ERRORS.\n");
+    }
+	else if (cmd.compare("stareconnect off") == 0)  {
+		STA_ACTIONFLAGS = STA_ACTIONFLAGS & ~(0b00000001);
+		printf("Queued. See DEBUG/ERRORS.\n");
+    } 
 	else if (cmd.compare("apoff") == 0)  {
 		// if (WiFi->StopAP()) printf("AP has been turned off.\n");
 		// else printf("[ERR] Error turning off AP.\n");
@@ -781,17 +802,11 @@ void executeCommand(string& cmd) {
 		printf("Your real public ip is: %s", Briand::BriandUtils::GetPublicIPFromIPFY().c_str());
     }
 	else if (cmd.compare("torip") == 0)  {
-		auto circuit = CIRCUITS_MANAGER->GetCircuit();
-		if (circuit == nullptr) {
-			printf("No suitable circuit found.\n");
+		if (SOCKS5_PROXY == nullptr) {
+			printf("Proxy is not started. Use \"torproxy start\" command.\n");
 		}
 		else {
-			printf("Using circuit #%hu\n", circuit->internalID);
-			
-			//
-			// TODO
-			//
-
+			SOCKS5_PROXY->SelfTest();
 		}
     }
 	// TOR commands
@@ -856,6 +871,57 @@ void heapStats(void* param) {
 		unsigned long currentHeap = esp_get_free_heap_size();
 		if (currentHeap > HEAP_MAX) HEAP_MAX = currentHeap;
 		if (currentHeap < HEAP_MIN) HEAP_MIN = currentHeap;
+		vTaskDelay(500 / portTICK_PERIOD_MS);
+	}
+}
+
+void checkStaHealth(void* param) {
+	// IDF Task cannot return
+	while (1) {
+		// If MSB set, do not do anything!
+		if ((STA_ACTIONFLAGS & 0b10000000) != 0b10000000) {
+			// Set MSB (Busy)
+			STA_ACTIONFLAGS = STA_ACTIONFLAGS | 0b10000000;
+
+			// If LSB/bit 1 is set, then auto-reconnect if is not connected.
+			if ((STA_ACTIONFLAGS & 0b00000001) == 0b00000001) {
+				// Check if disconnected or IP is 0.0.0.0 (happens on low memory, does not fire any event)
+				if (WiFi != nullptr && (!WiFi->IsConnected() || WiFi->GetStaIP().compare("0.0.0.0")==0)) {
+					printf("**************ENTERING RECONNECT!**************\n");
+					WiFi->DisconnectStation(); // clean-up!
+					if (!WiFi->ConnectStation(*STA_ESSID.get(), *STA_PASSW.get(), WIFI_CONNECTION_TIMEOUT, *STA_HOSTNAME.get(), CHANGE_MAC_TO_RANDOM)) {
+						ESP_LOGE(LOGTAG, "[ERR] WiFi Re-connect failed.\n");
+					}
+					else {
+						ESP_LOGD(LOGTAG, "[DEBUG] WiFi Re-connect success.\n");
+					}
+				}
+			}
+			// If bit 2 is set, then disconnect and reset the bit.
+			if ((STA_ACTIONFLAGS & 0b00000010) == 0b00000010) {
+				if (WiFi != nullptr && WiFi->IsConnected()) {
+					WiFi->DisconnectStation();
+					printf("[INFO] WiFi disconnected as requested.\n");
+				}
+				STA_ACTIONFLAGS = STA_ACTIONFLAGS & (~0b00000010);
+			}
+			// If bit 3 is set, then connect and reset the bit.
+			if ((STA_ACTIONFLAGS & 0b00000100) == 0b00000100) {
+				if (WiFi != nullptr && !WiFi->IsConnected()) {
+					if (!WiFi->ConnectStation(*STA_ESSID.get(), *STA_PASSW.get(), WIFI_CONNECTION_TIMEOUT, *STA_HOSTNAME.get(), CHANGE_MAC_TO_RANDOM)) {
+						printf("\n[INFO] ERROR: WiFi connect failed.\n\n");
+					}
+					else {
+						printf("\n[INFO] WiFi connect success.\n\n");
+					}
+				}
+				STA_ACTIONFLAGS = STA_ACTIONFLAGS & (~0b00000100);
+			}
+
+			// Reset MSB (Free)
+			STA_ACTIONFLAGS = STA_ACTIONFLAGS & (~0b10000000);
+		}
+
 		vTaskDelay(500 / portTICK_PERIOD_MS);
 	}
 }

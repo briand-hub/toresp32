@@ -83,7 +83,7 @@ namespace Briand
 
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy listening.\n");
 
-        xTaskCreate(this->HandleRequest, "TorProxy", 2560, reinterpret_cast<void*>(this->proxySocket), 5, &this->proxyTaskHandle);
+        xTaskCreate(this->HandleRequest, "TorProxy", 4096, reinterpret_cast<void*>(this->proxySocket), 5, &this->proxyTaskHandle);
 
         this->proxyStarted = true;
 
@@ -125,7 +125,7 @@ namespace Briand
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy accepted incoming connection from %s\n", BriandUtils::IPv4ToString(clientAddr.sin_addr).c_str());
 
                 // Start task to handle this client
-                xTaskCreate(HandleClient, "TorProxyReq", 2048, reinterpret_cast<void*>(clientSock), 6, NULL);
+                xTaskCreate(HandleClient, "TorProxyReq", 4096, reinterpret_cast<void*>(clientSock), 6, NULL);
             }
 
             // Wait before next run
@@ -274,7 +274,6 @@ namespace Briand
                 }
 
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy finding suitable circuit.\n");
-
 
                 if (BriandTorSocks5Proxy::torCircuits == nullptr) {
                     ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: circuits manager not ready. Closing connection.\n");
@@ -558,6 +557,134 @@ namespace Briand
         }
         
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy stopped.\n");
+    }
+
+    void BriandTorSocks5Proxy::SelfTest() {
+        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy SelfTest started.\n");
+
+        auto client = make_unique<BriandIDFSocketClient>();
+        client->SetVerbose(false);
+        client->SetTimeout(NET_CONNECT_TIMEOUT_S, NET_IO_TIMEOUT_S);
+        client->SetReceivingBufferSize(64); // should be enough
+        
+        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy SelfTest connecting.\n");
+        
+        if (!client->Connect("127.0.0.1", TOR_SOCKS5_PROXY_PORT)) {
+            ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest error on connecting.\n");
+            return;
+        }
+
+        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy SelfTest connected. Writing methods request\n");
+        
+        unique_ptr<vector<unsigned char>> wBuf, rBuf;
+        
+        wBuf= make_unique<vector<unsigned char>>();
+
+        // request v5 with 1 method (0x00 => no auth)
+        wBuf->push_back(0x05); wBuf->push_back(0x01); wBuf->push_back(0x00);
+        
+        if (!client->WriteData(wBuf)) {
+            ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest error on writing methods request. Disconnecting.\n");
+            client->Disconnect();
+            return;
+        }
+
+        wBuf->clear();
+    
+        rBuf = client->ReadData(true);
+
+        if (rBuf == nullptr || rBuf->size() < 2) {
+            ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest error on receiving methods response. Disconnecting.\n");
+            client->Disconnect();
+            return;
+        }
+
+        if (rBuf->at(0) != 0x05 || rBuf->at(1) != 0x00) {
+            ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest invalid methods response received. Disconnecting.\n");
+            client->Disconnect();
+            return;
+        }
+
+        rBuf.reset();
+
+        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy SelfTest Sending connect request.\n");
+
+        string hostname = "ifconfig.me";
+        // request v5 connect to hostname ifconfig.me
+        wBuf->push_back(0x05); wBuf->push_back(0x01); wBuf->push_back(0x00); wBuf->push_back(0x03);
+        // Hostname: ifconfig.me
+        wBuf->push_back(static_cast<unsigned char>(hostname.size())); // len
+        for (char& c: hostname) wBuf->push_back(static_cast<unsigned char>(c));
+        // Port: 80
+        wBuf->push_back(0x00); wBuf->push_back(0x50); 
+
+        if (!client->WriteData(wBuf)) {
+            ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest error on writing connect request. Disconnecting.\n");
+            client->Disconnect();
+            return;
+        }
+
+        wBuf->clear();
+    
+        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy SelfTest connect request sent.\n");
+
+        rBuf = client->ReadData(true);
+
+        if (rBuf == nullptr || rBuf->size() < 2) {
+            ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest error on receiving connect response. Disconnecting.\n");
+            client->Disconnect();
+            return;
+        }
+
+        if (rBuf->at(0) != 0x05 || rBuf->at(1) != 0x00) {
+            ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest connect request failed. Disconnecting.\n");
+            client->Disconnect();
+            return;
+        }
+
+        rBuf.reset();
+
+        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy SelfTest connected to destination. Sending HTTP/GET request.\n");
+
+        // Prepare the HTTP request, send
+        string request("");
+		request.append("GET / HTTP/1.1\r\n");
+		request.append("Host: " + hostname + " \r\n");
+		request.append("Connection: close\r\n");
+		request.append("\r\n");
+
+		for (char& c: request) wBuf->push_back(static_cast<unsigned char>(c));
+
+        if (!client->WriteData(wBuf)) {
+            ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest error on writing HTTP request. Disconnecting.\n");
+            client->Disconnect();
+            return;
+        }
+
+        wBuf.reset(); // no more needed
+
+        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy SelfTest HTTP/GET request sent, waiting response.\n");
+
+        rBuf = client->ReadData(true);
+
+        if (rBuf == nullptr || rBuf->size() < 2) {
+            ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest error on receiving HTTP/GET response. Disconnecting.\n");
+            client->Disconnect();
+            return;
+        }
+
+        printf("SOCKS5 Proxy had response: ");
+        // Convert to string
+        for (auto&& c: *rBuf.get()) printf("%c", c);
+        printf("\n");
+
+        rBuf.reset();
+
+        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy SelfTest Disconnecting.\n");
+        
+        client->Disconnect();
+
+        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy SelfTest finished.\n");
     }
 
 }

@@ -17,6 +17,8 @@
 * Moving to another cache implementation using microdescriptors from Authorities
 * Added heap monitor to meminfo command
 * Moved to microdescriptor cache and more efficient FetchDescriptorsFromAuthorities with readLine method of LibBriandIDF
+* Added STA command for connect/disconnect and auto-reconnect
+* Something is eating all heap (found with 3 built circuits goes below 10.000bytes free)
 
 ## 2021-08-07
 

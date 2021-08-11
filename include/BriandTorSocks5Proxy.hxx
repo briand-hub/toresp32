@@ -77,5 +77,11 @@ namespace Briand
         */
         void StopProxyServer();
         
+        /**
+         * Method to self-test simulating a client that requests on 127.0.0.1 remote IP via APIFY. 
+         * Uses TOR network, outputs IP to stdout.
+        */
+        void SelfTest();
+
     };
 }
