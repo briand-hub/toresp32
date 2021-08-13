@@ -2,12 +2,8 @@
 
 ## Next steps
 
-* Implement SENDME windows and cells
 * Consider error management short/int for method errors (mbedtls style)
-* Consider adding TIMEOUT seconds to Stream methods.
 * Implement a vector of nodes.
-* Change the "old" buffer-copy to vector->data() to optimize memory usage
-* Simplify code in TorCircuit class
 * Authenticate cell? => Prepare stub method to authenticate client
 
 ## 2021-08-08
@@ -19,6 +15,7 @@
 * Moved to microdescriptor cache and more efficient FetchDescriptorsFromAuthorities with readLine method of LibBriandIDF
 * Added STA command for connect/disconnect and auto-reconnect
 * Something is eating all heap (found with 3 built circuits goes below 10.000bytes free)
+* Optimized use of vector->data() instead of copy to the "old" buffer style
 
 ## 2021-08-07
 

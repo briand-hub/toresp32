@@ -67,13 +67,13 @@ namespace Briand
 			return outBuffer;
 		}
 
-		string Decrypt(unique_ptr<unsigned char[]>& input, unsigned int inputSizeBytes) {
+		string Decrypt(unique_ptr<vector<unsigned char>>& input) {
 			constexpr unsigned short BLOCK_SIZE_BYTES = 16;
 			
 			unsigned char iv[BLOCK_SIZE_BYTES] = { 0x00 };			// zero-init IV
 			size_t nonce_size = 0;
 			unsigned char nonce_counter[BLOCK_SIZE_BYTES] = { 0x00 };
-			auto outBuffer = make_unique<unsigned char[]>(inputSizeBytes);
+			auto outBuffer = make_unique<unsigned char[]>(input->size());
 
 			string output("");
 
@@ -86,13 +86,13 @@ namespace Briand
 			esp_aes_setkey(&aes_context, reinterpret_cast<const unsigned char*>(this->enc_key.c_str()), this->enc_key.length() * 8);
 
 			// Encrypt (only CBC mode makes 16-bytes per round, CTR has not this problem with input)
-			esp_aes_crypt_ctr(&aes_context, inputSizeBytes, &nonce_size, nonce_counter, iv, (input.get()), outBuffer.get());
+			esp_aes_crypt_ctr(&aes_context, input->size(), &nonce_size, nonce_counter, iv, input->data(), outBuffer.get());
 
 			// Free context
 			esp_aes_free(&aes_context);
 
-			output.resize(inputSizeBytes);
-			for (int i=0; i<inputSizeBytes; i++) {
+			output.resize(input->size());
+			for (int i=0; i<input->size(); i++) {
 				output.at(i) = static_cast<char>( outBuffer[i] );
 			}
 
@@ -150,8 +150,7 @@ namespace Briand
 				}
 				f.close();
 
-				auto tempVector = BriandUtils::VectorToArray(buffer);
-				string contents = this->Decrypt(tempVector, buffer->size());
+				string contents = this->Decrypt(buffer);
 
 				size_t pos;
 

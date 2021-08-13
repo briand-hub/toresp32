@@ -395,12 +395,13 @@ namespace Briand
 		return now;
 	}
 
-	unique_ptr<unsigned char[]> BriandUtils::VectorToArray(const unique_ptr<vector<unsigned char>>& input) {
+	/* DELETED unique_ptr<unsigned char[]> BriandUtils::VectorToArray(const unique_ptr<vector<unsigned char>>& input) {
 		auto b = make_unique<unsigned char[]>(input->size());
 		for (unsigned long int i = 0; i < input->size(); i++)
 			b[i] = input->at(i);
 		return std::move(b);
 	}
+	*/
 
 	unique_ptr<vector<unsigned char>> BriandUtils::ArrayToVector(const unique_ptr<unsigned char[]>& input, const unsigned long int& size) {
 		auto v = make_unique<vector<unsigned char>>();

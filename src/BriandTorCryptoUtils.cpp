@@ -136,19 +136,17 @@ namespace Briand {
 		auto mdInfo = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
 
 		auto hashedMessageRaw = BriandUtils::GetOneOldBuffer(mdInfo->size);
-		auto inputRaw = BriandUtils::VectorToArray(input);
-		auto keyRaw = BriandUtils::VectorToArray(key);
 
 		ESP_LOGD(LOGTAG, "[DEBUG] HMAC-SHA256 Raw message to encode: ");
-		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) BriandUtils::PrintOldStyleByteBuffer(inputRaw.get(), input->size(), input->size(), input->size());
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) BriandUtils::PrintByteBuffer(*input.get());
 		
 		// Using mbedtls_md() not working as expected!!
 
 		auto mdCtx = make_unique<mbedtls_md_context_t>();
 
 		mbedtls_md_setup(mdCtx.get(), mdInfo, 1); // last 1: specify hmac
-		mbedtls_md_hmac_starts(mdCtx.get(), keyRaw.get(), key->size());
-		mbedtls_md_hmac_update(mdCtx.get(), inputRaw.get(), input->size());
+		mbedtls_md_hmac_starts(mdCtx.get(), key->data(), key->size());
+		mbedtls_md_hmac_update(mdCtx.get(), input->data(), input->size());
 		mbedtls_md_hmac_finish(mdCtx.get(), hashedMessageRaw.get());
 
 		// HINT : using this:
@@ -213,7 +211,7 @@ namespace Briand {
 		// Using mbedtls
 
 		// First, calculate hash SHA256 of the message
-		auto messageHash = BriandUtils::VectorToArray( GetDigest_SHA256(message) );
+		auto messageHash = GetDigest_SHA256(message);
 		constexpr unsigned short DIGEST_SIZE = 32;
 
 		// Structures needed
@@ -222,9 +220,7 @@ namespace Briand {
 
 		// Extract the PK from the certificate
 
-		auto certBuffer = BriandUtils::VectorToArray(x509DerCertificate);
-
-		if ( mbedtls_x509_crt_parse(&rsaIde, certBuffer.get(), x509DerCertificate->size()) != 0) {
+		if ( mbedtls_x509_crt_parse(&rsaIde, x509DerCertificate->data(), x509DerCertificate->size()) != 0) {
 			ESP_LOGD(LOGTAG, "[DEBUG] CheckSignature RSA/SHA256: failed to parse certificate.\n");
 			
 			// Free
@@ -232,13 +228,10 @@ namespace Briand {
 			return false;
 		}
 
-		// Prepare other buffers neeeded
-		auto signatureBuffer = BriandUtils::VectorToArray(signature);
-
 		// Thanks a lot @gilles-peskine-arm for resolving the problem! ( https://github.com/ARMmbed/mbedtls/issues/4400 )
 		// Using MBEDTLS_MD_NONE because this is raw data, and this function expects a signature with added information data
 		// about the MD used.
-		int verifyResult = mbedtls_pk_verify(&rsaIde.pk, MBEDTLS_MD_NONE, messageHash.get(), DIGEST_SIZE, signatureBuffer.get(), signature->size());
+		int verifyResult = mbedtls_pk_verify(&rsaIde.pk, MBEDTLS_MD_NONE, messageHash->data(), DIGEST_SIZE, signature->data(), signature->size());
 
 		if (verifyResult != 0) {
 			// Error description
@@ -282,10 +275,9 @@ namespace Briand {
 		// Start to parse the CA and add it to chain
 		// CA MUST BE THE FIRST IN THE CHAIN!!!
 		// MUST be zero-init
-		auto tempBuffer = BriandUtils::VectorToArray(x509CACertificate);
 
 		// Parse CA and add to chain
-		if (mbedtls_x509_crt_parse(&chain, tempBuffer.get(), x509CACertificate->size()) != 0) {
+		if (mbedtls_x509_crt_parse(&chain, x509CACertificate->data(), x509CACertificate->size()) != 0) {
 			ESP_LOGD(LOGTAG, "[DEBUG] X509Validate: failed to parse CA certificate.\n");
 
 			// free
@@ -296,14 +288,10 @@ namespace Briand {
 		}	
 
 		// Parse CA again but add to ROOTCA chain to verify against
-		mbedtls_x509_crt_parse(&root_ca, tempBuffer.get(), x509CACertificate->size());
-
-		// Reset buffer and parse the peer (this) certificate
-
-		tempBuffer = BriandUtils::VectorToArray(x509PeerCertificate);
+		mbedtls_x509_crt_parse(&root_ca, x509CACertificate->data(), x509CACertificate->size());
 
 		// Parse Peer and add to chain
-		if ( mbedtls_x509_crt_parse(&chain, tempBuffer.get(), x509PeerCertificate->size()) != 0) {
+		if ( mbedtls_x509_crt_parse(&chain, x509PeerCertificate->data(), x509PeerCertificate->size()) != 0) {
 			ESP_LOGD(LOGTAG, "[DEBUG] X509Validate: failed to parse peer certificate.\n");
 
 			// free
@@ -311,10 +299,7 @@ namespace Briand {
 			mbedtls_x509_crt_free(&root_ca);
 
 			return false;
-		}	
-
-		// Not need anymore the buffer, save RAM
-		tempBuffer.reset();
+		}
 
 		// Validate
 		// to see validation results the verify callback could be added.
@@ -322,7 +307,7 @@ namespace Briand {
 		
 		if (mbedtls_x509_crt_verify_with_profile(&chain, &root_ca, NULL,  &profile, NULL, &verification_flags, NULL, NULL) != 0) {
 			if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
-				tempBuffer = BriandUtils::GetOneOldBuffer(256 + 1);
+				auto tempBuffer = BriandUtils::GetOneOldBuffer(256 + 1);
 				mbedtls_x509_crt_verify_info( reinterpret_cast<char*>(tempBuffer.get()), 256, "", verification_flags);
 				printf("[DEBUG] X509Validate failed because %s\n", reinterpret_cast<const char*>(tempBuffer.get()));
 			} 
@@ -357,12 +342,9 @@ namespace Briand {
 			return false;
 		}
 
-		// Prepare buffers
-		auto messageBuffer = BriandUtils::VectorToArray(message);
-		auto pkBuffer = BriandUtils::VectorToArray(ed25519PK);
-		auto signatureBuffer = BriandUtils::VectorToArray(signature);
+		// Verify
 
-		if (crypto_sign_verify_detached(signatureBuffer.get(), messageBuffer.get(), message->size(), pkBuffer.get()) != 0) {
+		if (crypto_sign_verify_detached(signature->data(), message->data(), message->size(), ed25519PK->data()) != 0) {
 			ESP_LOGD(LOGTAG, "[DEBUG] CheckSignature Ed25519 signature is not valid.\n");
 			return false;
 		}
@@ -528,10 +510,9 @@ namespace Briand {
 
 		// Set private key 
 		// no need to reverse!
-		tempBuffer = BriandUtils::VectorToArray(privateKey);
 
-		ret = mbedtls_mpi_read_binary(&private_key, tempBuffer.get(), privateKey->size());
-		tempBuffer.reset();
+		ret = mbedtls_mpi_read_binary(&private_key, privateKey->data(), privateKey->size());
+
 		if (ret != 0) {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
@@ -551,10 +532,8 @@ namespace Briand {
 		tempV->insert(tempV->begin(), serverPublic->begin(), serverPublic->end());
 		std::reverse(tempV->begin(), tempV->end());
 
-		tempBuffer = BriandUtils::VectorToArray(tempV);
-		ret = mbedtls_mpi_read_binary(&server_public.X, tempBuffer.get(), serverPublic->size());
+		ret = mbedtls_mpi_read_binary(&server_public.X, tempV->data(), serverPublic->size());
 		tempV.reset();
-		tempBuffer.reset();
 		if (ret != 0) {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
@@ -849,9 +828,9 @@ namespace Briand {
 
 		mbedtls_hkdf(
 			mbedtls_md_info_from_type(MBEDTLS_MD_SHA256),
-			BriandUtils::VectorToArray(t_key).get(), t_key->size(), 
-			BriandUtils::VectorToArray(secret_input).get(), secret_input->size(), 
-			BriandUtils::VectorToArray(m_expand).get(), m_expand->size(), 
+			t_key->data(), t_key->size(), 
+			secret_input->data(), secret_input->size(), 
+			m_expand->data(), m_expand->size(), 
 			hkdfBuffer.get(), EXTRACT_TOTAL_SIZE
 		);
 

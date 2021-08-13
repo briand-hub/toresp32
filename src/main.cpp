@@ -203,10 +203,12 @@ void TorEsp32Setup() {
         printf("[TEST] Encrypted Bytes: ");
 		Briand::BriandUtils::PrintOldStyleByteBuffer(buf.get(), test.length(), test.length()+1, test.length());
         testStart = esp_timer_get_time();
-        printf("[TEST] Decrypted Bytes: <%s>\n", config->Decrypt(buf, test.length()).c_str());
+		auto bufV = Briand::BriandUtils::ArrayToVector(buf, test.length());
+        printf("[TEST] Decrypted Bytes: <%s>\n", config->Decrypt(bufV).c_str());
         printf("[TEST] Took %llu milliseconds.\n", (esp_timer_get_time() - testStart)/1000L);
         printf("[TEST] AES Test success.\n");
 		buf.reset();
+		bufV.reset();
 		config.reset();
 
 		// Test SHA256

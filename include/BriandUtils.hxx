@@ -136,7 +136,7 @@ namespace Briand
 		 * @param input Pointer to the vector
 		 * @return Pointer to buffer
 		*/
-		static unique_ptr<unsigned char[]> VectorToArray(const unique_ptr<vector<unsigned char>>& input);
+		/* DELETED static unique_ptr<unsigned char[]> VectorToArray(const unique_ptr<vector<unsigned char>>& input); */
 
 		/**
 		 * Helper method convert old-style buffer for libraries that needs it to vector
