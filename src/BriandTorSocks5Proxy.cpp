@@ -655,27 +655,47 @@ namespace Briand
 
 		for (char& c: request) wBuf->push_back(static_cast<unsigned char>(c));
 
-        if (!client->WriteData(wBuf)) {
-            ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest error on writing HTTP request. Disconnecting.\n");
-            client->Disconnect();
-            return;
+        // RAW Send operation with write check
+        // Set TCP_NODELAY to write poor buffer
+        int flag = 1;
+        setsockopt(client->GetSocketDescriptor(), IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
+        ssize_t wroteBytes = 0;
+        while (wroteBytes < wBuf->size()) {
+            auto sentBytes = send(client->GetSocketDescriptor(), wBuf->data(), wBuf->size(), 0);
+            if (sentBytes < 0) {
+                ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest error on writing HTTP request. Disconnecting.\n");
+                client->Disconnect();
+                return;
+            }
+            wroteBytes += sentBytes;
         }
+
+        // Close socket for writing
+        shutdown(client->GetSocketDescriptor(), SHUT_WR);
 
         wBuf.reset(); // no more needed
 
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy SelfTest HTTP/GET request sent, waiting response.\n");
 
-        rBuf = client->ReadData(true);
+        unique_ptr<string> httpResponse = make_unique<string>();
+        while (client->AvailableBytes() > 0) {
+            rBuf = client->ReadData(false);
+            // Append to string
+            httpResponse->append( *BriandNet::UnsignedCharVectorToString(rBuf, true).get() );
+        }
 
-        if (rBuf == nullptr || rBuf->size() < 2) {
+        // Erase till \r\n\r\n
+        auto pos = httpResponse->find("\r\n\r\n");
+
+        if (pos == string::npos) {
             ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest error on receiving HTTP/GET response. Disconnecting.\n");
             client->Disconnect();
             return;
         }
 
-        printf("SOCKS5 Proxy had response: ");
-        // Convert to string
-        for (auto&& c: *rBuf.get()) printf("%c", c);
+        httpResponse->erase(0, pos+4);
+
+        printf("SOCKS5 Proxy had response: %s\n", httpResponse->c_str());
         printf("\n");
 
         rBuf.reset();

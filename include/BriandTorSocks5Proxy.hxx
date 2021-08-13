@@ -21,6 +21,7 @@
 #include "BriandDefines.hxx"
 #include "BriandTorCircuit.hxx"
 #include "BriandTorCircuitsManager.hxx"
+#include "BriandNet.hxx"
 
 using namespace std;
 

@@ -262,15 +262,6 @@ void TorEsp32Setup() {
 void TorEsp32Main(void* taskArg) {
 	// An xTask cannot return!
 	while (1) {
-		//
-		// TODO
-		//
-		// In this place, if something is received/sent from serial or socks
-		// or ap etc... handle it!
-		// eg. circuit tear down request / new circuits to build etc.
-		// this should be done only if all has been setup (nextStep >= 10000)
-		//
-
 		// If during serial input reading, wait while the command is entered and confirmed.
 		if (SERIAL_INPUT_READING) {
 			char in = (char)fgetc(stdin);
@@ -921,6 +912,6 @@ void checkStaHealth(void* param) {
 			STA_ACTIONFLAGS = STA_ACTIONFLAGS & (~0b10000000);
 		}
 
-		vTaskDelay(500 / portTICK_PERIOD_MS);
+		vTaskDelay(2000 / portTICK_PERIOD_MS);
 	}
 }
