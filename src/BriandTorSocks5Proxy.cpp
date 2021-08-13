@@ -416,14 +416,16 @@ namespace Briand
                     recBuf = make_unique<unsigned char[]>(MAX_FREE_PAYLOAD);
 
                     // Check if more bytes are available before blocking socket!
-                    ssize_t bytesAvail = 0;
-                    ioctl(clientSock, FIONREAD, &bytesAvail);
-                    if (bytesAvail > 0) {
-                        len = recv(clientSock, recBuf.get(), MAX_FREE_PAYLOAD, 0);
-                    }
-                    else {
-                        len = 0;
-                    }
+                    // 
+                    // ioctl(clientSock, FIONREAD, &bytesAvail);
+                    // if (bytesAvail > 0) {
+                    //     len = recv(clientSock, recBuf.get(), MAX_FREE_PAYLOAD, 0);
+                    // }
+                    // else {
+                    //     len = 0;
+                    // }
+
+                    len = recv(clientSock, recBuf.get(), MAX_FREE_PAYLOAD, 0);
 
                     // If zero-sized here (after the select()) the client is disconnected. So close connection
                     if (len == 0) {
@@ -438,6 +440,7 @@ namespace Briand
                     // If a *previous* RELAY_END (or else) has set torStreamFinished = true, do not write any other byte
                     // to TOR circuit. Just read all the other bytes from the client (if available) and then close.
                     if (torStreamFinished) {
+                        ssize_t bytesAvail = 1; // enters in the cycle
                         while (len > 0 && bytesAvail > 0) {
                             size_t readSize = (bytesAvail > MAX_FREE_PAYLOAD ? MAX_FREE_PAYLOAD : bytesAvail);
                             len = recv(clientSock, recBuf.get(), readSize, MSG_DONTWAIT); // this operation must not block!
@@ -648,26 +651,17 @@ namespace Briand
 
         // Prepare the HTTP request, send
         string request("");
-		request.append("GET / HTTP/1.1\r\n");
+		request.append("GET /ip HTTP/1.1\r\n");
 		request.append("Host: " + hostname + " \r\n");
 		request.append("Connection: close\r\n");
 		request.append("\r\n");
 
 		for (char& c: request) wBuf->push_back(static_cast<unsigned char>(c));
 
-        // RAW Send operation with write check
-        // Set TCP_NODELAY to write poor buffer
-        int flag = 1;
-        setsockopt(client->GetSocketDescriptor(), IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
-        ssize_t wroteBytes = 0;
-        while (wroteBytes < wBuf->size()) {
-            auto sentBytes = send(client->GetSocketDescriptor(), wBuf->data(), wBuf->size(), 0);
-            if (sentBytes < 0) {
-                ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest error on writing HTTP request. Disconnecting.\n");
-                client->Disconnect();
-                return;
-            }
-            wroteBytes += sentBytes;
+        if (!client->WriteData(wBuf)) {
+            ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest error on writing HTTP request. Disconnecting.\n");
+            client->Disconnect();
+            return;
         }
 
         // Close socket for writing
@@ -677,18 +671,20 @@ namespace Briand
 
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy SelfTest HTTP/GET request sent, waiting response.\n");
 
-        unique_ptr<string> httpResponse = make_unique<string>();
-        while (client->AvailableBytes() > 0) {
-            rBuf = client->ReadData(false);
-            // Append to string
-            httpResponse->append( *BriandNet::UnsignedCharVectorToString(rBuf, true).get() );
+        rBuf = client->ReadData(false);
+        if (rBuf == nullptr || rBuf->size() == 0) {
+            ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest error on receiving HTTP/GET response. Disconnecting.\n");
+            client->Disconnect();
+            return;
         }
+
+        auto httpResponse = BriandNet::UnsignedCharVectorToString(rBuf, true);
 
         // Erase till \r\n\r\n
         auto pos = httpResponse->find("\r\n\r\n");
 
         if (pos == string::npos) {
-            ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest error on receiving HTTP/GET response. Disconnecting.\n");
+            ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest error on extrating body from HTTP/GET response. Disconnecting.\n");
             client->Disconnect();
             return;
         }
