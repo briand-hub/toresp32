@@ -10,7 +10,7 @@
 
 * Added task monitoring command and enabled config parameter USE_TRACE_FACILITY 
 * Testing task stack usage on ESP system: done optimizations
-* Testing STA auto disconnect cause: found powersave (set to off by default)
+* Testing STA auto disconnect cause: found powersave (now set to off by default)
 
 ## 2021-08-08
 

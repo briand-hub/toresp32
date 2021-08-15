@@ -241,7 +241,7 @@ void TorEsp32Setup() {
 	printf("[INFO] Initializing WiFi\n");
 
 	WiFi = Briand::BriandIDFWifiManager::GetInstance();
-	WiFi->SetVerbose(true, false);
+	WiFi->SetVerbose(false, true);
 
 	// Init STA and AP random hostnames
 
@@ -476,7 +476,7 @@ void TorEsp32Main(void* taskArg) {
 			// Start the Proxy
 			printf("[INFO] Starting SOCKS5 Proxy.\n");
 			SOCKS5_PROXY = make_unique<Briand::BriandTorSocks5Proxy>();
-			SOCKS5_PROXY->StartProxyServer(5001, CIRCUITS_MANAGER);
+			SOCKS5_PROXY->StartProxyServer(TOR_SOCKS5_PROXY_PORT, CIRCUITS_MANAGER);
 			printf("[INFO] SOCKS5 Proxy started.\n");
 
 			// Builtin led handling
@@ -623,6 +623,8 @@ void executeCommand(string& cmd) {
 		printf("meminfo : display short memory information.\n");
 		printf("netinfo : display network STA/AP interfaces information.\n");
 		printf("taskinfo : shows running tasks details.\n");
+		printf("wifilog on : outputs all wifi logs.\n");
+		printf("wifilog off : stop output of all wifi logs.\n");
 		printf("staoff : disconnect STA.\n");
 		printf("staon : connect/reconnect STA.\n");
 		printf("stareconnect [on|off] : autoreconnect/do not autoreconnect STA.\n");
@@ -690,6 +692,15 @@ void executeCommand(string& cmd) {
 	else if (cmd.compare("taskinfo") == 0) {
         auto tinfo = Briand::BriandESPDevice::GetSystemTaskInfo();
 		printf("%s\n", tinfo->c_str());
+    }
+	else if (cmd.compare("wifilog on") == 0) {
+        WiFi->SetVerbose(true, false);
+		printf("WIFI log enabled.\n");
+    }
+	else if (cmd.compare("wifilog off") == 0) {
+        auto tinfo = Briand::BriandESPDevice::GetSystemTaskInfo();
+		WiFi->SetVerbose(false, true);
+		printf("WIFI log disabled.\n");
     }
 	else if (cmd.compare("loglevel N") == 0) {
 		esp_log_level_set(LOGTAG, ESP_LOG_NONE);
@@ -825,7 +836,7 @@ void executeCommand(string& cmd) {
 		printf("done.\n");
 	}
 	else if (cmd.compare("torproxy start") == 0) {
-		printf("Starting SOCKS5 Proxy on port 5001...");
+		printf("Starting SOCKS5 Proxy on port %hu...", TOR_SOCKS5_PROXY_PORT);
 		if (SOCKS5_PROXY == nullptr) SOCKS5_PROXY = make_unique<Briand::BriandTorSocks5Proxy>();
 		SOCKS5_PROXY->StartProxyServer(TOR_SOCKS5_PROXY_PORT, CIRCUITS_MANAGER);
 		printf("done.\n");
@@ -900,16 +911,19 @@ void checkStaHealth(void* param) {
 					WiFi->DisconnectStation();
 					printf("[INFO] WiFi disconnected as requested.\n");
 				}
+				else {
+					printf("[INFO] WiFi is not connected.\n");
+				}
 				STA_ACTIONFLAGS = STA_ACTIONFLAGS & (~0b00000010);
 			}
 			// If bit 3 is set, then connect and reset the bit.
 			if ((STA_ACTIONFLAGS & 0b00000100) == 0b00000100) {
 				if (WiFi != nullptr && !WiFi->IsConnected()) {
 					if (!WiFi->ConnectStation(*STA_ESSID.get(), *STA_PASSW.get(), WIFI_CONNECTION_TIMEOUT, *STA_HOSTNAME.get(), CHANGE_MAC_TO_RANDOM)) {
-						printf("\n[INFO] ERROR: WiFi connect failed.\n\n");
+						printf("[INFO] ERROR: WiFi connect failed.\n");
 					}
 					else {
-						printf("\n[INFO] WiFi connect success.\n\n");
+						printf("[INFO] WiFi connect success.\n");
 					}
 				}
 				STA_ACTIONFLAGS = STA_ACTIONFLAGS & (~0b00000100);
