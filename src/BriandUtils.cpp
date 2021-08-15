@@ -301,7 +301,7 @@ namespace Briand
 
 		auto ipString = Briand::BriandNet::HttpsGet("api.ipfy.org", 443, "/", httpCode, randomAgent);
 
-		if (ipString == nullptr) return "";
+		if (ipString == nullptr) return "Error (HTTP/" + to_string(httpCode) + ")";
 		else return *ipString.get();
 	}
 

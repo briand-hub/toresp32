@@ -83,7 +83,7 @@ void app_main() {
 	xTaskCreate(heapStats, "HeapStats", 1024, NULL, 1000, NULL);
 
 	// Start application loop
-	xTaskCreate(TorEsp32Main, "TorEsp32", 8192, NULL, 15, NULL);
+	xTaskCreate(TorEsp32Main, "TorEsp32", 4096, NULL, 15, NULL);
 }
 
 void builtin_led_task(void* p) {
@@ -241,7 +241,7 @@ void TorEsp32Setup() {
 	printf("[INFO] Initializing WiFi\n");
 
 	WiFi = Briand::BriandIDFWifiManager::GetInstance();
-	WiFi->SetVerbose(false, true);
+	WiFi->SetVerbose(true, false);
 
 	// Init STA and AP random hostnames
 
@@ -393,7 +393,7 @@ void TorEsp32Main(void* taskArg) {
 			printf("[INFO] LAN IP Address: %s\n", WiFi->GetStaIP().c_str());
 
 			// Start WiFi Check
-			xTaskCreate(checkStaHealth, "StaCheck", 1024, NULL, 1000, NULL);
+			xTaskCreate(checkStaHealth, "StaCheck", 1280, NULL, 1000, NULL);
 
 			nextStep = 7;
 		}
@@ -622,6 +622,7 @@ void executeCommand(string& cmd) {
 		printf("devinfo : display device information.\n");
 		printf("meminfo : display short memory information.\n");
 		printf("netinfo : display network STA/AP interfaces information.\n");
+		printf("taskinfo : shows running tasks details.\n");
 		printf("staoff : disconnect STA.\n");
 		printf("staon : connect/reconnect STA.\n");
 		printf("stareconnect [on|off] : autoreconnect/do not autoreconnect STA.\n");
@@ -685,6 +686,10 @@ void executeCommand(string& cmd) {
         printf("STA IPv4: %s\n",WiFi->GetStaIP().c_str());
 		//printf("STA IPv6: %s\n", WiFi.localIPv6().toString().c_str());
 		//printf("STA GW: %s\n", WiFi.gatewayIP().toString().c_str());
+    }
+	else if (cmd.compare("taskinfo") == 0) {
+        auto tinfo = Briand::BriandESPDevice::GetSystemTaskInfo();
+		printf("%s\n", tinfo->c_str());
     }
 	else if (cmd.compare("loglevel N") == 0) {
 		esp_log_level_set(LOGTAG, ESP_LOG_NONE);
@@ -792,7 +797,7 @@ void executeCommand(string& cmd) {
 			printf("FAILED to build a circuit.\n");
     }
 	else if (cmd.compare("myrealip") == 0)  {
-		printf("Your real public ip is: %s", Briand::BriandUtils::GetPublicIPFromIPFY().c_str());
+		printf("Your real public ip is: %s\n", Briand::BriandUtils::GetPublicIPFromIPFY().c_str());
     }
 	else if (cmd.compare("torip") == 0)  {
 		if (SOCKS5_PROXY == nullptr) {

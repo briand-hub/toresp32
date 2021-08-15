@@ -6,6 +6,12 @@
 * Implement a vector of nodes.
 * Authenticate cell? => Prepare stub method to authenticate client
 
+## 2021-08-15
+
+* Added task monitoring command and enabled config parameter USE_TRACE_FACILITY 
+* Testing task stack usage on ESP system: done optimizations
+* Testing STA auto disconnect cause: found powersave (set to off by default)
+
 ## 2021-08-08
 
 * Need to change a little Socks5Proxy not catching client disconnect for http request and keeping socket opened. (main thread + one thread per accept())
