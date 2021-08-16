@@ -2,7 +2,6 @@
 
 ## Next steps
 
-* PROXY Authentication user/psw
 * Consider error management short/int for method errors (mbedtls style)
 * Implement a vector of nodes.
 * Authenticate cell? => Prepare stub method to authenticate client
@@ -15,15 +14,26 @@
 	*I (919907) wifi:bcn_timout,ap_probe_send_start*
 	*I (923657) wifi:ap_probe_send over, resett wifi status to disassoc*
   solved by changing staCheckHealth() with just a simple *esp_wifi_connect()* call on auto-reconnect code.
-* Optimized mbedTLS library memory usage by setting following options in menuconfig:
+* Optimized mbedTLS library memory usage by setting following options as ENABLED in menuconfig:
     *Component config -> mbedTLS -> Using dynamic TX/RX buffer*
     *Component config -> mbedTLS -> Using dynamic TX/RX buffer -> Free SSL peer certificate after...*
     *Component config -> mbedTLS -> Using dynamic TX/RX buffer -> Free private key after...*
     *Component config -> mbedTLS -> Using dynamic TX/RX buffer -> Free private key after... -> Free SSL ca certificate after...*
-
+	*Component config -> mbedTLS -> Using dynamic TX/RX buffer -> Free private key after...*
   BEFORE: each circuit requires ~30KB of heap (~4KB for object, ~26KB for mbedtls client communications). MIN FREE HEAP ~10KB
   AFTER: each circuit requires ~10KB of heap (~4KB for object, ~6KB for mbedtls client communications). MIN FREE HEAP ~80KB with 3 built circuits
-* Increased default no. of circuits (TOR_CIRCUITS_KEEPALIVE) to 6 (tested, no low memory and network works. With more circuits problems on lwIP?)
+* Increased default no. of circuits (TOR_CIRCUITS_KEEPALIVE) to 8 (tested, no low memory and network works, otherwise sockets/ap connections seems not to work well)
+  *Component config -> Wi-Fi -> Max Number of WiFi static RX bufers = 16 (10 was default)*
+  *Component config -> Wi-Fi -> WiFi AMPDU TX BA window size = 16 (6 was default)*
+  *Component config -> Wi-Fi -> WiFi AMPDU RX BA window size = 16 (6 was default)*
+  *Component config -> LWIP -> Max Number of open sockets = 16 (10 was default)*
+  *Component config -> LWIP -> TCP -> Maximum active TCP Connections = 16 (10 was default)*
+  *Component config -> LWIP -> TCP -> Maximum listening TCP Connections = 16 (10 was default)*
+  *Component config -> LWIP -> TCP -> Maximum segment size (MSS) = 1440 (kept default)*
+  *Component config -> LWIP -> TCP -> Default send buffer size = 2880 (2xMSS as required, default was 5770)*
+  *Component config -> LWIP -> TCP -> Default receive window size = 2880 (2xMSS as required, default was 5770)*
+  *Component config -> LWIP -> TCP -> Default TCP receive mail box size = 16 (default was 6)*
+* PROXY Authentication user/psw
 
 ## 2021-08-08
 

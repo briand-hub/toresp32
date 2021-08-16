@@ -623,7 +623,8 @@ void executeCommand(string& cmd) {
 		printf("staon : connect/reconnect STA.\n");
 		printf("stareconnect [on|off] : autoreconnect/do not autoreconnect STA.\n");
 		printf("apoff : turn off AP interface.\n");
-		printf("apon : turn on AP interface (will keep intact hostname/essid/password).\n");
+		printf("apon : turn on AP interface (will keep intact essid/password).\n");
+		printf("apnew : turn on AP interface (will CHANGE essid/password).\n");
         printf("synctime : sync localtime time with NTP.\n");
 		printf("loglevel [N/E/W/I/D/V] : Sets the log level, from lower to highest: None/Error/Warning/Info/Debug/Verbose.\n");
 		printf("reboot : restart device.\n");
@@ -753,6 +754,16 @@ void executeCommand(string& cmd) {
 	else if (cmd.compare("apon") == 0)  {
 		if (WiFi->StartAP(*AP_ESSID.get(), *AP_PASSW.get(), 13, 1, true)) {
 			printf("AP Ready. ESSID: %s PASSWORD: %s\n", AP_ESSID->c_str(), AP_PASSW->c_str());
+		}
+		else {
+			printf("[ERR] Error on AP init! Only serial communication is enabled.\n");
+		}
+    }
+	else if (cmd.compare("apnew") == 0)  {
+		AP_ESSID = make_unique<string>(Briand::BriandUtils::GetRandomSSID().get());
+		AP_PASSW = make_unique<string>(Briand::BriandUtils::GetRandomPassword(WIFI_AP_PASSWORD_LEN).get());
+		if (WiFi->StartAP(*AP_ESSID.get(), *AP_PASSW.get(), 13, 1, true)) {
+			printf("NEW AP Ready. ESSID: %s PASSWORD: %s\n", AP_ESSID->c_str(), AP_PASSW->c_str());
 		}
 		else {
 			printf("[ERR] Error on AP init! Only serial communication is enabled.\n");

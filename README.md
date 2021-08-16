@@ -3,7 +3,10 @@ Briand's project to turn an ESP32 into a Tor client "plug&amp;play"
 
 ## Development status
 
-* 08/21 Proxy working through Tor for HTTP/HTTPS requests!
+**FIRST RELEASE AVAILABLE**
+
+* 08/2021 Ready to release
+* 08/2021 Proxy working through Tor for HTTP/HTTPS requests!
 * 07/2021 With updated [library](https://www.github.com/briand-hub/LibBriandIDF) and small modifications now this project can work both on ESP32 and Linux systems (see details below)
 * 07/2021 Working with multiple circuits (managed asynchronously): connection, hostname resolution
 * 05/2021 Switching to IDF Framework completed and obtained the first working circuit!
@@ -16,14 +19,19 @@ This project borns just for personal interest on ESP32 platform (I'm using WeMos
 Unfortunatley Tor has little or no library and the protocol specifications/documentation is very poor. Seems also that implementations (found just two, written in C and Python) are a bit complicated to decode and catch Tor's "secrets" and moreover code is not organized in my own "way". So I decided to start this project.
 
 ## The goal
-The goal is to write a very simple C++17 working Tor client for ESP32 that prints the output on the serial port buffer with in a formatted way so the ESP32 could be attached to any computer with a bash/dos/putty client ready-to-go. The output format *should* allow the parsing for any other program that would consume this output.
-The next step would be using ESP32's AP interface to give a sort of SOCKS5 protocol for use with any browser (this of course at own risk).
-The serial output leak might occour so any file (configuration) and the serial buffer itself could be encrypted using AES.
+The goal is to write a very simple C++17 working Tor proxy for ESP32 so the ESP32 could be attached to any computer with a bash/dos/putty client ready-to-go.
+Using ESP as a proxy allows to keep no traces of Tor client/browser on your computer (but traces of the navigation history and so on **are not** avoided!).
 
-## Usage disclamer and license
+## Usage disclaimer and license
 This code is open source and protected by GPL v3 license, see [LICENSE FILE](LICENSE).
 This project is intended **only** for educational purposes and any modification, unintended use, illegal use is *your own* responsibility.
 This project has no warranty in any sense.
+
+## Usage instructions
+
+See [[WIKI]].
+
+**REMEMBER**: ESP32 is a 240MHz processor with 320KB of RAM. Do not expect good performances or fast webpage loading!!
 
 ## The code
 It is written in C++17. The project is a PlatformIO project based on WEMOS LOLIN D32 platform. The framework used is Espressif IDF 4.4.
@@ -111,7 +119,7 @@ toresp32$ valgrind ./main_linux_exe
 - [x] Connection parameters could be saved in a configuration file (encrypted with 16 char password / AES-128)
 - [x] Add a vintage logo :-)
 - [x] Study TOR protocol
-- [ ] ...
+- [x] Working release
 
 ## Future ideas
 * Add a TRNG (true random number generator) with a Zener diode 
