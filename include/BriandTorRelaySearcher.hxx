@@ -32,7 +32,7 @@ namespace Briand {
 	 * authorities requires (April 2021) ~2MB space and ESP has poor. In futures more relays will be added
 	 * and this will bring to much more space required.
 	*/
-	class BriandTorRelaySearcher {
+	class BriandTorRelaySearcher : public BriandESPHeapOptimize {
 		private:
 
 		// Linux porting requires little modification
@@ -142,5 +142,11 @@ namespace Briand {
 		 * Prints the cache contents to serial output
 		*/
 		void PrintCacheContents();
+
+		/** Inherited from BriandESPHeapOptimize */
+		virtual void PrintObjectSizeInfo();
+		/** Inherited from BriandESPHeapOptimize */
+		virtual size_t GetObjectSize();
+		
 	};
 }

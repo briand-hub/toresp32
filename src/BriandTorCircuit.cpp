@@ -1678,4 +1678,46 @@ namespace Briand {
 		return this->paddingSent;
 	}
 
+	size_t BriandTorCircuit::GetObjectSize() {
+		size_t oSize = 0;
+
+		oSize += sizeof(*this);
+		oSize += sizeof(this->CIRCID);
+		oSize += sizeof(this->CIRCUIT_STATUS);
+		oSize += sizeof(this->createdOn);
+		oSize += sizeof(this->CURRENT_STREAM_ID);
+		oSize += sizeof(this->CURRENT_STREAM_WINDOW);
+		oSize += sizeof(this->exitNode) + (this->exitNode == nullptr ? 0 : this->exitNode->GetObjectSize());
+		oSize += sizeof(this->guardNode) + (this->guardNode == nullptr ? 0 : this->guardNode->GetObjectSize());
+		oSize += sizeof(this->internalID);
+		oSize += sizeof(this->LINKPROTOCOLVERSION);
+		oSize += sizeof(this->middleNode) + (this->middleNode == nullptr ? 0 : this->middleNode->GetObjectSize());
+		oSize += sizeof(this->paddingSent);
+		oSize += sizeof(this->paddingSentOn);
+		oSize += sizeof(this->relaySearcher) + (this->relaySearcher == nullptr ? 0 : this->relaySearcher->GetObjectSize());
+		oSize += sizeof(this->sClient) + (this->sClient == nullptr ? 0 : this->sClient->GetObjectSize());
+
+		return oSize;
+	}
+
+	void BriandTorCircuit::PrintObjectSizeInfo() {
+		printf("sizeof(*this) = %zu\n", sizeof(*this));
+		printf("sizeof(this->CIRCID) = %zu\n", sizeof(this->CIRCID));
+		printf("sizeof(this->CIRCUIT_STATUS) = %zu\n", sizeof(this->CIRCUIT_STATUS));
+		printf("sizeof(this->createdOn) = %zu\n", sizeof(this->createdOn));
+		printf("sizeof(this->CURRENT_STREAM_ID) = %zu\n", sizeof(this->CURRENT_STREAM_ID));
+		printf("sizeof(this->CURRENT_STREAM_WINDOW) = %zu\n", sizeof(this->CURRENT_STREAM_WINDOW));
+		printf("sizeof(this->exitNode) = %zu\n", sizeof(this->exitNode) + (this->exitNode == nullptr ? 0 : this->exitNode->GetObjectSize()));
+		printf("sizeof(this->guardNode) = %zu\n", sizeof(this->guardNode) + (this->guardNode == nullptr ? 0 : this->guardNode->GetObjectSize()));
+		printf("sizeof(this->internalID) = %zu\n", sizeof(this->internalID));
+		printf("sizeof(this->LINKPROTOCOLVERSION) = %zu\n", sizeof(this->LINKPROTOCOLVERSION));
+		printf("sizeof(this->middleNode) = %zu\n", sizeof(this->middleNode) + (this->middleNode == nullptr ? 0 : this->middleNode->GetObjectSize()));
+		printf("sizeof(this->paddingSent) = %zu\n", sizeof(this->paddingSent));
+		printf("sizeof(this->paddingSentOn) = %zu\n", sizeof(this->paddingSentOn));
+		printf("sizeof(this->relaySearcher) = %zu\n", sizeof(this->relaySearcher) + (this->relaySearcher == nullptr ? 0 : this->relaySearcher->GetObjectSize()));
+		printf("sizeof(this->sClient) = %zu\n", sizeof(this->sClient) + (this->sClient == nullptr ? 0 : this->sClient->GetObjectSize()));
+
+		printf("TOTAL = %zu\n", this->GetObjectSize());
+	}
+
 }

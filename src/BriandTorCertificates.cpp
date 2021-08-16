@@ -59,6 +59,23 @@ namespace Briand {
 		}
 	}
 
+	size_t BriandTorCertificateBase::GetObjectSize() {
+		size_t oSize = 0;
+
+		oSize += sizeof(*this);
+		oSize += sizeof(this->Contents) + (this->Contents == nullptr ? 0 : this->Contents->size()*sizeof(unsigned char));
+
+		return oSize;
+	}
+
+	void BriandTorCertificateBase::PrintObjectSizeInfo() {
+		printf("sizeof(*this) = %zu\n", sizeof(*this));
+		printf("sizeof(this->Contents) = %zu\n", sizeof(this->Contents) + (this->Contents == nullptr ? 0 : this->Contents->size()*sizeof(unsigned char)));
+
+		printf("TOTAL = %zu\n", this->GetObjectSize());
+	}
+
+
 
 	// class BriandTorEd25519CertificateExtension {
 		
@@ -120,6 +137,21 @@ namespace Briand {
 		return 4 + this->ExtLength;
 	}
 
+	size_t BriandTorEd25519CertificateExtension::GetObjectSize() {
+		size_t oSize = 0;
+
+		oSize += sizeof(*this);
+		oSize += sizeof(this->ExtData) + (this->ExtData == nullptr ? 0 : this->ExtData->size()*sizeof(unsigned char));
+
+		return oSize;
+	}
+
+	void BriandTorEd25519CertificateExtension::PrintObjectSizeInfo() {
+		printf("sizeof(*this) = %zu\n", sizeof(*this));
+		printf("sizeof(this->ExtData) = %zu\n", sizeof(this->ExtData) + (this->ExtData == nullptr ? 0 : this->ExtData->size()*sizeof(unsigned char)));
+
+		printf("TOTAL = %zu\n", this->GetObjectSize());
+	}
 
 	//class BriandTorEd25519CertificateBase {
 
@@ -271,6 +303,30 @@ namespace Briand {
 			//BriandUtils::PrintOldStyleByteBuffer(this->SIGNATURE.get(), this->signature_len, this->signature_len+1, this->signature_len);
 			BriandUtils::PrintByteBuffer(*this->SIGNATURE.get(), this->SIGNATURE->size(), this->SIGNATURE->size());
 		}
+	}
+
+	size_t BriandTorEd25519CertificateBase::GetObjectSize() {
+		size_t oSize = 0;
+
+		oSize += sizeof(*this);
+		oSize += sizeof(this->CERTIFIED_KEY) + (this->CERTIFIED_KEY == nullptr ? 0 : this->CERTIFIED_KEY->size()*sizeof(unsigned char));
+		if (this->EXTENSIONS != nullptr) for (int i=0; i<this->EXTENSIONS->size(); i++) oSize += this->EXTENSIONS->at(i).GetObjectSize();
+		oSize += sizeof(this->non_signature_parts) + (this->non_signature_parts == nullptr ? 0 : this->non_signature_parts->size()*sizeof(unsigned char));
+		oSize += sizeof(this->SIGNATURE) + (this->SIGNATURE == nullptr ? 0 : this->SIGNATURE->size()*sizeof(unsigned char));
+
+		return oSize;
+	}
+
+	void BriandTorEd25519CertificateBase::PrintObjectSizeInfo() {
+		printf("sizeof(*this) = %zu\n", sizeof(*this));
+		printf("sizeof(this->CERTIFIED_KEY) = %zu\n", sizeof(this->CERTIFIED_KEY) + (this->CERTIFIED_KEY == nullptr ? 0 : this->CERTIFIED_KEY->size()*sizeof(unsigned char)));
+		size_t ext_len = sizeof(this->EXTENSIONS);
+		if (this->EXTENSIONS != nullptr) for (int i=0; i<this->EXTENSIONS->size(); i++) ext_len += this->EXTENSIONS->at(i).GetObjectSize();
+		printf("sizeof(this->EXTENSIONS) = %zu\n", ext_len);
+		printf("sizeof(this->non_signature_parts) = %zu\n", sizeof(this->non_signature_parts) + (this->non_signature_parts == nullptr ? 0 : this->non_signature_parts->size()*sizeof(unsigned char)));
+		printf("sizeof(this->SIGNATURE) = %zu\n", sizeof(this->SIGNATURE) + (this->SIGNATURE == nullptr ? 0 : this->SIGNATURE->size()*sizeof(unsigned char)));
+
+		printf("TOTAL = %zu\n", this->GetObjectSize());
 	}
 
 
@@ -429,6 +485,24 @@ namespace Briand {
 			printf("[DEBUG] RSAEd25519CrossCertificate->SIGNATURE = ");
 			BriandUtils::PrintByteBuffer(*this->SIGNATURE.get(), this->SIGLEN, this->SIGLEN);
 		}
+	}
+
+	size_t BriandTorCertificate_RSAEd25519CrossCertificate::GetObjectSize() {
+		size_t oSize = 0;
+
+		oSize += sizeof(*this);
+		oSize += sizeof(this->ED25519_KEY) + (this->ED25519_KEY == nullptr ? 0 : this->ED25519_KEY->size()*sizeof(unsigned char));
+		oSize += sizeof(this->SIGNATURE) + (this->SIGNATURE == nullptr ? 0 : this->SIGNATURE->size()*sizeof(unsigned char));
+
+		return oSize;
+	}
+
+	void BriandTorCertificate_RSAEd25519CrossCertificate::PrintObjectSizeInfo() {
+		printf("sizeof(*this) = %zu\n", sizeof(*this));
+		printf("sizeof(this->ED25519_KEY) = %zu\n", sizeof(this->ED25519_KEY) + (this->ED25519_KEY == nullptr ? 0 : this->ED25519_KEY->size()*sizeof(unsigned char)));
+		printf("sizeof(this->SIGNATURE) = %zu\n", sizeof(this->SIGNATURE) + (this->SIGNATURE == nullptr ? 0 : this->SIGNATURE->size()*sizeof(unsigned char)));
+
+		printf("TOTAL = %zu\n", this->GetObjectSize());
 	}
 
 

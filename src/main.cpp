@@ -438,13 +438,6 @@ void TorEsp32Main(void* taskArg) {
 				
 				// Change default ip
 				WiFi->SetApIPv4(10, 0, 0, 1);
-
-				//
-				// TODO: add a handler for AP commands
-				//
-
-
-
 			}
 			else {
 				ESP_LOGE(LOGTAG, "[ERR] Error on AP init! Only serial communication is enabled.\n");
@@ -543,7 +536,7 @@ void printLogo() {
 }
 
 void syncTimeWithNTP() {
-	ESP_LOGI(LOGTAG, "[INFO] Sync time to UTC+0 (no daylight saving) with NTP server %s\n", NTP_SERVER);
+	printf("[INFO] Sync time to UTC+0 (no daylight saving) with NTP server %s\n", NTP_SERVER);
 
 	//For UTC -5.00 : -5 * 60 * 60 : -18000
 	//For UTC +1.00 : 1 * 60 * 60 : 3600
@@ -640,6 +633,7 @@ void executeCommand(string& cmd) {
 			printf("search-exit : if DEBUG active, search and display info for an exit node.\n");
 			printf("search-middle : if DEBUG active, search and display info for a middle node.\n");
 			printf("testcircuit : if DEBUG active, build a new circuit, resolve www.torproject.org IP then destroy just for testing.\n");
+			printf("heapcircuit : if DEBUG active, prints heap size info of the first ready circuit.\n");
 		}
 
 		printf("TOR TESTING---------------------------------------------------------------------------\n");
@@ -651,7 +645,7 @@ void executeCommand(string& cmd) {
         printf("torcache refresh : refresh the tor cache.\n");
 		printf("torcircuits : print out the current tor circuit status.\n");
 		printf("torcircuits [restart|stop] : Invalidate all circuits pool, if restart rebuild again.\n");
-		printf("torproxy [start|stop] : Starts/Stops SOCKS5 Proxy SelfTest does a \"torip\".\n");
+		printf("torproxy [start|stop|status] : Starts/Stops/Prints info SOCKS5 Proxy.\n");
 		printf("tor resolve [hostname] : Resolve IPv4 address through tor.\n");
     }
     else if (cmd.compare("time") == 0) {
@@ -807,6 +801,25 @@ void executeCommand(string& cmd) {
 		else 
 			printf("FAILED to build a circuit.\n");
     }
+	else if (cmd.compare("heapcircuit") == 0 && (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG))  {
+		if (CIRCUITS_MANAGER == nullptr) {
+			printf("Error, circuit manager not instanced.\n");
+		}
+		else {
+			auto circ = CIRCUITS_MANAGER->GetCircuit();
+			if (circ == nullptr) {
+				printf("Error, no suitable circuit.\n");
+			}
+			else {
+				printf("CIRCUIT OBJ ------------------------------------------------------------------------------\n");
+				circ->PrintObjectSizeInfo();
+				printf("------------------------------------------------------------------------------------------\n\n");
+				printf("INTERNAL NODE OBJ (guard) ----------------------------------------------------------------\n");
+				circ->guardNode->PrintObjectSizeInfo();
+				printf("------------------------------------------------------------------------------------------\n");
+			}
+		}
+    }
 	else if (cmd.compare("myrealip") == 0)  {
 		printf("Your real public ip is: %s\n", Briand::BriandUtils::GetPublicIPFromIPFY().c_str());
     }
@@ -845,6 +858,14 @@ void executeCommand(string& cmd) {
 		printf("Stopping SOCKS5 Proxy...");
 		if (SOCKS5_PROXY != nullptr) SOCKS5_PROXY->StopProxyServer();
 		printf("done.\n");
+	}
+	else if (cmd.compare("torproxy status") == 0) {
+		if (SOCKS5_PROXY != nullptr) {
+			
+		}
+		else {
+			printf("Error, Proxy not instanced.\n");
+		}
 	}
 	else if (cmd.compare("torcache") == 0) {
         auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
@@ -887,6 +908,13 @@ void heapStats(void* param) {
 void checkStaHealth(void* param) {
 	// IDF Task cannot return
 	while (1) {
+		
+
+		#if defined(__linux__)
+			// On linux environment this must never fire (always set MSB to 1)
+			STA_ACTIONFLAGS = STA_ACTIONFLAGS | 0b10000000;
+		#endif
+
 		// If MSB set, do not do anything!
 		if ((STA_ACTIONFLAGS & 0b10000000) != 0b10000000) {
 			// Set MSB (Busy)
@@ -896,9 +924,10 @@ void checkStaHealth(void* param) {
 			if ((STA_ACTIONFLAGS & 0b00000001) == 0b00000001) {
 				// Check if disconnected or IP is 0.0.0.0 (happens on low memory, does not fire any event)
 				if (WiFi != nullptr && (!WiFi->IsConnected() || WiFi->GetStaIP().compare("0.0.0.0")==0)) {
-					WiFi->DisconnectStation(); // clean-up!
-					if (!WiFi->ConnectStation(*STA_ESSID.get(), *STA_PASSW.get(), WIFI_CONNECTION_TIMEOUT, *STA_HOSTNAME.get(), false)) {
-						ESP_LOGE(LOGTAG, "[ERR] WiFi Re-connect failed.\n");
+					//WiFi->DisconnectStation(); // do not use this, will stuck in infinite loop.
+					auto err = esp_wifi_connect();
+					if (err != ESP_OK) {
+						ESP_LOGE(LOGTAG, "[ERR] WiFi Re-connect failed, error %d\n", err);
 					}
 					else {
 						ESP_LOGD(LOGTAG, "[DEBUG] WiFi Re-connect success.\n");

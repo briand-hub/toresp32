@@ -28,7 +28,7 @@ namespace Briand {
 	/**
 	 * Base class just to define common methods and fields to simplify code. Valid for some certificates.
 	*/
-	class BriandTorCertificateBase {
+	class BriandTorCertificateBase : public BriandESPHeapOptimize {
 		protected:
 
 		public:
@@ -65,12 +65,18 @@ namespace Briand {
 		 * Print to serial certificate informations (debug) 
 		*/
 		virtual void PrintCertInfo();
+
+		/** Inherited from BriandESPHeapOptimize */
+		virtual void PrintObjectSizeInfo();
+		/** Inherited from BriandESPHeapOptimize */
+		virtual size_t GetObjectSize();
+
 	};
 
 	/**
 	 * This is a support class, just keeps information about an Ed25519 certificate extension. 
 	*/
-	class BriandTorEd25519CertificateExtension {
+	class BriandTorEd25519CertificateExtension : public BriandESPHeapOptimize {
 		public:
 		unsigned short ExtLength; 	// [2 bytes]
         unsigned char ExtType;   	// [1 byte]
@@ -95,13 +101,18 @@ namespace Briand {
 		 * @return Extension size in bytes (header + data)
 		*/
 		unsigned int TotalSize();
+
+		/** Inherited from BriandESPHeapOptimize */
+		virtual void PrintObjectSizeInfo();
+		/** Inherited from BriandESPHeapOptimize */
+		virtual size_t GetObjectSize();
 	};
 
 	/**
 	 * Base class just to define common methods and fields to simplify code. Valid for Ed25519 Tor certificates.
 	 * See https://gitweb.torproject.org/torspec.git/tree/cert-spec.txt
 	*/
-	class BriandTorEd25519CertificateBase {
+	class BriandTorEd25519CertificateBase : public BriandESPHeapOptimize {
 		protected:
 		const unsigned short certified_key_len = 32;
 		const unsigned short signature_len = 64;
@@ -158,6 +169,11 @@ namespace Briand {
 		 * Print to serial certificate informations (debug) 
 		*/
 		virtual void PrintCertInfo();
+
+		/** Inherited from BriandESPHeapOptimize */
+		virtual void PrintObjectSizeInfo();
+		/** Inherited from BriandESPHeapOptimize */
+		virtual size_t GetObjectSize();
 	
 	};
 
@@ -186,7 +202,7 @@ namespace Briand {
 	 * This class is useful to handle Tor specific RSA->Ed25519 Cross Certificate. 
 	 * See https://gitweb.torproject.org/torspec.git/tree/cert-spec.txt
 	*/
-	class BriandTorCertificate_RSAEd25519CrossCertificate {
+	class BriandTorCertificate_RSAEd25519CrossCertificate : public BriandESPHeapOptimize {
 		private:
 		const unsigned int ed25519_key_size = 32;
 		bool isStructValid;
@@ -230,6 +246,11 @@ namespace Briand {
 		 * Print to serial certificate informations (debug) 
 		*/
 		void PrintCertInfo();
+
+		/** Inherited from BriandESPHeapOptimize */
+		virtual void PrintObjectSizeInfo();
+		/** Inherited from BriandESPHeapOptimize */
+		virtual size_t GetObjectSize();
 
 	};
 

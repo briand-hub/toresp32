@@ -579,4 +579,74 @@ namespace Briand {
 		}
 	}
 
+	size_t BriandTorRelay::GetObjectSize() {
+		size_t oSize = 0;
+
+		oSize += sizeof(*this);
+		oSize += sizeof(this->address) + (this->address == nullptr ? 0 : this->address->size() * sizeof(char));
+		oSize += sizeof(this->AES_BackwardContext) + (this->AES_BackwardContext == nullptr ? 0 : sizeof(*this->AES_BackwardContext.get()));
+		oSize += sizeof(this->AES_BackwardIV) + (this->AES_BackwardIV == nullptr ? 0 : sizeof(*this->AES_BackwardIV)*16);
+		oSize += sizeof(this->AES_BackwardNonceCounter) + (this->AES_BackwardNonceCounter == nullptr ? 0 : sizeof(*this->AES_BackwardNonceCounter)*16);
+		oSize += sizeof(this->AES_ForwardContext) + (this->AES_ForwardContext == nullptr ? 0 : sizeof(*this->AES_ForwardContext.get()));
+		oSize += sizeof(this->AES_ForwardIV) + (this->AES_ForwardIV == nullptr ? 0 : sizeof(*this->AES_ForwardIV)*16);
+		oSize += sizeof(this->AES_ForwardNonceCounter) + (this->AES_ForwardNonceCounter == nullptr ? 0 : sizeof(*this->AES_ForwardNonceCounter)*16);
+		oSize += sizeof(this->certEd25519AuthenticateCellLink) + (this->certEd25519AuthenticateCellLink == nullptr ? 0 : this->certEd25519AuthenticateCellLink->GetObjectSize());
+		oSize += sizeof(this->certEd25519SigningKey) + (this->certEd25519SigningKey == nullptr ? 0 : this->certEd25519SigningKey->GetObjectSize());
+		oSize += sizeof(this->certLinkKey) + (this->certLinkKey == nullptr ? 0 : this->certLinkKey->GetObjectSize());
+		oSize += sizeof(this->certRsa1024AuthenticateCell) + (this->certRsa1024AuthenticateCell == nullptr ? 0 : this->certRsa1024AuthenticateCell->GetObjectSize());
+		oSize += sizeof(this->certRsa1024Identity) + (this->certRsa1024Identity == nullptr ? 0 : this->certRsa1024Identity->GetObjectSize());
+		oSize += sizeof(this->certRSAEd25519CrossCertificate) + (this->certRSAEd25519CrossCertificate == nullptr ? 0 : this->certRSAEd25519CrossCertificate->GetObjectSize());
+		oSize += sizeof(this->certTLSLink) + (this->certTLSLink == nullptr ? 0 : this->certTLSLink->GetObjectSize());
+		oSize += sizeof(this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH) + (this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH == nullptr ? 0 : this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size() * sizeof(unsigned char));
+		oSize += sizeof(this->CREATED_EXTENDED_RESPONSE_SERVER_PK) + (this->CREATED_EXTENDED_RESPONSE_SERVER_PK == nullptr ? 0 : this->CREATED_EXTENDED_RESPONSE_SERVER_PK->size() * sizeof(unsigned char));
+		oSize += sizeof(this->CURVE25519_PRIVATE_KEY) + (this->CURVE25519_PRIVATE_KEY == nullptr ? 0 : this->CURVE25519_PRIVATE_KEY->size() * sizeof(unsigned char));
+		oSize += sizeof(this->CURVE25519_PUBLIC_KEY) + (this->CURVE25519_PUBLIC_KEY == nullptr ? 0 : this->CURVE25519_PUBLIC_KEY->size() * sizeof(unsigned char));
+		oSize += sizeof(this->descriptorNtorOnionKey) + (this->descriptorNtorOnionKey == nullptr ? 0 : this->descriptorNtorOnionKey->size() * sizeof(char));
+		oSize += sizeof(this->fingerprint) + (this->fingerprint == nullptr ? 0 : this->fingerprint->size() * sizeof(char));
+		oSize += sizeof(this->KEY_Backward_Kb) + (this->KEY_Backward_Kb == nullptr ? 0 : this->KEY_Backward_Kb->size() * sizeof(unsigned char));
+		oSize += sizeof(this->KEY_BackwardDigest_Db) + (this->KEY_BackwardDigest_Db == nullptr ? 0 : sizeof(*KEY_BackwardDigest_Db.get()));
+		oSize += sizeof(this->KEY_Forward_Kf) + (this->KEY_Forward_Kf == nullptr ? 0 : this->KEY_Forward_Kf->size() * sizeof(unsigned char));
+		oSize += sizeof(this->KEY_ForwardDigest_Df) + (this->KEY_ForwardDigest_Df == nullptr ? 0 : sizeof(*KEY_ForwardDigest_Df.get()));
+		oSize += sizeof(this->KEY_HiddenService_Nonce) + (this->KEY_HiddenService_Nonce == nullptr ? 0 : this->KEY_HiddenService_Nonce->size() * sizeof(unsigned char));
+		oSize += sizeof(this->KEYSEED) + (this->KEYSEED == nullptr ? 0 : this->KEYSEED->size() * sizeof(unsigned char));
+		oSize += sizeof(this->nickname) + (this->nickname == nullptr ? 0 : this->nickname->size() * sizeof(char));
+
+		return oSize;
+	}
+
+	void BriandTorRelay::PrintObjectSizeInfo() {
+		printf("sizeof(*this) = %zu\n", sizeof(*this));
+		printf("sizeof(this->address) = %zu\n", sizeof(this->address) + (this->address == nullptr ? 0 : this->address->size() * sizeof(char)));
+		printf("sizeof(this->AES_BackwardContext) = %zu\n", sizeof(this->AES_BackwardContext) + (this->AES_BackwardContext == nullptr ? 0 : sizeof(*this->AES_BackwardContext.get())));
+		printf("sizeof(this->AES_BackwardIV) = %zu\n", sizeof(this->AES_BackwardIV) + (this->AES_BackwardIV == nullptr ? 0 : sizeof(*this->AES_BackwardIV)*16));
+		printf("sizeof(this->AES_BackwardNonceCounter) = %zu\n", sizeof(this->AES_BackwardNonceCounter) + (this->AES_BackwardNonceCounter == nullptr ? 0 : sizeof(*this->AES_BackwardNonceCounter)*16));
+		printf("sizeof(this->AES_BackwardNonceOffset) = %zu\n", sizeof(this->AES_BackwardNonceOffset));
+		printf("sizeof(this->AES_ForwardContext) = %zu\n", sizeof(this->AES_ForwardContext) + (this->AES_ForwardContext == nullptr ? 0 : sizeof(*this->AES_ForwardContext.get())));
+		printf("sizeof(this->AES_ForwardIV) = %zu\n", sizeof(this->AES_ForwardIV) + (this->AES_ForwardIV == nullptr ? 0 : sizeof(*this->AES_ForwardIV)*16));
+		printf("sizeof(this->AES_ForwardNonceCounter) = %zu\n", sizeof(this->AES_ForwardNonceCounter) + (this->AES_ForwardNonceCounter == nullptr ? 0 : sizeof(*this->AES_ForwardNonceCounter)*16));
+		printf("sizeof(this->AES_ForwardNonceOffset) = %zu\n", sizeof(this->AES_ForwardNonceOffset));
+		printf("sizeof(this->certEd25519AuthenticateCellLink) = %zu\n", sizeof(this->certEd25519AuthenticateCellLink) + (this->certEd25519AuthenticateCellLink == nullptr ? 0 : this->certEd25519AuthenticateCellLink->GetObjectSize()));
+		printf("sizeof(this->certEd25519SigningKey) = %zu\n", sizeof(this->certEd25519SigningKey) + (this->certEd25519SigningKey == nullptr ? 0 : this->certEd25519SigningKey->GetObjectSize()));
+		printf("sizeof(this->certLinkKey) = %zu\n", sizeof(this->certLinkKey) + (this->certLinkKey == nullptr ? 0 : this->certLinkKey->GetObjectSize()));
+		printf("sizeof(this->certRsa1024AuthenticateCell) = %zu\n", sizeof(this->certRsa1024AuthenticateCell) + (this->certRsa1024AuthenticateCell == nullptr ? 0 : this->certRsa1024AuthenticateCell->GetObjectSize()));
+		printf("sizeof(this->certRsa1024Identity) = %zu\n", sizeof(this->certRsa1024Identity) + (this->certRsa1024Identity == nullptr ? 0 : this->certRsa1024Identity->GetObjectSize()));
+		printf("sizeof(this->certRSAEd25519CrossCertificate) = %zu\n", sizeof(this->certRSAEd25519CrossCertificate) + (this->certRSAEd25519CrossCertificate == nullptr ? 0 : this->certRSAEd25519CrossCertificate->GetObjectSize()));
+		printf("sizeof(this->certTLSLink) = %zu\n", sizeof(this->certTLSLink) + (this->certTLSLink == nullptr ? 0 : this->certTLSLink->GetObjectSize()));
+		printf("sizeof(this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH) = %zu\n", sizeof(this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH) + (this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH == nullptr ? 0 : this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size() * sizeof(unsigned char)));
+		printf("sizeof(this->CREATED_EXTENDED_RESPONSE_SERVER_PK) = %zu\n", sizeof(this->CREATED_EXTENDED_RESPONSE_SERVER_PK) + (this->CREATED_EXTENDED_RESPONSE_SERVER_PK == nullptr ? 0 : this->CREATED_EXTENDED_RESPONSE_SERVER_PK->size() * sizeof(unsigned char)));
+		printf("sizeof(this->CURVE25519_PRIVATE_KEY) = %zu\n", sizeof(this->CURVE25519_PRIVATE_KEY) + (this->CURVE25519_PRIVATE_KEY == nullptr ? 0 : this->CURVE25519_PRIVATE_KEY->size() * sizeof(unsigned char)));
+		printf("sizeof(this->CURVE25519_PUBLIC_KEY) = %zu\n", sizeof(this->CURVE25519_PUBLIC_KEY) + (this->CURVE25519_PUBLIC_KEY == nullptr ? 0 : this->CURVE25519_PUBLIC_KEY->size() * sizeof(unsigned char)));
+		printf("sizeof(this->descriptorNtorOnionKey) = %zu\n", sizeof(this->descriptorNtorOnionKey) + (this->descriptorNtorOnionKey == nullptr ? 0 : this->descriptorNtorOnionKey->size() * sizeof(char)));
+		printf("sizeof(this->fingerprint) = %zu\n", sizeof(this->fingerprint) + (this->fingerprint == nullptr ? 0 : this->fingerprint->size() * sizeof(char)));
+		printf("sizeof(this->KEY_Backward_Kb) = %zu\n", sizeof(this->KEY_Backward_Kb) + (this->KEY_Backward_Kb == nullptr ? 0 : this->KEY_Backward_Kb->size() * sizeof(unsigned char)));
+		printf("sizeof(this->KEY_BackwardDigest_Db) = %zu\n", sizeof(this->KEY_BackwardDigest_Db) + (this->KEY_BackwardDigest_Db == nullptr ? 0 : sizeof(*KEY_BackwardDigest_Db.get())));
+		printf("sizeof(this->KEY_Forward_Kf) = %zu\n", sizeof(this->KEY_Forward_Kf) + (this->KEY_Forward_Kf == nullptr ? 0 : this->KEY_Forward_Kf->size() * sizeof(unsigned char)));
+		printf("sizeof(this->KEY_ForwardDigest_Df) = %zu\n", sizeof(this->KEY_ForwardDigest_Df) + (this->KEY_ForwardDigest_Df == nullptr ? 0 : sizeof(*KEY_ForwardDigest_Df.get())));
+		printf("sizeof(this->KEY_HiddenService_Nonce) = %zu\n", sizeof(this->KEY_HiddenService_Nonce) + (this->KEY_HiddenService_Nonce == nullptr ? 0 : this->KEY_HiddenService_Nonce->size() * sizeof(unsigned char)));
+		printf("sizeof(this->KEYSEED) = %zu\n", sizeof(this->KEYSEED) + (this->KEYSEED == nullptr ? 0 : this->KEYSEED->size() * sizeof(unsigned char)));
+		printf("sizeof(this->nickname) = %zu\n", sizeof(this->nickname) + (this->nickname == nullptr ? 0 : this->nickname->size() * sizeof(char)));
+
+		printf("TOTAL = %zu\n", this->GetObjectSize());
+	}
+
 }

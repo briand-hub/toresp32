@@ -3,6 +3,7 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+.vscode/*.log
 data
 GitHowTo.txt
 IDFHowTo.txt

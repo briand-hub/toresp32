@@ -1153,4 +1153,24 @@ namespace Briand {
 		}
 	}
 
+	size_t BriandTorRelaySearcher::GetObjectSize() {
+		size_t oSize = 0;
+
+		oSize += sizeof(*this);
+		oSize += sizeof(this->NODES_FILE_EXIT) + sizeof(char)*strlen(this->NODES_FILE_EXIT);
+		oSize += sizeof(this->NODES_FILE_GUARD) + sizeof(char)*strlen(this->NODES_FILE_GUARD);
+		oSize += sizeof(this->NODES_FILE_MIDDLE) + sizeof(char)*strlen(this->NODES_FILE_MIDDLE);
+
+		return oSize;
+	}
+
+	void BriandTorRelaySearcher::PrintObjectSizeInfo() {
+		printf("sizeof(*this) = %zu\n", sizeof(*this));
+		printf("sizeof(this->NODES_FILE_EXIT) + sizeof(char)*strlen(this->NODES_FILE_EXIT) = %zu\n", sizeof(this->NODES_FILE_EXIT) + sizeof(char)*strlen(this->NODES_FILE_EXIT));
+		printf("sizeof(this->NODES_FILE_GUARD) + sizeof(char)*strlen(this->NODES_FILE_GUARD) = %zu\n", sizeof(this->NODES_FILE_GUARD) + sizeof(char)*strlen(this->NODES_FILE_GUARD));
+		printf("sizeof(this->NODES_FILE_MIDDLE) + sizeof(char)*strlen(this->NODES_FILE_MIDDLE) = %zu\n", sizeof(this->NODES_FILE_MIDDLE) + sizeof(char)*strlen(this->NODES_FILE_MIDDLE));
+
+		printf("TOTAL = %zu\n", this->GetObjectSize());
+	}
+
 }

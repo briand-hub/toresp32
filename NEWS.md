@@ -2,6 +2,7 @@
 
 ## Next steps
 
+* PROXY Authentication user/psw
 * Consider error management short/int for method errors (mbedtls style)
 * Implement a vector of nodes.
 * Authenticate cell? => Prepare stub method to authenticate client
@@ -10,7 +11,19 @@
 
 * Added task monitoring command and enabled config parameter USE_TRACE_FACILITY 
 * Testing task stack usage on ESP system: done optimizations
-* Testing STA auto disconnect cause: found powersave (now set to off by default)
+* Testing STA auto disconnect cause: found powersave (now set to off by default) and this error:
+	*I (919907) wifi:bcn_timout,ap_probe_send_start*
+	*I (923657) wifi:ap_probe_send over, resett wifi status to disassoc*
+  solved by changing staCheckHealth() with just a simple *esp_wifi_connect()* call on auto-reconnect code.
+* Optimized mbedTLS library memory usage by setting following options in menuconfig:
+    *Component config -> mbedTLS -> Using dynamic TX/RX buffer*
+    *Component config -> mbedTLS -> Using dynamic TX/RX buffer -> Free SSL peer certificate after...*
+    *Component config -> mbedTLS -> Using dynamic TX/RX buffer -> Free private key after...*
+    *Component config -> mbedTLS -> Using dynamic TX/RX buffer -> Free private key after... -> Free SSL ca certificate after...*
+
+  BEFORE: each circuit requires ~30KB of heap (~4KB for object, ~26KB for mbedtls client communications). MIN FREE HEAP ~10KB
+  AFTER: each circuit requires ~10KB of heap (~4KB for object, ~6KB for mbedtls client communications). MIN FREE HEAP ~80KB with 3 built circuits
+* Increased default no. of circuits (TOR_CIRCUITS_KEEPALIVE) to 6 (tested, no low memory and network works. With more circuits problems on lwIP?)
 
 ## 2021-08-08
 

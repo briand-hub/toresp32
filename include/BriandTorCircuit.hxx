@@ -31,7 +31,7 @@ namespace Briand {
 	/**
 	 * This class manage a single Tor circuit 
 	*/
-	class BriandTorCircuit {
+	class BriandTorCircuit : public BriandESPHeapOptimize {
 		private:
 
 		/** This is the circuit general status flag mask 
@@ -45,12 +45,6 @@ namespace Briand {
 		protected:
 
 		unique_ptr<Briand::BriandTorRelaySearcher> relaySearcher;
-		//bool isBuilt;						// has been built
-		//bool isCreating;					// true after calling BuildCircuit()
-		//bool isClean; 						// not used for any traffic
-		//bool isClosing;						// it is currently closing
-		//bool isClosed;						// it is closed (call destroyer and free RAM!!)
-		//bool isBusy;						// Flag (currently streaming / doing something)
 		unsigned long int createdOn;		// create timestamp
 		unsigned long int paddingSent;		// no. of padding cells sent
 		unsigned long int paddingSentOn;	// timestamp of last sent padding
@@ -280,10 +274,15 @@ namespace Briand {
 		bool IsInstanceBusy();
 
 		/**
-		 * Methods return a string with all status flags separeted by comma (DIRT,BUSY,BUILDING)
+		 * Method return a string with all status flags separeted by comma (DIRT,BUSY,BUILDING)
 		 * @return string with status
 		*/
 		string StatusGetString();
+
+		/** Inherited from BriandESPHeapOptimize */
+		virtual void PrintObjectSizeInfo();
+		/** Inherited from BriandESPHeapOptimize */
+		virtual size_t GetObjectSize();
 		
 	};
 }

@@ -27,7 +27,7 @@ namespace Briand {
 	/**
 	 * This class describes and keeps information about a single Tor Relay
 	*/
-	class BriandTorRelay {
+	class BriandTorRelay : public BriandESPHeapOptimize {
 		private:
 		protected:
 
@@ -159,6 +159,12 @@ namespace Briand {
 		 * Method (only if debug active) print short info about relay
 		*/
 		void PrintRelayInfo();
+
+		/** Inherited from BriandESPHeapOptimize */
+		virtual void PrintObjectSizeInfo();
+		/** Inherited from BriandESPHeapOptimize */
+		virtual size_t GetObjectSize();
+
 	};
 
 }
