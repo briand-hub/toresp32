@@ -40,6 +40,12 @@ namespace Briand
         /** Proxy status */
         bool proxyStarted;
 
+        /** Proxy user */
+        static string proxyUser;
+
+        /** Proxy password */
+        static string proxyPassword;
+
         /** Pointer to CircuitsManager instance */
         static BriandTorCircuitsManager* torCircuits;
 
@@ -83,6 +89,11 @@ namespace Briand
          * Uses TOR network, outputs IP to stdout.
         */
         void SelfTest();
+
+        /**
+         * Method prints on stdout the proxy status (including credentials)
+        */
+        void PrintStatus();
 
     };
 }

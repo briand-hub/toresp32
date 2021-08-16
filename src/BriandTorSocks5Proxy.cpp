@@ -31,6 +31,37 @@ namespace Briand
         this->torCircuits = nullptr;
         this->proxyStarted = false;
         bzero(&this->proxyTaskHandle, sizeof(this->proxyTaskHandle));
+
+        // Create a random username and password
+        constexpr unsigned char CRED_SIZE = 8;
+        this->proxyUser = "";
+        this->proxyPassword = "";
+        while (this->proxyUser.length() < CRED_SIZE) {
+            // Use only alphanumeric ascii-chars [a-z][A-Z][0-9]
+
+            unsigned char randomChar = BriandUtils::GetRandomByte();
+            if ( 
+                (randomChar >= 0x30 && randomChar <= 0x39) || 
+                (randomChar >= 0x41 && randomChar <= 0x5A) ||
+                (randomChar >= 0x61 && randomChar <= 0x7A)
+            ) 
+            {
+                this->proxyUser.push_back(randomChar);
+            }
+        }
+        while (this->proxyPassword.length() < CRED_SIZE) {
+            // Use only alphanumeric ascii-chars [a-z][A-Z][0-9]
+
+            unsigned char randomChar = BriandUtils::GetRandomByte();
+            if ( 
+                (randomChar >= 0x30 && randomChar <= 0x39) || 
+                (randomChar >= 0x41 && randomChar <= 0x5A) ||
+                (randomChar >= 0x61 && randomChar <= 0x7A)
+            ) 
+            {
+                this->proxyPassword.push_back(randomChar);
+            }
+        }
     }
 
     BriandTorSocks5Proxy::~BriandTorSocks5Proxy() {
@@ -199,11 +230,17 @@ namespace Briand
                     continue;
                 }
 
-                // Find if there is a suitable method (0x00 => no authentication is required)
+                // Find if there is a suitable method (0x00 => no authentication or 0x02 => authentication)
                 bool methodOk = false;
+                bool useAuthentication = false;
                 for (unsigned int i = 2; i<len && i < recBuf[1]+2 ; i++) {
                     if (recBuf[i] == 0x00) {
                         methodOk = true;
+                        break;
+                    }
+                    else if (recBuf[i] == 0x02) {
+                        methodOk = true;
+                        useAuthentication = true;
                         break;
                     }
                 }
@@ -222,9 +259,77 @@ namespace Briand
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client handshake ok.\n");
 
                 // Send OK Response to client
-                {
+                if (!useAuthentication) {
                     unsigned char temp[2] = { 0x05, 0x00 };
                     send(clientSock, temp, 2, 0);
+                }
+                else {
+                    unsigned char temp[2] = { 0x05, 0x02 };
+                    send(clientSock, temp, 2, 0);
+                }
+
+                // Authentication
+                if (useAuthentication) {
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client waiting for auth request.\n");
+                    // The client sends an auth request contaning
+                    // [version:0x05] [ulen (1byte)] [uname (1-255 bytes)] [plen (1byte)] [passwd (1-255 bytes)]
+                    // MAX buffer of 513/514 bytes
+                    recBuf = make_unique<unsigned char[]>(514);
+                    len = recv(clientSock, recBuf.get(), 513, 0);
+
+                    if (len < 5) {
+                        ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy methods receiving error: less than 5 bytes. Closing connection.\n");
+                        // Close client socket
+                        ErrorResponse(clientSock, nullptr, 0);
+                        // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
+                        clientSocket = reinterpret_cast<void*>(-1);
+                        // vTaskDelete will be called by next cycle.
+                        continue;
+                    }
+
+                    if (recBuf[0] != 0x05) {
+                        ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: wrong socks version on authentication. Closing connection.\n");
+                        // Write back unsupported version / unsupported method and close
+                        unsigned char temp[2] = { 0x05, 0xFF };
+                        ErrorResponse(clientSock, temp, 2);
+                        // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
+                        clientSocket = reinterpret_cast<void*>(-1);
+                        // vTaskDelete will be called by next cycle.
+                        continue;
+                    }
+
+                    string rUser = "";
+                    string rPass = "";
+                    unsigned short index = 2;
+                    while (index < recBuf[1]+2 && index < len) {
+                        rUser.push_back(recBuf[index]);
+                        index++;
+                    }
+                    unsigned short pStops = recBuf[index] + index + 1;
+                    index++;
+                    while (index < pStops && index < len) {
+                        rPass.push_back(recBuf[index]);
+                        index++;
+                    }
+
+                    if (BriandTorSocks5Proxy::proxyUser.compare(rUser) != 0 || BriandTorSocks5Proxy::proxyPassword.compare(rPass) != 0) {
+                        ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: wrong credentials. Closing connection.\n");
+                        // Write back error
+                        unsigned char temp[2] = { 0x05, 0xFF };
+                        ErrorResponse(clientSock, temp, 2);
+                        // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
+                        clientSocket = reinterpret_cast<void*>(-1);
+                        // vTaskDelete will be called by next cycle.
+                        continue;
+                    }
+
+                    // Auth OK to client
+                    {
+                        unsigned char temp[2] = { 0x05, 0x00 };
+                        send(clientSock, temp, 2, 0);
+                    }
+
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client authenticated.\n");
                 }
 
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client waiting for request.\n");
@@ -701,6 +806,17 @@ namespace Briand
         client->Disconnect();
 
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy SelfTest finished.\n");
+    }
+
+    void BriandTorSocks5Proxy::PrintStatus() {
+        if (this->proxyStarted) {
+            printf("PROXY STATUS: started on port %hu\n", TOR_SOCKS5_PROXY_PORT);
+            printf("PROXY USERNAME: %s\n", this->proxyUser.c_str());
+            printf("PROXY PASSWORD: %s\n", this->proxyPassword.c_str());
+        }
+        else {
+            printf("PROXY STATUS: not started.\n");
+        }
     }
 
 }

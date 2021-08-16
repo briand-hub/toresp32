@@ -470,6 +470,7 @@ void TorEsp32Main(void* taskArg) {
 			printf("[INFO] Starting SOCKS5 Proxy.\n");
 			SOCKS5_PROXY = make_unique<Briand::BriandTorSocks5Proxy>();
 			SOCKS5_PROXY->StartProxyServer(TOR_SOCKS5_PROXY_PORT, CIRCUITS_MANAGER);
+			SOCKS5_PROXY->PrintStatus();
 			printf("[INFO] SOCKS5 Proxy started.\n");
 
 			// Builtin led handling
@@ -861,7 +862,7 @@ void executeCommand(string& cmd) {
 	}
 	else if (cmd.compare("torproxy status") == 0) {
 		if (SOCKS5_PROXY != nullptr) {
-			
+			SOCKS5_PROXY->PrintStatus();
 		}
 		else {
 			printf("Error, Proxy not instanced.\n");
