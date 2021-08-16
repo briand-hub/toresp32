@@ -25,6 +25,8 @@ using namespace std;
 namespace Briand
 {
     BriandTorCircuitsManager* BriandTorSocks5Proxy::torCircuits = nullptr;
+    string BriandTorSocks5Proxy::proxyUser = "";
+    string BriandTorSocks5Proxy::proxyPassword = "";
 
     BriandTorSocks5Proxy::BriandTorSocks5Proxy() {
         this->proxySocket = -1;
