@@ -29,7 +29,7 @@ This project has no warranty in any sense.
 
 ## Usage instructions
 
-See [[WIKI]].
+See [WIKI](https://github.com/briand-hub/toresp32/wiki).
 
 **REMEMBER**: ESP32 is a 240MHz processor with 320KB of RAM. Do not expect good performances or fast webpage loading!!
 
