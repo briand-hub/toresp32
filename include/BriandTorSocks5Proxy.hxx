@@ -87,12 +87,12 @@ namespace Briand
         static const unsigned short MAX_FREE_PAYLOAD = 498;
 
         /** Delay in mseconds for stream read/write operations */
-        static const unsigned short STREAM_WAIT_MS = 500;
+        static const unsigned short STREAM_WAIT_MS = 200;
 
         /** Number of requests, limits the call to HandleClient() */
         static unsigned char REQUEST_QUEUE;
 
-        /** Number of MAX requests, limits the call to HandleClient(), fixed to 2/3 of circuits */
+        /** Number of MAX requests, limits the call to HandleClient(), fixed to TOR_CIRCUITS_KEEPALIVE */
         static const unsigned char REQUEST_QUEUE_LIMIT = static_cast<unsigned char>((TOR_CIRCUITS_KEEPALIVE*2)/3);
 
         /**

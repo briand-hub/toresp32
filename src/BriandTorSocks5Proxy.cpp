@@ -517,7 +517,7 @@ namespace Briand
                 xTaskCreate(ProxyClient_Stream_Writer, "StreamWR", 4*1024, reinterpret_cast<void*>(parameter.get()), 20, NULL);
 
                 // Now wait that read/write finished.
-                while(!parameter->readerFinished && !parameter->writerFinished && !parameter->clientDisconnected) {
+                while(!parameter->readerFinished || !parameter->writerFinished) {
                     vTaskDelay(500 / portTICK_PERIOD_MS);
                 }
 

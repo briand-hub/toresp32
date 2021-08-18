@@ -2,7 +2,7 @@
 
 ## Next steps
 
-* Consider using fixed and static (stacked) receive/send buffer on Proxy
+* Should keep static buffer on TorProxy writer/reader and the previous "// reserve some bytes" ?
 * Consider switch to nonblocking cache file read
 * Consider error management short/int for method errors (mbedtls style)
 * Implement a vector of nodes.
@@ -10,7 +10,16 @@
 
 ## 
 
-* No way to make async read/write proxy working, switching to new ideas. This because AP mis-connection and lots of heap malloc() fails that generates crashes.
+* Solved the BIIIIIIIG bug in the while() that was causing heap paaaaaaaain :/ left the set parameters in previous news. Reset the previously commented "// reserve some bytes"
+
+  * Start-up free heap ~285KB (now moved BEFORE CircuitsManager startup)
+  * With 5 built circuits, not connected to, AP, no proxy used: HEAP FREE: 124628 / 369256 bytes. MAX FREE 213564 MIN FREE 124072 LARGEST FREE BLOCK: 65536
+  * With 5 circuits built, connected to AP, no proxy used: HEAP FREE: 121316 / 369256 bytes. MAX FREE 213564 MIN FREE 119620 LARGEST FREE BLOCK: 65536
+  * With 5 circuits built, connected to AP, proxy in use with curl: HEAP FREE: 103508 / 369256 bytes. MAX FREE 213564 MIN FREE 101624 LARGEST FREE BLOCK: 65536
+  * With 5 circuits built, connected to AP, proxy in use with firefox: HEAP FREE: 86784 / 369256 bytes. MAX FREE 213564 MIN FREE 77912 LARGEST FREE BLOCK: 65536
+
+* Swtiched now to 6 circuits and 6 operating at same time (reset the QUEUE length to 100% causes crash)
+    * With 6 circuits built, connected to AP, proxy in use with firefox/https: HEAP FREE: 77500 / 369256 bytes. MAX FREE 213564 MIN FREE 59468 LARGEST FREE BLOCK: 32768
 
 
 

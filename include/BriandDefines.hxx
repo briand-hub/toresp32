@@ -37,7 +37,7 @@
     constexpr unsigned char NET_CONNECT_TIMEOUT_S = 60;		    // Elapsed this number of seconds, any connection is intended to be timed out!
     constexpr unsigned char NET_IO_TIMEOUT_S = 30;		        // Timeout (seconds) for socket read/write operations (0 for unlimited)
     constexpr const char* NTP_SERVER = "pool.ntp.org";    	    // NTP server to use
-    constexpr unsigned short TOR_CIRCUITS_KEEPALIVE = 5;	    // No. of Tor circuits to be kept always open and ready (avoid more than 6 on ESP Platform!)
+    constexpr unsigned short TOR_CIRCUITS_KEEPALIVE = 6;	    // No. of Tor circuits to be kept always open and ready (avoid more than 6 on ESP Platform!)
     constexpr unsigned short TOR_CIRCUITS_MAX_TIME_S = 900;	    // Elapsed this time (seconds) the Tor circuit will be closed automatically.
     constexpr unsigned short TOR_CIRCUITS_MAX_REQUESTS = 60;    // After N requests the Tor circuit will be closed and changed.
     constexpr unsigned char TOR_NODES_CACHE_SIZE = 100;		    // No. of Tor nodes, for each type (guard/exit/middle) to keep saved. (Avoid more than 50/100 on ESP Platform!)

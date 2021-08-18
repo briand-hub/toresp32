@@ -234,9 +234,9 @@ void TorEsp32Setup() {
 	
 	// High processor frequency
 	// No more needed, done in config
-	//printf("[INFO] Setting CPU speed to 240MHz\n");
-	//Briand::BriandESPDevice::SetCpuFreqMHz(240);
-	//printf("[INFO] Current CPU speed is %lu MHz.\n", Briand::BriandESPDevice::GetCpuFreqMHz());
+	printf("[INFO] Setting CPU speed to 240MHz\n");
+	Briand::BriandESPDevice::SetCpuFreqMHz(240);
+	printf("[INFO] Current CPU speed is %lu MHz.\n", Briand::BriandESPDevice::GetCpuFreqMHz());
 
     // Print welcome
     printLogo();
