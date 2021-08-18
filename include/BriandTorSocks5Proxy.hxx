@@ -31,6 +31,40 @@ namespace Briand
 	class BriandTorSocks5Proxy {
         protected:
 
+        class StreamWorkerParams {
+            public:
+            /** The connected client socket */
+            int clientSocket;
+            /** Reference to the circuit chosen */
+            BriandTorCircuit* circuit;
+            /** If true, there is nothing more to read from client */
+            bool readerFinished;
+            /** If true, there is nothing more to write to client */
+            bool writerFinished;
+            /** If true, client disconnected. */
+            bool clientDisconnected;
+            /** If true, a TorStreamEnd() has been done. */
+            bool torStreamClosed;
+
+            /** Constructor initializes with default parameters */
+            StreamWorkerParams() {
+                this->clientSocket = -1;
+                this->circuit = NULL;
+                this->readerFinished = false;
+                this->writerFinished = false;
+                this->clientDisconnected = false;
+                this->torStreamClosed = false;
+            }
+
+            bool GoodForWrite() {
+                return (!this->clientDisconnected && !this->writerFinished && circuit != NULL && clientSocket != -1);
+            }
+
+            bool GoodForRead() {
+                return (!this->clientDisconnected && !this->readerFinished && circuit != NULL && clientSocket != -1);
+            }
+        };
+
         /** Proxy server socket */
         int proxySocket;
 
@@ -49,15 +83,41 @@ namespace Briand
         /** Pointer to CircuitsManager instance */
         static BriandTorCircuitsManager* torCircuits;
 
+        /** Maximum payload available for read/write stream operations */
+        static const unsigned short MAX_FREE_PAYLOAD = 498;
+
+        /** Delay in mseconds for stream read/write operations */
+        static const unsigned short STREAM_WAIT_MS = 500;
+
+        /** Number of requests, limits the call to HandleClient() */
+        static unsigned char REQUEST_QUEUE;
+
+        /** Number of MAX requests, limits the call to HandleClient(), fixed to 2/3 of circuits */
+        static const unsigned char REQUEST_QUEUE_LIMIT = static_cast<unsigned char>((TOR_CIRCUITS_KEEPALIVE*2)/3);
+
         /**
          * Handles a single request to this proxy (accept() and starts HandleClient)
+         * @param serverSocket the server socket FD (int)
         */
         static void HandleRequest(void* serverSocket);
 
         /**
          * Handles a single client (async)
+         * @param clientSocket the connected client socket FD (int)
         */
         static void HandleClient(void* clientSocket);
+
+        /**
+         * Handles a single client receive -> write to tor (async)
+         * @param workerParams a reference to an existing instance of the StreamWorkerParams
+        */
+        static void ProxyClient_Stream_Reader(void* swParams);
+
+        /**
+         * Handles a single tor receive -> write to client (async)
+         * @param workerParams a reference to an existing instance of the StreamWorkerParams
+        */
+        static void ProxyClient_Stream_Writer(void* swParams);
 
         /**
          * Method sends an error response and close client connection

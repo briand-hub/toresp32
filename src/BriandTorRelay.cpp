@@ -477,6 +477,7 @@ namespace Briand {
 
 		// Prepare and copy first G_LENGTH bytes
 		this->CREATED_EXTENDED_RESPONSE_SERVER_PK = make_unique<vector<unsigned char>>();
+		this->CREATED_EXTENDED_RESPONSE_SERVER_PK->reserve(G_LENGTH);
 		this->CREATED_EXTENDED_RESPONSE_SERVER_PK->insert(
 				this->CREATED_EXTENDED_RESPONSE_SERVER_PK->begin(), 
 				created2_extended2_payload->begin() + 2, 
@@ -490,6 +491,7 @@ namespace Briand {
 
 		// And the other H_LENGTH 32 bytes
 		this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH = make_unique<vector<unsigned char>>();
+		this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH->reserve(H_LENGTH);
 		this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH->insert(
 				this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH->begin(), 
 				created2_extended2_payload->begin() + 2 + G_LENGTH, 

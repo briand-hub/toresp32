@@ -404,7 +404,7 @@ namespace Briand {
 
 		tempCell = make_unique<BriandTorCell>( this->LINKPROTOCOLVERSION, this->CIRCID, BriandTorCellCommand::NETINFO );
 		struct in_addr public_ip;
-		inet_aton(BriandUtils::GetPublicIPFromIPFY().c_str(), &public_ip);
+		inet_aton(BriandUtils::GetPublicIP().c_str(), &public_ip);
 		tempCell->BuildAsNETINFO( public_ip );
 
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
@@ -847,6 +847,11 @@ namespace Briand {
 			return false;
 		}
 
+		// Clear no more needed certificates to save RAM
+		this->guardNode->ResetCertificates();
+		this->middleNode->ResetCertificates();
+		this->exitNode->ResetCertificates();
+
 		ESP_LOGD(LOGTAG, "[DEBUG] CREATE2 success. Extending to Middle node.\n");
 
 		// EXTEND2 to middle
@@ -880,11 +885,6 @@ namespace Briand {
 		this->StatusResetTo(CircuitStatusFlag::BUILT);
 		this->StatusSetFlag(CircuitStatusFlag::STREAM_READY);
 		this->StatusSetFlag(CircuitStatusFlag::CLEAN);
-
-		// Clear certificates to save RAM
-		this->guardNode->ResetCertificates();
-		this->middleNode->ResetCertificates();
-		this->exitNode->ResetCertificates();
 		
 		this->createdOn = BriandUtils::GetUnixTime();
 
@@ -1071,6 +1071,7 @@ namespace Briand {
 					*/
 
 					auto sendMePayload = make_unique<vector<unsigned char>>();
+					sendMePayload->reserve(BriandTorCell::PAYLOAD_LEN); // reserve some bytes
 					sendMePayload->push_back(0x01); // version 1 authenticated cell
 
 					if (tempCell->GetRelayCellDigest() == nullptr) {
@@ -1206,6 +1207,7 @@ namespace Briand {
 
 				// Take payload and return, that's all!
 				response = make_unique<vector<unsigned char>>();
+				response->reserve(BriandTorCell::PAYLOAD_LEN); // reserve some bytes
 				response->insert(response->begin(), readCell->GetPayload()->begin(), readCell->GetPayload()->end());
 			}
 
@@ -1244,6 +1246,7 @@ namespace Briand {
 		ESP_LOGD(LOGTAG, "[DEBUG] Sending RELAY_RESOLVE cell for hostname <%s>.\n", hostname.c_str());
 
 		auto requestPayload = make_unique<vector<unsigned char>>();
+		requestPayload->reserve(BriandTorCell::PAYLOAD_LEN); // reserve some bytes
 
 		for (const char& c: hostname) {
 			requestPayload->push_back(static_cast<unsigned char>(c));
@@ -1356,6 +1359,7 @@ namespace Briand {
 		*/
 
 		auto payload = make_unique<vector<unsigned char>>();
+		payload->reserve(BriandTorCell::PAYLOAD_LEN); // reserve some bytes
 		for (const char& c : hostname) {
 			payload->push_back(static_cast<unsigned char>(c));
 		}

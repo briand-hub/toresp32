@@ -86,22 +86,6 @@ void app_main() {
 	xTaskCreate(TorEsp32Main, "TorEsp32", 4096, NULL, 15, NULL);
 }
 
-void builtin_led_task(void* p) {
-	// IDF Task cannot return!
-	while(1) {
-		gpio_set_direction(GPIO_NUM_5, GPIO_MODE_INPUT);
-		int l = gpio_get_level(GPIO_NUM_5);
-		gpio_set_direction(GPIO_NUM_5, GPIO_MODE_OUTPUT);
-		if (l == 0) {
-			gpio_set_level(GPIO_NUM_5, 1);
-		} 
-		else {
-			gpio_set_level(GPIO_NUM_5, 0);
-		} 
-		vTaskDelay( (BUILTIN_LED_MODE*100) / portTICK_PERIOD_MS);
-	}
-}
-
 void TorEsp32Setup() {
 	// Initialize globals
     CONFIG_PASSWORD = make_unique<string>("");
@@ -249,9 +233,10 @@ void TorEsp32Setup() {
 	AP_HOSTNAME->append( Briand::BriandUtils::GetRandomHostName().get() );
 	
 	// High processor frequency
-	printf("[INFO] Setting CPU speed to 240MHz\n");
-	Briand::BriandESPDevice::SetCpuFreqMHz(240);
-	printf("[INFO] Current CPU speed is %lu MHz.\n", Briand::BriandESPDevice::GetCpuFreqMHz());
+	// No more needed, done in config
+	//printf("[INFO] Setting CPU speed to 240MHz\n");
+	//Briand::BriandESPDevice::SetCpuFreqMHz(240);
+	//printf("[INFO] Current CPU speed is %lu MHz.\n", Briand::BriandESPDevice::GetCpuFreqMHz());
 
     // Print welcome
     printLogo();
@@ -341,10 +326,6 @@ void TorEsp32Main(void* taskArg) {
 					STA_ESSID->append(cfg->WESSID);
 					STA_PASSW->append(cfg->WPASSWORD);
 					SERIAL_ENC_KEY->append(cfg->SERIAL_ENC_KEY);
-
-					// If a serial encoding key is set, use crypt.
-
-					// TODO !
 
 					// go to connect
 					nextStep = 6;
@@ -451,12 +432,25 @@ void TorEsp32Main(void* taskArg) {
 			// Sync time with NTP (VERY IMPORTANT!)
 			syncTimeWithNTP();
 
+			printf("[INFO] Free heap at system start is %lu bytes.\n", Briand::BriandESPDevice::GetFreeHep());
+
 			// Proceed to next steps
 			nextStep = 1000;
 		}
 		else if (nextStep == 1000) {
+			if (BUILTIN_LED_MODE == 0) {
+				// Turn off
+				printf("[INFO] Turning OFF built led %d\n", GPIO_NUM_5);
+				gpio_set_level(GPIO_NUM_5, 1); // 1 => off, 0 => on
+			}
+
 			printf("[INFO] Starting TOR Circuits Manager.\n");
 			CIRCUITS_MANAGER = make_unique<Briand::BriandTorCircuitsManager>(TOR_CIRCUITS_KEEPALIVE, TOR_CIRCUITS_MAX_TIME_S, TOR_CIRCUITS_MAX_REQUESTS);
+			
+			// Builtin led handling
+			gpio_set_direction(GPIO_NUM_5, GPIO_MODE_OUTPUT);
+			gpio_set_level(GPIO_NUM_5, 1); // initial status OFF
+			
 			CIRCUITS_MANAGER->Start();
 			printf("[INFO] TOR Circuits Manager started.\n");
 
@@ -473,26 +467,12 @@ void TorEsp32Main(void* taskArg) {
 			SOCKS5_PROXY->PrintStatus();
 			printf("[INFO] SOCKS5 Proxy started.\n");
 
-			// Builtin led handling
-			gpio_set_direction(GPIO_NUM_5, GPIO_MODE_OUTPUT);
-			if (BUILTIN_LED_MODE == 0) {
-				// Turn off
-				printf("[INFO] Turning OFF built led %d\n", GPIO_NUM_5);
-				gpio_set_level(GPIO_NUM_5, 1); // 1 => off, 0 => on
-			}
-			else if (BUILTIN_LED_MODE == 1) {
-				// Turn on
-				printf("[INFO] Turning OFF built led %d\n", GPIO_NUM_5);
-				gpio_set_level(GPIO_NUM_5, 0); // 1 => off, 0 => on
-			}
-			else {
-				// On/off delay
-				printf("[INFO] Starting blinking task for built led %d\n", GPIO_NUM_5);
+			if (BUILTIN_LED_MODE == 1) {
+				// The led here should be turned ON
+				printf("[INFO] Turning ON built led %d\n", GPIO_NUM_5);
 				gpio_set_level(GPIO_NUM_5, 0); // initial status ON
-				xTaskCreate(builtin_led_task, "blinkled", 512, NULL, 1000, NULL);
-			}   
+			}
 
-			printf("[INFO] Free heap at system start is %lu bytes.\n", Briand::BriandESPDevice::GetFreeHep());
 			printf("\n\n[INFO] SYSTEM READY! Type help for commands.\n\n");
 
 			nextStep = 10000;
@@ -529,7 +509,7 @@ void printLogo() {
     printf("                          | |                  \n");
     printf("                          |_|                  \n");
     printf("                                               \n");
-    printf("                VERSION 1.0.0                  \n");
+    printf("                VERSION 1.1.0                  \n");
     printf("              (Pandemic edition)               \n");
     printf("          Copyright (C) 2021 briand            \n");
     printf("        https://github.com/briand-hub          \n");
@@ -627,6 +607,8 @@ void executeCommand(string& cmd) {
 		printf("apnew : turn on AP interface (will CHANGE essid/password).\n");
         printf("synctime : sync localtime time with NTP.\n");
 		printf("loglevel [N/E/W/I/D/V] : Sets the log level, from lower to highest: None/Error/Warning/Info/Debug/Verbose.\n");
+		printf("syslog on : outputs all system logs (keeps the software debugging log to current level set with loglevel command).\n");
+		printf("syslog off : stop output all system logs (keeps the software debugging log to current level set with loglevel command).\n");
 		printf("reboot : restart device.\n");
 
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
@@ -671,7 +653,7 @@ void executeCommand(string& cmd) {
     }
 	else if (cmd.compare("meminfo") == 0) {
         // TODO printf("HEAP FREE: %u / %u bytes. PSRAM FREE: %u / %u bytes.\n", esp_get_free_heap_size(), Briand::BriandESPDevice::GetHeapSize(), Briand::BriandESPDevice::GetFreePsram(), Briand::BriandESPDevice::GetPsramSize());
-		printf("HEAP FREE: %u / %lu bytes. MAX FREE %lu MIN FREE %lu\n", esp_get_free_heap_size(), Briand::BriandESPDevice::GetHeapSize(), HEAP_MAX, HEAP_MIN);
+		printf("HEAP FREE: %u / %lu bytes. MAX FREE %lu MIN FREE %lu LARGEST FREE BLOCK: %zu\n", esp_get_free_heap_size(), Briand::BriandESPDevice::GetHeapSize(), HEAP_MAX, HEAP_MIN, heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     }
 	else if (cmd.compare("netinfo") == 0) {
         printf("AP Hostname: %s\n", AP_HOSTNAME->c_str());
@@ -728,6 +710,16 @@ void executeCommand(string& cmd) {
 		BRIAND_SET_LOG(ESP_LOG_VERBOSE);
 		printf("Log level set to VERBOSE\n");
 	}
+	else if (cmd.compare("syslog on") == 0) {
+        esp_log_level_set("*", ESP_LOG_INFO);
+		esp_log_level_set(LOGTAG, esp_log_level_get(LOGTAG));
+		printf("ESP System logs enabled.\n");
+    }
+	else if (cmd.compare("syslog off") == 0) {
+        esp_log_level_set("*", ESP_LOG_NONE);
+		esp_log_level_set(LOGTAG, esp_log_level_get(LOGTAG));
+		printf("ESP System logs disabled.\n");
+    }
 	else if (cmd.compare("reboot") == 0)  {
         printf("Device will reboot now.\n");
 		reboot();
@@ -833,7 +825,7 @@ void executeCommand(string& cmd) {
 		}
     }
 	else if (cmd.compare("myrealip") == 0)  {
-		printf("Your real public ip is: %s\n", Briand::BriandUtils::GetPublicIPFromIPFY().c_str());
+		printf("Your real public ip is: %s\n", Briand::BriandUtils::GetPublicIP().c_str());
     }
 	else if (cmd.compare("torip") == 0)  {
 		if (SOCKS5_PROXY == nullptr) {

@@ -53,9 +53,6 @@ namespace Briand {
 		/* The length in case of variable cells will be calculated from vector (length occupy 2 bytes) */
 		unique_ptr<vector<unsigned char>> Payload;
 
-		/* Apr 2021: The longest allowable cell payload, in bytes. (509) */
-		const short PAYLOAD_LEN = 509; 
-
 		/* RELAY cell Command */
 		BriandTorCellRelayCommand RelayCommand;
 
@@ -75,6 +72,12 @@ namespace Briand {
 		void PadPayload();
 
 		public:
+
+		/* Apr 2021: The longest allowable cell payload, in bytes. (509) */
+		static const short PAYLOAD_LEN = 509; 
+
+		/* Apr 2021: The longest allowable cell size (for fixed size) */
+		static const short MAX_CELL_SIZE = 514; 
 
 		/**
 		 * Constructor

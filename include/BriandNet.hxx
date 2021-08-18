@@ -95,20 +95,6 @@ namespace Briand
 		static unique_ptr<string> HttpsGet(const string& host, const short& port, const string& path, short& httpReturnCode, const string& agent = "empty", const bool& returnBodyOnly = false, const unique_ptr<string>& pemCAcert = nullptr, const unique_ptr<vector<unsigned char>>& derCAcert = nullptr);
 
 		/**
-		 * Method send an HttpS request and returns contents in JSON format
-		 * @param host Hostname/IP (ex. ifconfig.me)
-		 * @param port Port (ex. 443)
-		 * @param path URI path starting with / (ex. /all.json) MUST be urlencoded before!
-		 * @param httpReturnCode if success HTTP code (200/404/500..) if fails 0
-		 * @param deserializationSuccess if deserilization had success true, if fails false.
-		 * @param agent User-Agent to set in the header
-		 * @param pemCAcert The PEM-format certificate CA root. If nullptr, INSECURE mode will be used (unless DER certificate furnished)
-		 * @param derCAcert The DER-format certificate CA root. If nullptr, INSECURE mode will be used (unless PEM certificate furnished)
-		 * @return JSON objects with fields if success, NULL if fails.
-		*/
-		// DELETED static cJSON* HttpsGetJson(const string& host, const short& port, const string& path, short& httpReturnCode, bool& deserializationSuccess, const string& agent = "empty", const unique_ptr<string>& pemCAcert = nullptr, const unique_ptr<vector<unsigned char>>& derCAcert = nullptr);
-
-		/**
 		 * Method send an Http (NOT HTTPS!) request and returns contents in string format
 		 * @param host Hostname/IP (ex. ifconfig.me)
 		 * @param port Port (ex. 443)

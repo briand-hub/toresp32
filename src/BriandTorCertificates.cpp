@@ -30,10 +30,12 @@ namespace Briand {
 	BriandTorCertificateBase::BriandTorCertificateBase() {
 		this->Type = 0;
 		this->Contents = make_unique<vector<unsigned char>>();
+		this->Contents->reserve(512); // reserve some bytes
 	}
 
 	BriandTorCertificateBase::BriandTorCertificateBase(const BriandTorCertificateBase& other) {
 		this->Contents = make_unique<vector<unsigned char>>();
+		this->Contents->reserve(other.Contents->size()); // reserve bytes
 		this->Contents->insert(this->Contents->begin(), other.Contents->begin(), other.Contents->end());
 	}
 
@@ -85,6 +87,7 @@ namespace Briand {
 		this->ExtType = 0x00;
 		this->ExtFlags = 0x00;
 		this->ExtData = make_unique<vector<unsigned char>>();
+		this->ExtData->reserve(128); // reserve some bytes
 		
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Ed25519CertificateExtension raw bytes: ");
@@ -126,6 +129,7 @@ namespace Briand {
 		this->ExtFlags = other.ExtFlags;
 		this->valid = other.valid;
 		this->ExtData = make_unique<vector<unsigned char>>();
+		this->ExtData->reserve(other.ExtData->size()); // reserve some bytes
 		this->ExtData->insert(this->ExtData->begin(), other.ExtData->begin(), other.ExtData->end());
 	}
 
@@ -164,9 +168,13 @@ namespace Briand {
 		this->CERT_KEY_TYPE = 0x00;
 		this->N_EXTENSIONS = 0x00;
 		this->CERTIFIED_KEY = make_unique<vector<unsigned char>>();
+		this->CERTIFIED_KEY->reserve(64); // reserve some bytes
 		this->SIGNATURE = make_unique<vector<unsigned char>>();
+		this->SIGNATURE->reserve(64); // reserve some bytes
 		this->EXTENSIONS = make_unique<vector<BriandTorEd25519CertificateExtension>>();
+		this->EXTENSIONS->reserve(2); // reserve some bytes
 		this->non_signature_parts = make_unique<vector<unsigned char>>();
+		this->non_signature_parts->reserve(512); // reserve some bytes
 
 		// start to build
 
@@ -221,6 +229,7 @@ namespace Briand {
 			unsigned int extensionsStartAt = 7 + certified_key_len + 1;
 			unsigned char remainingExtensions = this->N_EXTENSIONS;
 			auto extBuffer = make_unique<vector<unsigned char>>();
+			extBuffer->reserve(raw_bytes->size()); // reserve some bytes
 			extBuffer->insert(extBuffer->begin(), raw_bytes->begin() + extensionsStartAt, raw_bytes->end());
 
 			while (remainingExtensions > 0) {
@@ -384,6 +393,7 @@ namespace Briand {
 		this->Type = 0;
 		this->isStructValid = false;
 		this->ED25519_KEY = make_unique<vector<unsigned char>>();
+		this->ED25519_KEY->reserve(64); // reserve some bytes
 		this->EXPIRATION_DATE = 0x00000000;
 		this->SIGNATURE = nullptr; 
 		this->SIGLEN = 0x00;
@@ -420,6 +430,7 @@ namespace Briand {
 		}
 
 		this->SIGNATURE = make_unique<vector<unsigned char>>();
+		this->SIGNATURE->reserve(64); // reserve some bytes
 
 		// copy data from byte 37 for siglen bytes
 		//std::copy(raw_bytes->begin()+37, raw_bytes->begin()+37+this->SIGLEN, this->SIGNATURE.get());

@@ -189,116 +189,11 @@ namespace Briand
 		return output;
 	}
 
-	/* DELETED
-	string BriandUtils::BriandIfConfigMe() {
-		bool success = false;
+	string BriandUtils::GetPublicIP() {
 		short httpCode = 0;
 		string randomAgent = string( Briand::BriandUtils::GetRandomHostName().get() );
 
-		cJSON* doc = Briand::BriandNet::HttpsGetJson("ifconfig.me", 443, "/all.json", httpCode, success, randomAgent);
-
-		// Prepare output
-		string output("");
-
-		if (success) {
-			auto ip_addr = cJSON_GetObjectItemCaseSensitive(doc, "ip_addr");
-			auto remote_host = cJSON_GetObjectItemCaseSensitive(doc, "remote_host");
-			auto user_agent = cJSON_GetObjectItemCaseSensitive(doc, "user_agent");
-			auto port = cJSON_GetObjectItemCaseSensitive(doc, "port");
-			auto language = cJSON_GetObjectItemCaseSensitive(doc, "language");
-			auto encoding = cJSON_GetObjectItemCaseSensitive(doc, "encoding");
-			auto mime = cJSON_GetObjectItemCaseSensitive(doc, "mime");
-			auto via = cJSON_GetObjectItemCaseSensitive(doc, "via");
-			auto forwarded = cJSON_GetObjectItemCaseSensitive(doc, "forwarded");
-
-			if (ip_addr != NULL && ip_addr->valuestring != NULL) {
-				output.append("[IFCONFIG.me Public ip]: ");
-				output.append( ip_addr->valuestring );
-				output.append("\n");
-			}
-			if (remote_host != NULL && remote_host->valuestring != NULL) {
-				output.append("[IFCONFIG.me Remote host]: ");
-				output.append( remote_host->valuestring );
-				output.append("\n");
-			}
-			if (user_agent != NULL && user_agent->valuestring != NULL) {
-				output.append("[IFCONFIG.me User-Agent]: ");
-				output.append( user_agent->valuestring );
-				output.append("\n");
-			}
-			if (port != NULL && cJSON_IsNumber(port)) {
-				output.append("[IFCONFIG.me Port]: ");
-				output.append( std::to_string( port->valueint ) );
-				output.append("\n");
-			}
-			if (language != NULL && language->valuestring != NULL) {
-				output.append("[IFCONFIG.me Language]: ");
-				output.append( language->valuestring );
-				output.append("\n");
-			}
-			if (encoding != NULL && encoding->valuestring != NULL) {
-				output.append("[IFCONFIG.me Encoding]: ");
-				output.append( encoding->valuestring );
-				output.append("\n");
-			}
-			if (mime != NULL && mime->valuestring != NULL) {
-				output.append("[IFCONFIG.me Mime]: ");
-				output.append( mime->valuestring );
-				output.append("\n");
-			}
-			if (via != NULL && via->valuestring != NULL) {
-				output.append("[IFCONFIG.me Via]: ");
-				output.append( via->valuestring );
-				output.append("\n");
-			}
-			if (forwarded != NULL && forwarded->valuestring != NULL) {
-				output.append("[IFCONFIG.me Forwarded]: ");
-				output.append( forwarded->valuestring );
-				output.append("\n");
-			}
-		}
-		else {
-			ESP_LOGW(LOGTAG, "[ERR] Error on downloading from https://ifconfig.me/all.json Http code: %d Deserialization success: %d\n", httpCode, success);
-		}
-
-		cJSON_Delete(doc);
-
-		return output;
-	}
-	*/
-
-	/* DELETED
-	string BriandUtils::BriandGetPublicIPFromIfConfigMe() {
-		bool success = false;
-		short httpCode = 0;
-		string randomAgent = string( Briand::BriandUtils::GetRandomHostName().get() );
-
-		cJSON* doc = Briand::BriandNet::HttpsGetJson("ifconfig.me", 443, "/all.json", httpCode, success, randomAgent);
-
-		// Prepare output
-		string output("");
-
-		if (success) {
-			auto ip_addr = cJSON_GetObjectItemCaseSensitive(doc, "ip_addr");
-
-			if (ip_addr != NULL && ip_addr->valuestring != NULL) {
-				output.assign(ip_addr->valuestring);
-			}
-		}
-		else {
-			ESP_LOGW(LOGTAG, "[ERR] Error on downloading IP Informations from https://ifconfig.me/all.json Http code: %d Deserialization success: %d\n", httpCode, success);
-		}
-
-		cJSON_Delete(doc);
-
-		return output;
-	}
-	*/
-
-	string BriandUtils::GetPublicIPFromIPFY() {
-		short httpCode = 0;
-		string randomAgent = string( Briand::BriandUtils::GetRandomHostName().get() );
-
+		// Using APIFY but also ifconfig.me could be used
 		auto ipString = Briand::BriandNet::HttpsGet("api.ipfy.org", 443, "/", httpCode, randomAgent);
 
 		if (ipString == nullptr) return "Error (HTTP/" + to_string(httpCode) + ")";
@@ -395,16 +290,9 @@ namespace Briand
 		return now;
 	}
 
-	/* DELETED unique_ptr<unsigned char[]> BriandUtils::VectorToArray(const unique_ptr<vector<unsigned char>>& input) {
-		auto b = make_unique<unsigned char[]>(input->size());
-		for (unsigned long int i = 0; i < input->size(); i++)
-			b[i] = input->at(i);
-		return std::move(b);
-	}
-	*/
-
 	unique_ptr<vector<unsigned char>> BriandUtils::ArrayToVector(const unique_ptr<unsigned char[]>& input, const unsigned long int& size) {
 		auto v = make_unique<vector<unsigned char>>();
+		v->reserve(size);
 
 		if (input == nullptr) return std::move(v);
 
@@ -442,6 +330,7 @@ namespace Briand
 
 	unique_ptr<vector<unsigned char>> BriandUtils::HexStringToVector(const string& hexstring, const string& preNonHex) {
 		auto v = make_unique<vector<unsigned char>>();
+		v->reserve(hexstring.size() + preNonHex.size()); // reserve some bytes
 
 		if (hexstring.length() % 2 != 0)
 			return std::move(v);

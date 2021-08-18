@@ -24,7 +24,7 @@
 #ifndef BRIANDDEFINES_H_ 
     #define BRIANDDEFINES_H_             
 
-    constexpr unsigned char BUILTIN_LED_MODE = 1;               // Built-in led mode: 0 = OFF, 1 = ON, 2..255 = N = blink each N*100 milliseconds
+    constexpr unsigned char BUILTIN_LED_MODE = 1;               // Built-in led mode: 0 = OFF, 1 = ON
     constexpr const char* LOGTAG = "toresp32";                  // Custom ESP Tag for logging
     constexpr bool CHANGE_MAC_TO_RANDOM = true;				    // choose if you want to change the MAC address to a random one for improved security
     constexpr unsigned short WIFI_CONNECTION_TIMEOUT = 30;      // timeout in seconds, expired with no wifi STA connection will reboot system
@@ -37,13 +37,13 @@
     constexpr unsigned char NET_CONNECT_TIMEOUT_S = 60;		    // Elapsed this number of seconds, any connection is intended to be timed out!
     constexpr unsigned char NET_IO_TIMEOUT_S = 30;		        // Timeout (seconds) for socket read/write operations (0 for unlimited)
     constexpr const char* NTP_SERVER = "pool.ntp.org";    	    // NTP server to use
-    constexpr unsigned short TOR_CIRCUITS_KEEPALIVE = 8;	    // No. of Tor circuits to be kept always open and ready (avoid more than 8 on ESP Platform!)
+    constexpr unsigned short TOR_CIRCUITS_KEEPALIVE = 5;	    // No. of Tor circuits to be kept always open and ready (avoid more than 6 on ESP Platform!)
     constexpr unsigned short TOR_CIRCUITS_MAX_TIME_S = 900;	    // Elapsed this time (seconds) the Tor circuit will be closed automatically.
     constexpr unsigned short TOR_CIRCUITS_MAX_REQUESTS = 60;    // After N requests the Tor circuit will be closed and changed.
     constexpr unsigned char TOR_NODES_CACHE_SIZE = 100;		    // No. of Tor nodes, for each type (guard/exit/middle) to keep saved. (Avoid more than 50/100 on ESP Platform!)
     constexpr unsigned char TOR_NODES_CACHE_VAL_H = 24;		    // Hours since the chache of nodes is considered OLD and must be downloaded again
     constexpr unsigned short TOR_SOCKS5_PROXY_PORT = 80;        // Port of the Socks5 Proxy
-    constexpr unsigned short TOR_SOCKS5_PROXY_TIMEOUT_S = 15;   // Timeout in seconds the Socks5 Proxy select/read/write calls
+    constexpr unsigned short TOR_SOCKS5_PROXY_TIMEOUT_S = 30;   // Timeout in seconds the Socks5 Proxy select/read/write calls
 
     // Includes needed (with linux porting enabled)
 

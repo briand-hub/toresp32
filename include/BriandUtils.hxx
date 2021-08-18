@@ -70,22 +70,10 @@ namespace Briand
 		static string BriandTorRelayFlagsToString(unsigned short flagMask, const string& prepend = "", const string& separator=" ");
 
 		/**
-		 * Method to query ifconfig.me and obtain headers/ip info
-		 * @return string with main informations, empty if fails
-		*/
-		/* DELETED static string BriandIfConfigMe(); */
-
-		/**
-		 * Method to get public IP address from ifconfig.me
-		 * @return string with IP, empty if fails
-		*/
-		/* DELETED static string BriandGetPublicIPFromIfConfigMe(); */
-
-		/**
 		 * Method to get public IP address from ipify API
 		 * @return string with IP, empty if fails
 		*/
-		static string GetPublicIPFromIPFY();
+		static string GetPublicIP();
 
 		/**
 		 * DEBUG Method to print raw bytes to serial output (hex format)
@@ -129,14 +117,6 @@ namespace Briand
 		 * Method to get UNIX time from ESP32
 		*/
 		static unsigned long GetUnixTime();
-
-		/**
-		 * Helper method convert vector to old-style buffer for libraries that needs it.
-		 * SIZE IS THE SAME AS INPUT VECTOR
-		 * @param input Pointer to the vector
-		 * @return Pointer to buffer
-		*/
-		/* DELETED static unique_ptr<unsigned char[]> VectorToArray(const unique_ptr<vector<unsigned char>>& input); */
 
 		/**
 		 * Helper method convert old-style buffer for libraries that needs it to vector

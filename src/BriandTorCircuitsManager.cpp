@@ -175,6 +175,10 @@ namespace Briand
         return nullptr;
     }
 
+    bool BriandTorCircuitsManager::IsStarted() {
+        return !this->isStopped;
+    }
+
     void BriandTorCircuitsManager::PrintCircuitsInfo() {
         printf("#\tCircID\t\tStatus\t\t\t\t\tPaddings\tCreatedOn\tDescription\n");
         for (unsigned short i=0; i<this->CIRCUIT_POOL_SIZE; i++) {
@@ -208,8 +212,9 @@ namespace Briand
                     printf("%s, ", circuit->exitNode->nickname->c_str() );
                     printf("THE WEB");
                 }
+
+                printf("\n");
             }
-            printf("\n");
         }
     }
 

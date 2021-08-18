@@ -3,7 +3,11 @@ Briand's project to turn an ESP32 into a Tor client "plug&amp;play"
 
 ## Development status
 
-**FIRST RELEASE AVAILABLE**
+For details check always [NEWS FILE](NEWS.md)
+
+* Working to a faster/better proxy (version 1.1.0)
+
+**FIRST RELEASE AVAILABLE [go to release](https://github.com/briand-hub/toresp32/releases/tag/v1.0.0)**
 
 * 08/2021 Ready to release
 * 08/2021 Proxy working through Tor for HTTP/HTTPS requests!
@@ -11,8 +15,6 @@ Briand's project to turn an ESP32 into a Tor client "plug&amp;play"
 * 07/2021 Working with multiple circuits (managed asynchronously): connection, hostname resolution
 * 05/2021 Switching to IDF Framework completed and obtained the first working circuit!
 * 04/2021 At the moment just a non-working draft!
-
-For news check always [NEWS FILE](NEWS.md)
 
 ## Intro
 This project borns just for personal interest on ESP32 platform (I'm using WeMos LolinD32 v.1.0.0) because it summarize my interests for electronics, programming, c++ and cryptography. I think [Tor](https://www.torproject.org/) is a great example of applied cryptography for a noble purpose. 

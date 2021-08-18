@@ -25,6 +25,7 @@ namespace Briand
 
 	unique_ptr<vector<unsigned char>> BriandNet::StringToUnsignedCharVector(unique_ptr<string>& input, bool emptyContents /* = true*/) {
 		auto output = make_unique<vector<unsigned char>>();
+		output->reserve(input->size()); // allocate the right memory
 
 		if (input == nullptr || input->size() == 0) {
 			ESP_LOGD(LOGTAG, "[DEBUG] StringToUnsignedCharVector called with null data!\n");
@@ -48,6 +49,7 @@ namespace Briand
 
 	unique_ptr<string> BriandNet::UnsignedCharVectorToString(unique_ptr<vector<unsigned char>>& input, bool emptyContents /* = true*/) {
 		auto output = make_unique<string>();
+		output->reserve(input->size()); // allocate the right memory
 
 		if (input == nullptr || input->size() == 0) {
 			ESP_LOGD(LOGTAG, "[DEBUG] UnsignedCharVectorToString called with null data!\n");
@@ -68,12 +70,16 @@ namespace Briand
 				output->push_back( input->at(i) );
 			}
 		}
+
+		// Resize input
+		input->shrink_to_fit();
 		
 		return output;
 	}
 
 	unique_ptr<vector<unsigned char>> BriandNet::RawInsecureRequest(const string& host, const short& port, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/) {
 		auto output = make_unique<vector<unsigned char>>();
+		output->reserve(1024); // min. 1KB reserved
 
 		if (content == nullptr || content->size() == 0) {
 			ESP_LOGD(LOGTAG, "[DEBUG] RawInsecureRequest called with null data!\n");
@@ -122,6 +128,7 @@ namespace Briand
 
 	unique_ptr<vector<unsigned char>> BriandNet::RawSecureRequest(const unique_ptr<BriandIDFSocketTlsClient>& client, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/, bool closeConnection /* = false*/, bool expectResponse /* = true */) {
 		auto output = make_unique<vector<unsigned char>>();
+		output->reserve(1024); // min 1KB
 
 		if (content == nullptr || content->size() == 0) {
 			ESP_LOGD(LOGTAG, "[DEBUG] RawSecureRequest called with null data!\n");
@@ -252,48 +259,6 @@ namespace Briand
 			return nullptr;
 		}
 	}
-
-	/* DELETED cJSON* BriandNet::HttpsGetJson(const string& host, const short& port, const string& path, short& httpReturnCode, bool& deserializationSuccess, const string& agent, const unique_ptr<string>& pemCAcert, const unique_ptr<vector<unsigned char>>& derCAcert) {
-		ESP_LOGD(LOGTAG, "[DEBUG] HttpsGetJson called to https://%s:%d/%s\n", host.c_str(), port, path.c_str());
-		
-		deserializationSuccess = false;
-
-		auto response = HttpsGet(host, port, path, httpReturnCode, agent, true);
-
-		if (httpReturnCode == 200) {
-			ESP_LOGD(LOGTAG, "[DEBUG] HttpsGetJson response ok (200).\n");
-
-			// Seems that sometimes additional bytes are included in response when body only is requested. 
-			// So remove before the first { and after the last }
-
-			auto fpos = response->find("{");
-			auto lpos = response->find_last_of("}");
-
-			if (fpos != std::string::npos) response->erase(response->begin(), response->begin() + fpos);
-			if (lpos != std::string::npos) response->erase(response->begin() + lpos + 1, response->end());
-
-			cJSON* root = cJSON_Parse(response->c_str());
-
-			if (root == NULL) {
-				// Get last error
-				const char *error_ptr = cJSON_GetErrorPtr();
-				ESP_LOGD(LOGTAG, "[DEBUG] JSON parsing error: %s\n", error_ptr);
-				// Free resources
-				cJSON_Delete(root);
-				return NULL;
-			}
-
-			ESP_LOGD(LOGTAG, "[DEBUG] JSON deserialization success.\n");
-			deserializationSuccess = true;
-
-			return root;
-		}
-		else {
-			ESP_LOGD(LOGTAG, "[DEBUG] HttpsGetJson failed httpcode = %d\n ", httpReturnCode);
-			return NULL;
-		}
-	}
-	*/
 
 	unique_ptr<string> BriandNet::HttpInsecureGet(const string& host, const short& port, const string& path, short& httpReturnCode, const string& agent /* = "empty"*/, const bool& returnBodyOnly /* = false*/) {
 		ESP_LOGD(LOGTAG, "[DEBUG] HttpInsecureGet called to http://%s:%d%s\n", host.c_str(), port, path.c_str());

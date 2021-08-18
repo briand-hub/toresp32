@@ -102,11 +102,17 @@ namespace Briand {
          * This method returns a valid circuit to perform requests
          * @return Raw pointer to the circuit (BE CAREFUL!!), nullptr if no circuits available
         */
-       BriandTorCircuit* GetCircuit();
+        BriandTorCircuit* GetCircuit();
 
-       /**
-        * Prints out the current circuits situation
-       */
-       void PrintCircuitsInfo();
+        /**
+         * Method returns true if is started
+         * @return status
+        */
+        bool IsStarted();
+
+        /**
+            * Prints out the current circuits situation
+        */
+        void PrintCircuitsInfo();
     };
 }
