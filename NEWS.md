@@ -31,6 +31,7 @@
 * Added settings TOR_MUST_HAVE_PORTS in order to select only the exit nodes that accepts connections to the listed ports. This leds to download full consensus!
 * Added command to change proxy port
 * Removed all old Onionoo commented implementations
+* Reset cache size to 100 nodes, too much time required when exit port filtering is needed!
 
 ## 2021-08-17
 

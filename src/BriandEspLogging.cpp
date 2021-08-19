@@ -26,40 +26,20 @@
 
         // Define esp_log_level_get like the latest version, this is a trick
 
-        typedef struct _briandLogTrick {
-            const char* tag;
-            esp_log_level_t level;
-        } briandLogTrick;
+        #include <map>
 
-        briandLogTrick CURRENT_LOG_LEVEL[64];
-        unsigned char CURRENT_LOG_LEVEL_NEXT = 0;
+        // Use an efficient map!
+        map<const char*, esp_log_level_t> BRIAND_LOG_LEVEL_MAP;
 
         void BRIAND_SET_LOG(const char* tag, esp_log_level_t newLevel) { 
-            bool found = false;
-            for (unsigned char i = 0; i <= CURRENT_LOG_LEVEL_NEXT && !found; i++) {
-                if (tag != NULL && CURRENT_LOG_LEVEL[i].tag != NULL && strcmp(CURRENT_LOG_LEVEL[i].tag, tag) == 0) {
-                    CURRENT_LOG_LEVEL[i].level = newLevel;
-                    found = true;
-                }
-            }
-
-            if (!found) {
-                CURRENT_LOG_LEVEL[CURRENT_LOG_LEVEL_NEXT].tag = tag;
-                CURRENT_LOG_LEVEL[CURRENT_LOG_LEVEL_NEXT].level = newLevel;
-                if (CURRENT_LOG_LEVEL_NEXT + 1 < 64) CURRENT_LOG_LEVEL_NEXT++;
-            }
-
+            BRIAND_LOG_LEVEL_MAP[tag] = newLevel;
             esp_log_level_set(tag, newLevel);
         }
         
         esp_log_level_t esp_log_level_get(const char* tag) { 
-            for (unsigned char i = 0; i <= CURRENT_LOG_LEVEL_NEXT; i++) {
-                if (tag != NULL && CURRENT_LOG_LEVEL[i].tag != NULL && strcmp(CURRENT_LOG_LEVEL[i].tag, tag) == 0) {
-                    return CURRENT_LOG_LEVEL[i].level;
-                }
-            }
-
-            return ESP_LOG_NONE; 
+            auto it = BRIAND_LOG_LEVEL_MAP.find(tag);
+            if (it == BRIAND_LOG_LEVEL_MAP.end()) BRIAND_LOG_LEVEL_MAP[tag] = ESP_LOG_NONE;
+            return BRIAND_LOG_LEVEL_MAP[tag]; 
         }
 
     #endif
@@ -68,7 +48,7 @@
 
     void BRIAND_SET_LOG(const char* tag, esp_log_level_t newLevel) { 
         // There is the base function
-        esp_log_level_set("*", newLevel);
+        esp_log_level_set(tag, newLevel);
     }
 
 #else
