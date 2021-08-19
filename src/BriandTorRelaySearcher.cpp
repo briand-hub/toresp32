@@ -511,7 +511,6 @@ namespace Briand {
 	bool BriandTorRelaySearcher::IsPortListed(const unsigned short& port, const string& portList) {
 		size_t posStart = 0;
 		size_t posEnd = 0;
-		cout << "list is: " << portList << endl;
 		while (posStart < portList.size()) {
 			posEnd = portList.find(',', posStart);
 			
@@ -522,7 +521,6 @@ namespace Briand {
 			
 			if (posEnd != string::npos) {
 				string temp = portList.substr(posStart, posEnd-posStart);
-				cout << "temp = " << temp;
 				
 				size_t rangeSepPos = temp.find("-");
 				if (rangeSepPos == string::npos) {
@@ -542,14 +540,12 @@ namespace Briand {
 						min = max;
 						max = swap;
 					}
-					cout << " translated to min=" << min << " max = " << max;
+
 					if (port >= min && port <= max) {
 						return true;
 					}
 				}
-				
-				cout << endl;
-				
+								
 				posStart = posEnd + 1;
 			}
 		}

@@ -152,7 +152,7 @@
 
 
         /* Re-define project-specific IDF functions */
-        void BRIAND_SET_LOG(esp_log_level_t newLevel);
+        void BRIAND_SET_LOG(const char*, esp_log_level_t);
         typedef mbedtls_aes_context esp_aes_context;
         #define esp_aes_init mbedtls_aes_init
         #define esp_aes_free mbedtls_aes_free

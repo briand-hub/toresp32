@@ -66,13 +66,13 @@
 
 #elif defined(__linux__)
 
-    void BRIAND_SET_LOG(esp_log_level_t newLevel) { 
+    void BRIAND_SET_LOG(const char* tag, esp_log_level_t newLevel) { 
         // There is the base function
         esp_log_level_set("*", newLevel);
     }
 
 #else
 
-    constexpr void BRIAND_SET_LOG(esp_log_level_t newLevel) { /* do nothing */ };
+    constexpr void BRIAND_SET_LOG(const char* tag, esp_log_level_t newLevel) { /* do nothing */ };
 
 #endif /* defined(ESP_PLATFORM) */
