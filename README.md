@@ -5,7 +5,14 @@ Briand's project to turn an ESP32 into a Tor client "plug&amp;play"
 
 For details check always [NEWS FILE](NEWS.md)
 
-* Working to a faster/better proxy (version 1.1.0)
+* Working to version 1.1.0, new features: 
+	* consensus for cache (no more microdescriptors)
+	* exit policy check with default ports
+	* faster proxy with async and parallel read/write
+	* 8 ready circuits
+	* better performances
+	* less memory used
+	* better log output
 
 **FIRST RELEASE AVAILABLE [go to release](https://github.com/briand-hub/toresp32/releases/tag/v1.0.0)**
 

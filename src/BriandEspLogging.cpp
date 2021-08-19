@@ -26,16 +26,42 @@
 
         // Define esp_log_level_get like the latest version, this is a trick
 
-        esp_log_level_t CURRENT_LOG_LEVEL = ESP_LOG_WARN;
-        
-        void BRIAND_SET_LOG(esp_log_level_t newLevel) { 
-            CURRENT_LOG_LEVEL = newLevel; 
-            esp_log_level_set(LOGTAG, newLevel);
+        typedef struct _briandLogTrick {
+            const char* tag;
+            esp_log_level_t level;
+        } briandLogTrick;
+
+        briandLogTrick CURRENT_LOG_LEVEL[64];
+        unsigned char CURRENT_LOG_LEVEL_NEXT = 0;
+
+        void BRIAND_SET_LOG(const char* tag, esp_log_level_t newLevel) { 
+            bool found = false;
+            for (unsigned char i = 0; i <= CURRENT_LOG_LEVEL_NEXT && !found; i++) {
+                if (tag != NULL && CURRENT_LOG_LEVEL[i].tag != NULL && strcmp(CURRENT_LOG_LEVEL[i].tag, tag) == 0) {
+                    CURRENT_LOG_LEVEL[i].level = newLevel;
+                    found = true;
+                }
+            }
+
+            if (!found) {
+                CURRENT_LOG_LEVEL[CURRENT_LOG_LEVEL_NEXT].tag = tag;
+                CURRENT_LOG_LEVEL[CURRENT_LOG_LEVEL_NEXT].level = newLevel;
+                if (CURRENT_LOG_LEVEL_NEXT + 1 < 64) CURRENT_LOG_LEVEL_NEXT++;
+            }
+
+            esp_log_level_set(tag, newLevel);
         }
         
-        esp_log_level_t esp_log_level_get(const char* logTag) { 
-            return CURRENT_LOG_LEVEL; 
+        esp_log_level_t esp_log_level_get(const char* tag) { 
+            for (unsigned char i = 0; i <= CURRENT_LOG_LEVEL_NEXT; i++) {
+                if (tag != NULL && CURRENT_LOG_LEVEL[i].tag != NULL && strcmp(CURRENT_LOG_LEVEL[i].tag, tag) == 0) {
+                    return CURRENT_LOG_LEVEL[i].level;
+                }
+            }
+
+            return ESP_LOG_NONE; 
         }
+
     #endif
 
 #elif defined(__linux__)

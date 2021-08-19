@@ -66,8 +66,7 @@ namespace Briand {
 		virtual void randomize();
 		
 		/**
-		 * Method refreshed node cache by downloading a new consensus.
-		 * At the moment using MICRODESCRIPTORS (ESP32 has low performances)
+		 * Method refreshed node cache by downloading a fresh consensus.
 		*/
 		virtual void RefreshNodesCache();
 
@@ -85,7 +84,16 @@ namespace Briand {
 		*/
 		virtual bool IPsInSameFamily(const string& first, const string& second);
 
+		/**
+		 * Method check if a port is listed inside a list of ports.
+		 * @param port The port
+		 * @param portList A list containing a set of ports separated by comma, includes ranges: 22,80-81,443,1-20,9090
+		*/
+		virtual bool IsPortListed(const unsigned short& port, const string& portList);
+
 		public:
+
+		static const char* LOGTAG;
 
 		BriandTorRelaySearcher();
 

@@ -70,6 +70,8 @@ namespace Briand {
 
         public:
 
+        static const char* LOGTAG;
+
         /** Constructor */
         BriandTorCircuitsManager();
 

@@ -26,6 +26,8 @@ using namespace std;
 
 namespace Briand
 {
+	const char* BriandUtils::LOGTAG = "briandutils";
+
 	unsigned char BriandUtils::GetRandomByte() {
 		
 		// NOT working in ESP:
@@ -330,7 +332,7 @@ namespace Briand
 
 	unique_ptr<vector<unsigned char>> BriandUtils::HexStringToVector(const string& hexstring, const string& preNonHex) {
 		auto v = make_unique<vector<unsigned char>>();
-		v->reserve(hexstring.size() + preNonHex.size()); // reserve some bytes
+		//v->reserve(hexstring.size() + preNonHex.size()); // reserve some bytes
 
 		if (hexstring.length() % 2 != 0)
 			return std::move(v);

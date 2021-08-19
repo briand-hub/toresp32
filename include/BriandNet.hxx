@@ -30,6 +30,8 @@ namespace Briand
 	class BriandNet {
 		public:
 
+		static const char* LOGTAG;
+
 		/**
 		 * Method to convert a string to a vector<unsigned char> pointer
 		 * @param input pointer to input string

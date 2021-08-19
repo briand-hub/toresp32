@@ -73,6 +73,8 @@ namespace Briand {
 
 		public:
 
+		static const char* LOGTAG;
+
 		/* Apr 2021: The longest allowable cell payload, in bytes. (509) */
 		static const short PAYLOAD_LEN = 509; 
 

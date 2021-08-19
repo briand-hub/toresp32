@@ -2,26 +2,33 @@
 
 ## Next steps
 
-* Should keep static buffer on TorProxy writer/reader and the previous "// reserve some bytes" ?
 * Consider switch to nonblocking cache file read
 * Consider error management short/int for method errors (mbedtls style)
 * Implement a vector of nodes.
 * Authenticate cell? => Prepare stub method to authenticate client
 
-## 
+## 2021-08-18
 
 * Solved the BIIIIIIIG bug in the while() that was causing heap paaaaaaaain :/ left the set parameters in previous news. Reset the previously commented "// reserve some bytes"
 
   * Start-up free heap ~285KB (now moved BEFORE CircuitsManager startup)
   * With 5 built circuits, not connected to, AP, no proxy used: HEAP FREE: 124628 / 369256 bytes. MAX FREE 213564 MIN FREE 124072 LARGEST FREE BLOCK: 65536
   * With 5 circuits built, connected to AP, no proxy used: HEAP FREE: 121316 / 369256 bytes. MAX FREE 213564 MIN FREE 119620 LARGEST FREE BLOCK: 65536
-  * With 5 circuits built, connected to AP, proxy in use with curl: HEAP FREE: 103508 / 369256 bytes. MAX FREE 213564 MIN FREE 101624 LARGEST FREE BLOCK: 65536
-  * With 5 circuits built, connected to AP, proxy in use with firefox: HEAP FREE: 86784 / 369256 bytes. MAX FREE 213564 MIN FREE 77912 LARGEST FREE BLOCK: 65536
+  * With 5 circuits built, connected to AP, proxy after use with curl: HEAP FREE: 103508 / 369256 bytes. MAX FREE 213564 MIN FREE 101624 LARGEST FREE BLOCK: 65536
+  * With 5 circuits built, connected to AP, proxy after use with firefox: HEAP FREE: 
 
-* Swtiched now to 6 circuits and 6 operating at same time (reset the QUEUE length to 100% causes crash)
-    * With 6 circuits built, connected to AP, proxy in use with firefox/https: HEAP FREE: 77500 / 369256 bytes. MAX FREE 213564 MIN FREE 59468 LARGEST FREE BLOCK: 32768
+* Swtiched now to 6 circuits (reset the QUEUE length to 100% causes crash but parameters were fine)
+* New loglevel command for any tag, "log TAG N/E/", each object has its own now in order to limit output.
+* Removed previous byte reservations for vector<> and changed back to dynamic buffers and structs.
+* Testing with 8 circuits and cache increased to 255 nodes (~60KB files), but needed to change Wi-Fi dynamic buffers to 64 to avoid AP disconnections (with 40 disconnects when using proxy)
 
-
+  * Start-up free heap still ~285KB 
+  * With 8 built circuits, not connected to, AP, no proxy used: HEAP FREE: 89708 / 368696 bytes. MAX FREE 213128 MIN FREE 83076 LARGEST FREE BLOCK: 65536
+  * With 8 circuits built, connected to AP, no proxy used: HEAP FREE: 67584 / 368696 bytes. MAX FREE 213128 MIN FREE 62532 LARGEST FREE BLOCK: 16384
+  * With 8 circuits built, connected to AP, proxy after use with curl: HEAP FREE: 108384 / 368696 bytes. MAX FREE 213128 MIN FREE 62532 LARGEST FREE BLOCK: 65536
+  * With 8 circuits built, connected to AP, proxy after use with firefox: HEAP FREE: 87740 / 368696 bytes. MAX FREE 213128 MIN FREE 42680 LARGEST FREE BLOCK: 32768
+* New cache size of 255 nodes does not increase so much spiffs usage and makes things more reliable in relay searching
+* Added settings TOR_MUST_HAVE_PORTS in order to select only the exit nodes that accepts connections to the listed ports. This leds to download full consensus!
 
 ## 2021-08-17
 
@@ -60,13 +67,13 @@
 
   *TESTING WITH NORMAL CPU SPEED 160 vs 240 to check if crashes are related to this*
 
-  *Component config -> Wi-Fi -> Max Number of Wifi static RX buffers = 16*
+  *Component config -> Wi-Fi -> Max Number of Wifi static RX buffers = 16 (16 fine with 6 circuits keep-alive)*
 
-  *Component config -> Wi-Fi -> Max Number of Wifi dynamic RX buffers = 32*
+  *Component config -> Wi-Fi -> Max Number of Wifi dynamic RX buffers = 32 (32 fine with 6 circuits keep-alive)*
 
   *Component config -> Wi-Fi -> Type of WiFi TX buffers = Dynamic (Static) //this setting could not be changed from Static if PSRAM enabled*
 
-  *Component config -> Wi-Fi -> Max Number of Wifi dynamic TX buffers = 32*
+  *Component config -> Wi-Fi -> Max Number of Wifi dynamic/static TX buffers = 32 (32 fine with 6 circuits keep-alive)*
 
   *Component config -> Wi-Fi -> DISABLED WiFi AMPDU TX // for connet-to-ap issues*
 

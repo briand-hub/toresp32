@@ -29,6 +29,8 @@ namespace Briand
 	class BriandUtils {
 		public:
 
+		static const char* LOGTAG;
+
 		/**
 		 * Get a random byte based on ESP32 hw
 		 * @return Random byte

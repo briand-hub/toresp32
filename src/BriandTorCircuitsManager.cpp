@@ -23,6 +23,8 @@ using namespace std;
 
 namespace Briand
 {
+    const char* BriandTorCircuitsManager::LOGTAG = "briandcircmgr";
+
     unique_ptr<unique_ptr<BriandTorCircuit>[]> BriandTorCircuitsManager::CIRCUITS = nullptr;
     unsigned short BriandTorCircuitsManager::CIRCUIT_POOL_SIZE = 3;
     unsigned short BriandTorCircuitsManager::CIRCUIT_MAX_TIME = 900;

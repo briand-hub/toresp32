@@ -24,6 +24,8 @@ using namespace std;
 
 namespace Briand
 {
+    const char* BriandTorSocks5Proxy::LOGTAG = "briandproxy";
+
     BriandTorCircuitsManager* BriandTorSocks5Proxy::torCircuits = nullptr;
     string BriandTorSocks5Proxy::proxyUser = "";
     string BriandTorSocks5Proxy::proxyPassword = "";
@@ -198,9 +200,7 @@ namespace Briand
 
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy HandleClient with clientSock = %d\n", clientSock);
 
-                //auto recBuf = make_unique<unsigned char[]>(258);
-                // Moved to static
-                unsigned char recBuf[514];
+                auto recBuf = make_unique<unsigned char[]>(258);
 
                 ssize_t len;
 
@@ -208,11 +208,11 @@ namespace Briand
                 // ver |len | methods
                 // 0x05|0xNN| NN times methods (max 255)
 
-                len = recv(clientSock, recBuf, 257, 0);
+                len = recv(clientSock, recBuf.get(), 257, 0);
 
                 if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
                     printf("[DEBUG] SOCKS5 Proxy (methods) received %d bytes: ", len);
-                    BriandUtils::PrintOldStyleByteBuffer(recBuf, len);
+                    BriandUtils::PrintOldStyleByteBuffer(recBuf.get(), len);
                 }
 
                 if (len <= 0) {
@@ -290,10 +290,8 @@ namespace Briand
                     // The client sends an auth request contaning
                     // [version:0x05] [ulen (1byte)] [uname (1-255 bytes)] [plen (1byte)] [passwd (1-255 bytes)]
                     // MAX buffer of 513/514 bytes
-                    // Moved to static
-                    // recBuf = make_unique<unsigned char[]>(514);
-                    bzero(recBuf, 514);
-                    len = recv(clientSock, recBuf, 513, 0);
+                    recBuf = make_unique<unsigned char[]>(514);
+                    len = recv(clientSock, recBuf.get(), 513, 0);
 
                     if (len < 5) {
                         ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy methods receiving error: less than 5 bytes. Closing connection.\n");
@@ -354,13 +352,12 @@ namespace Briand
 
                 // At this point client sends a request to connect
 
-                // Moved to static
-                //recBuf = make_unique<unsigned char[]>(32);  // request could be max 22 bytes long
-                len = recv(clientSock, recBuf, 32, 0);
+                recBuf = make_unique<unsigned char[]>(32);  // request could be max 22 bytes long
+                len = recv(clientSock, recBuf.get(), 32, 0);
 
                 if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
                     printf("[DEBUG] SOCKS5 Proxy connect request received %d bytes: ", len);
-                    BriandUtils::PrintOldStyleByteBuffer(recBuf, len);
+                    BriandUtils::PrintOldStyleByteBuffer(recBuf.get(), len);
                 }
 
                 if (len < 10) {
@@ -578,7 +575,7 @@ namespace Briand
             };
 
             auto buffer = make_unique<vector<unsigned char>>(); 
-            buffer->reserve(514); // reserve some bytes
+            //buffer->reserve(514); // reserve some bytes
 
             // Read from TOR and save the finish status (RELAY_END) on the parameters
             bool torStreamOk = params->circuit->TorStreamRead(buffer, params->writerFinished, TOR_SOCKS5_PROXY_TIMEOUT_S);
@@ -684,10 +681,8 @@ namespace Briand
             }
             else if (FD_ISSET(params->clientSocket, &filter)) {
                 // Client ready to be read
-                // Moved to static
-                //auto buffer = make_unique<unsigned char[]>(MAX_FREE_PAYLOAD);
-                unsigned char buffer[MAX_FREE_PAYLOAD];
-                ssize_t len = recv(params->clientSocket, buffer, MAX_FREE_PAYLOAD, 0);
+                auto buffer = make_unique<unsigned char[]>(MAX_FREE_PAYLOAD);
+                ssize_t len = recv(params->clientSocket, buffer.get(), MAX_FREE_PAYLOAD, 0);
 
                 // If select() succeded but len is 0 then client is disconnected!
                 if (len == 0) {
@@ -706,11 +701,12 @@ namespace Briand
                 else {
                     bool torStreamOk = true;
                     auto sendBuf = make_unique<vector<unsigned char>>();
-                    sendBuf->reserve(514); // reserve some bytes
-                    sendBuf->insert(sendBuf->begin(), buffer, buffer + len);
+                    //sendBuf->reserve(514); // reserve some bytes
+                    sendBuf->insert(sendBuf->begin(), buffer.get(), buffer.get() + len);
                     params->circuit->TorStreamSend(sendBuf, torStreamOk);
-                    // Reset now the buffer, this avoids exceptions when task is deleted
+                    // Reset now the buffers
                     sendBuf.reset();
+                    buffer.reset();
 
                     if (!torStreamOk) {
                         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader TOR Stream error! Exiting.\n");
@@ -765,7 +761,7 @@ namespace Briand
         unique_ptr<vector<unsigned char>> wBuf, rBuf;
         
         wBuf= make_unique<vector<unsigned char>>();
-        wBuf->reserve(512); // reserve some bytes
+        //wBuf->reserve(512); // reserve some bytes
 
         // request v5 with 1 method (0x00 => no auth)
         wBuf->push_back(0x05); wBuf->push_back(0x01); wBuf->push_back(0x00);

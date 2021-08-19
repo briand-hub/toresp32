@@ -27,6 +27,8 @@ namespace Briand {
 	class BriandTorCryptoUtils {
 		public:
 
+		static const char* LOGTAG;
+
 		/**
 		 * Method perform SHA256 digest on the input bytes.
 		 * @param input input bytes

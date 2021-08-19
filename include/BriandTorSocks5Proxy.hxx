@@ -129,6 +129,8 @@ namespace Briand
 
         public:
 
+        static const char* LOGTAG;
+
         BriandTorSocks5Proxy();
         ~BriandTorSocks5Proxy();
 

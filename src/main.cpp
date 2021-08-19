@@ -105,8 +105,8 @@ void TorEsp32Setup() {
 	printf("[INFO] Setting ESP default log level to none...\n");
 	esp_log_level_set("*", ESP_LOG_NONE);
 	printf("[INFO] Setting the TorEsp32 default log level to error...\n");
-	esp_log_level_set(LOGTAG, ESP_LOG_ERROR);
-	BRIAND_SET_LOG(ESP_LOG_ERROR);
+	esp_log_level_set("toresp32", ESP_LOG_ERROR);
+	BRIAND_SET_LOG("toresp32", ESP_LOG_ERROR);
 
 	// Initialize the NVS
 	printf("[INFO] Initializing NVS...");
@@ -348,14 +348,14 @@ void TorEsp32Main(void* taskArg) {
 		}
 		else if (nextStep == 4) {
 			// Got Essid, ask for password
-			ESP_LOGD(LOGTAG, "  >Entered: %s\n", STA_ESSID->c_str());
+			ESP_LOGD("toresp32", "  >Entered: %s\n", STA_ESSID->c_str());
 			printf("Connect to WiFi - PASSWORD: ");
 			nextStep = 5;
 			startSerialRead(STA_PASSW.get());
 		}
 		else if (nextStep == 5) {
 			// Got Password, connect
-			ESP_LOGD(LOGTAG, "  >Entered: %s\n", STA_PASSW->c_str());
+			ESP_LOGD("toresp32", "  >Entered: %s\n", STA_PASSW->c_str());
 			nextStep = 6;
 		}
 		else if (nextStep == 6) {
@@ -363,7 +363,7 @@ void TorEsp32Main(void* taskArg) {
 			printf("[INFO] Connecting to %s ...", STA_ESSID->c_str());
 
 			if (!WiFi->ConnectStation(*STA_ESSID.get(), *STA_PASSW.get(), WIFI_CONNECTION_TIMEOUT, *STA_HOSTNAME.get(), CHANGE_MAC_TO_RANDOM)) {
-				ESP_LOGE(LOGTAG, "\n\n[ERR] WIFI CONNECTION ERROR/TIMEOUT. SYSTEM WILL RESTART IN 5 SECONDS!\n");
+				ESP_LOGE("toresp32", "\n\n[ERR] WIFI CONNECTION ERROR/TIMEOUT. SYSTEM WILL RESTART IN 5 SECONDS!\n");
 				vTaskDelay(5000 / portTICK_PERIOD_MS);
 				reboot();
 			}
@@ -421,7 +421,7 @@ void TorEsp32Main(void* taskArg) {
 				WiFi->SetApIPv4(10, 0, 0, 1);
 			}
 			else {
-				ESP_LOGE(LOGTAG, "[ERR] Error on AP init! Only serial communication is enabled.\n");
+				ESP_LOGE("toresp32", "[ERR] Error on AP init! Only serial communication is enabled.\n");
 			}
 
 			// Proceed to next step
@@ -541,7 +541,7 @@ void syncTimeWithNTP() {
 	sntp_setservername(0, NTP_SERVER);
 	sntp_init();
 
-	ESP_LOGI(LOGTAG, "[INFO] SNTP Time sync in progress...");
+	ESP_LOGI("toresp32", "[INFO] SNTP Time sync in progress...");
 
 	// Wait until timeout or success
 	int maxTentatives = 60; // = 30 seconds
@@ -550,8 +550,8 @@ void syncTimeWithNTP() {
 		vTaskDelay(500/portTICK_PERIOD_MS);
 	}
 
-	if (maxTentatives > 0) ESP_LOGI(LOGTAG, "done.\n");
-	if (maxTentatives <= 0) ESP_LOGI(LOGTAG, "FAILED.\n");
+	if (maxTentatives > 0) ESP_LOGI("toresp32", "done.\n");
+	if (maxTentatives <= 0) ESP_LOGI("toresp32", "FAILED.\n");
 
 	printLocalTime();
 }
@@ -597,8 +597,6 @@ void executeCommand(string& cmd) {
 		printf("meminfo : display short memory information.\n");
 		printf("netinfo : display network STA/AP interfaces information.\n");
 		printf("taskinfo : shows running tasks details.\n");
-		printf("wifilog on : outputs all wifi logs.\n");
-		printf("wifilog off : stop output of all wifi logs.\n");
 		printf("staoff : disconnect STA.\n");
 		printf("staon : connect/reconnect STA.\n");
 		printf("stareconnect [on|off] : autoreconnect/do not autoreconnect STA.\n");
@@ -606,12 +604,11 @@ void executeCommand(string& cmd) {
 		printf("apon : turn on AP interface (will keep intact essid/password).\n");
 		printf("apnew : turn on AP interface (will CHANGE essid/password).\n");
         printf("synctime : sync localtime time with NTP.\n");
-		printf("loglevel [N/E/W/I/D/V] : Sets the log level, from lower to highest: None/Error/Warning/Info/Debug/Verbose.\n");
-		printf("syslog on : outputs all system logs (keeps the software debugging log to current level set with loglevel command).\n");
-		printf("syslog off : stop output all system logs (keeps the software debugging log to current level set with loglevel command).\n");
+		printf("log [TAG] [N/E/W/I/D/V] : Sets the log level of specified tag,  type help log for details.\n");
+		printf("help log : Show details about log command.\n");
 		printf("reboot : restart device.\n");
 
-		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
+		if (esp_log_level_get("toresp32") == ESP_LOG_DEBUG) {
 			printf("TESTING (active in DEBUG)---------------------------------------------------------\n");
 			printf("search-guard : if DEBUG active, search and display info for a guard node.\n");
 			printf("search-exit : if DEBUG active, search and display info for an exit node.\n");
@@ -638,6 +635,60 @@ void executeCommand(string& cmd) {
     else if (cmd.compare("synctime") == 0) {
         syncTimeWithNTP();
     }
+	else if(cmd.compare("help log") == 0) {
+		printf("This command sets the ESP logging function to desidered level for the specified tag.\n");
+		printf("type: log [TAG] [LEVEL]\n");
+		printf("[LEVEL] could be one of: [N]one, [E]rror, [W]arning, [I]nfo, [D]ebug, [V]erbose.\n");
+		printf("example: <log wifi V> sets the WiFi log level to Verbose\n");
+		printf("[TAG] could be one of the default ESP log tags or one of this system:\n");
+		printf("TorEsp32 tags are:\n");
+		printf("\t toresp32 : main loop.\n");
+		printf("\t briandnet : the networking helper.\n");
+		printf("\t briandcell : the cell component.\n");
+		printf("\t briandcert : the certificate helper.\n");
+		printf("\t briandcircuit : the circuit component.\n");
+		printf("\t briandcircmgr : the circuits manager component.\n");
+		printf("\t briandcrypto : the cryptographics helper.\n");
+		printf("\t briandrelay : the relay component.\n");
+		printf("\t briandsearch : the relay searcher component.\n");
+		printf("\t briandproxy : the proxy component.\n");
+		printf("\t briandutils : the misc utilities helper.\n");
+		printf("Some of the ESP system tags are: wifi, wifi_init, esp_netif_handler, phy, system_api, tcpip_adapter, esp_netif_lwip, device, dhcpc ...\n");
+		printf("\t Using tag wildcard * sets ALL the logs to the level specified.\n");
+		printf("WARNING: setting high log level could cause unexpected crashes due to limited stack sizes and printf's high use of stack!!\n");
+	}
+	else if (cmd.length() > 3 && cmd.substr(0,4).compare("log ") == 0) {
+		cmd.erase(0, 4);
+		auto lPos = cmd.find(' ');
+		if (lPos == string::npos) printf("Wrong format for command. Type help log.\n");
+		const char* tag = cmd.substr(0, lPos).c_str();
+		cmd.erase(0, lPos+1);
+		if (cmd.compare("N") == 0) {
+			esp_log_level_set(tag, ESP_LOG_NONE);
+			BRIAND_SET_LOG(tag, ESP_LOG_NONE);
+		} 
+		else if (cmd.compare("E") == 0) {
+			esp_log_level_set(tag, ESP_LOG_ERROR);
+			BRIAND_SET_LOG(tag, ESP_LOG_ERROR);
+		} 
+		else if (cmd.compare("W") == 0) {
+			esp_log_level_set(tag, ESP_LOG_WARN);
+			BRIAND_SET_LOG(tag, ESP_LOG_WARN);
+		} 
+		else if (cmd.compare("I") == 0) {
+			esp_log_level_set(tag, ESP_LOG_INFO);
+			BRIAND_SET_LOG(tag, ESP_LOG_INFO);
+		} 
+		else if (cmd.compare("D") == 0) {
+			esp_log_level_set(tag, ESP_LOG_DEBUG);
+			BRIAND_SET_LOG(tag, ESP_LOG_DEBUG);
+		} 
+		else if (cmd.compare("V") == 0) {
+			esp_log_level_set(tag, ESP_LOG_VERBOSE);
+			BRIAND_SET_LOG(tag, ESP_LOG_VERBOSE);
+		} 
+		else printf("Wrong format for command. Type help log.\n");
+	}
     else if (cmd.compare("devinfo") == 0) {
         printf("CPU Frequency: %luMHz\n", Briand::BriandESPDevice::GetCpuFreqMHz());
         printf("Heap size: %lu bytes\n", Briand::BriandESPDevice::GetHeapSize());
@@ -670,55 +721,6 @@ void executeCommand(string& cmd) {
 	else if (cmd.compare("taskinfo") == 0) {
         auto tinfo = Briand::BriandESPDevice::GetSystemTaskInfo();
 		printf("%s\n", tinfo->c_str());
-    }
-	else if (cmd.compare("wifilog on") == 0) {
-        WiFi->SetVerbose(true, false);
-		printf("WIFI log enabled.\n");
-    }
-	else if (cmd.compare("wifilog off") == 0) {
-        auto tinfo = Briand::BriandESPDevice::GetSystemTaskInfo();
-		WiFi->SetVerbose(false, true);
-		printf("WIFI log disabled.\n");
-    }
-	else if (cmd.compare("loglevel N") == 0) {
-		esp_log_level_set(LOGTAG, ESP_LOG_NONE);
-		BRIAND_SET_LOG(ESP_LOG_NONE);
-		printf("Log level set to NONE\n");
-	}
-	else if (cmd.compare("loglevel E") == 0) {
-		esp_log_level_set(LOGTAG, ESP_LOG_ERROR);
-		BRIAND_SET_LOG(ESP_LOG_ERROR);
-		printf("Log level set to ERROR\n");
-	}
-	else if (cmd.compare("loglevel W") == 0) {
-		esp_log_level_set(LOGTAG, ESP_LOG_WARN);
-		BRIAND_SET_LOG(ESP_LOG_WARN);
-		printf("Log level set to WARNING\n");
-	}
-	else if (cmd.compare("loglevel I") == 0) {
-		esp_log_level_set(LOGTAG, ESP_LOG_INFO);
-		BRIAND_SET_LOG(ESP_LOG_INFO);
-		printf("Log level set to INFO\n");
-	}
-	else if (cmd.compare("loglevel D") == 0) {
-		esp_log_level_set(LOGTAG, ESP_LOG_DEBUG);
-		BRIAND_SET_LOG(ESP_LOG_DEBUG);
-		printf("Log level set to DEBUG\n");
-	}
-	else if (cmd.compare("loglevel V") == 0) {
-		esp_log_level_set(LOGTAG, ESP_LOG_VERBOSE);
-		BRIAND_SET_LOG(ESP_LOG_VERBOSE);
-		printf("Log level set to VERBOSE\n");
-	}
-	else if (cmd.compare("syslog on") == 0) {
-        esp_log_level_set("*", ESP_LOG_INFO);
-		esp_log_level_set(LOGTAG, esp_log_level_get(LOGTAG));
-		printf("ESP System logs enabled.\n");
-    }
-	else if (cmd.compare("syslog off") == 0) {
-        esp_log_level_set("*", ESP_LOG_NONE);
-		esp_log_level_set(LOGTAG, esp_log_level_get(LOGTAG));
-		printf("ESP System logs disabled.\n");
     }
 	else if (cmd.compare("reboot") == 0)  {
         printf("Device will reboot now.\n");
@@ -761,7 +763,7 @@ void executeCommand(string& cmd) {
 			printf("[ERR] Error on AP init! Only serial communication is enabled.\n");
 		}
     }
-	else if (cmd.compare("search-guard") == 0 && (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG))  {
+	else if (cmd.compare("search-guard") == 0 && (esp_log_level_get("toresp32") == ESP_LOG_DEBUG))  {
 		auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
 		auto relay = relaySearcher->GetGuardRelay();
         
@@ -772,7 +774,7 @@ void executeCommand(string& cmd) {
 
         relay->PrintRelayInfo();
     }
-	else if (cmd.compare("search-exit") == 0 && (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG))  {
+	else if (cmd.compare("search-exit") == 0 && (esp_log_level_get("toresp32") == ESP_LOG_DEBUG))  {
 		auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
 		auto relay = relaySearcher->GetExitRelay("", "");
         
@@ -783,7 +785,7 @@ void executeCommand(string& cmd) {
         
         relay->PrintRelayInfo();
     }
-	else if (cmd.compare("search-middle") == 0 && (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG))  {
+	else if (cmd.compare("search-middle") == 0 && (esp_log_level_get("toresp32") == ESP_LOG_DEBUG))  {
 		auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
 		auto relay = relaySearcher->GetMiddleRelay("");
 		
@@ -794,7 +796,7 @@ void executeCommand(string& cmd) {
 
         relay->PrintRelayInfo();
     }
-	else if (cmd.compare("testcircuit") == 0 && (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG))  {
+	else if (cmd.compare("testcircuit") == 0 && (esp_log_level_get("toresp32") == ESP_LOG_DEBUG))  {
 		auto tempCircuit = make_unique<Briand::BriandTorCircuit>();
 		
 		if (tempCircuit->BuildCircuit()) {
@@ -805,7 +807,7 @@ void executeCommand(string& cmd) {
 		else 
 			printf("FAILED to build a circuit.\n");
     }
-	else if (cmd.compare("heapcircuit") == 0 && (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG))  {
+	else if (cmd.compare("heapcircuit") == 0 && (esp_log_level_get("toresp32") == ESP_LOG_DEBUG))  {
 		if (CIRCUITS_MANAGER == nullptr) {
 			printf("Error, circuit manager not instanced.\n");
 		}
@@ -931,10 +933,10 @@ void checkStaHealth(void* param) {
 					//WiFi->DisconnectStation(); // do not use this, will stuck in infinite loop.
 					auto err = esp_wifi_connect();
 					if (err != ESP_OK) {
-						ESP_LOGE(LOGTAG, "[ERR] WiFi Re-connect failed, error %d\n", err);
+						ESP_LOGE("toresp32", "[ERR] WiFi Re-connect failed, error %d\n", err);
 					}
 					else {
-						ESP_LOGD(LOGTAG, "[DEBUG] WiFi Re-connect success.\n");
+						ESP_LOGD("toresp32", "[DEBUG] WiFi Re-connect success.\n");
 					}
 				}
 			}

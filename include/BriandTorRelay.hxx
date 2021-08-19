@@ -33,6 +33,8 @@ namespace Briand {
 
 		public:
 
+		static const char* LOGTAG;
+
 		unique_ptr<string> nickname;
 		//unique_ptr<string> first_address;
 		unique_ptr<string> address;

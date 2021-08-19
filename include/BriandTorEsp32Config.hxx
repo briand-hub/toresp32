@@ -41,6 +41,8 @@ namespace Briand
 
 		public:
 
+		static const char* LOGTAG;
+
 		unique_ptr<unsigned char[]> Encrypt(const string& input) {
 			constexpr unsigned short BLOCK_SIZE_BYTES = 16;
 			
@@ -221,4 +223,6 @@ namespace Briand
 			std::remove(TORESP32_CONFIG_FILE_NAME);
 		}
 	};
+
+	const char* BriandTorEsp32Config::LOGTAG = "briandconfig";
 }

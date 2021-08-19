@@ -24,6 +24,8 @@ using namespace std;
 
 namespace Briand {
 
+	const char* BriandTorCell::LOGTAG = "briandcell";
+
 	void BriandTorCell::PadPayload() {
 		/* 
 			April 2021
@@ -415,7 +417,7 @@ namespace Briand {
 			}
 
 			auto edBuf = make_unique<vector<unsigned char>>(); // temp buffer in case of ed25519 certs (must be built on contructor)
-			edBuf->reserve(MAX_CELL_SIZE); // reserve some bytes
+			//edBuf->reserve(MAX_CELL_SIZE); // reserve some bytes
 
 			switch (certType) {
 				case 0x01:
@@ -703,7 +705,7 @@ namespace Briand {
 
 		// header to prepend
 		auto extend2Header = make_unique<vector<unsigned char>>();
-		extend2Header->reserve(256); // reserve some bytes
+		//extend2Header->reserve(256); // reserve some bytes
 
 		// No. of link specifier 
 		extend2Header->push_back(0x02);
@@ -787,7 +789,7 @@ namespace Briand {
 		this->Digest = 0x00000000;
 		
 		auto relayCellHeader = make_unique<vector<unsigned char>>();
-		relayCellHeader->reserve(32); // reserve some bytes
+		//relayCellHeader->reserve(32); // reserve some bytes
 
 		// Relay command
 		relayCellHeader->push_back(command);
@@ -1045,7 +1047,7 @@ namespace Briand {
 
 		// Make a copy of the Payload
 		auto payloadCopy = make_unique<vector<unsigned char>>();
-		payloadCopy->reserve(BriandTorCell::PAYLOAD_LEN); // reserve some bytes
+		//payloadCopy->reserve(BriandTorCell::PAYLOAD_LEN); // reserve some bytes
 		payloadCopy->insert(payloadCopy->begin(), this->Payload->begin(), this->Payload->end());
 		// but set the digest field to zero
 		for (unsigned char i=5; i<=8; i++)

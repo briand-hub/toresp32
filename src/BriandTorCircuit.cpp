@@ -22,6 +22,8 @@ using namespace std;
 
 namespace Briand {
 
+	const char* BriandTorCircuit::LOGTAG = "briandcircuit";
+
 	BriandTorCircuit::BriandTorCircuit() {
 		this->guardNode = nullptr;
 		this->middleNode = nullptr;
@@ -1071,7 +1073,7 @@ namespace Briand {
 					*/
 
 					auto sendMePayload = make_unique<vector<unsigned char>>();
-					sendMePayload->reserve(BriandTorCell::PAYLOAD_LEN); // reserve some bytes
+					//sendMePayload->reserve(BriandTorCell::PAYLOAD_LEN); // reserve some bytes
 					sendMePayload->push_back(0x01); // version 1 authenticated cell
 
 					if (tempCell->GetRelayCellDigest() == nullptr) {
@@ -1207,7 +1209,7 @@ namespace Briand {
 
 				// Take payload and return, that's all!
 				response = make_unique<vector<unsigned char>>();
-				response->reserve(BriandTorCell::PAYLOAD_LEN); // reserve some bytes
+				//response->reserve(BriandTorCell::PAYLOAD_LEN); // reserve some bytes
 				response->insert(response->begin(), readCell->GetPayload()->begin(), readCell->GetPayload()->end());
 			}
 
@@ -1246,7 +1248,7 @@ namespace Briand {
 		ESP_LOGD(LOGTAG, "[DEBUG] Sending RELAY_RESOLVE cell for hostname <%s>.\n", hostname.c_str());
 
 		auto requestPayload = make_unique<vector<unsigned char>>();
-		requestPayload->reserve(BriandTorCell::PAYLOAD_LEN); // reserve some bytes
+		//requestPayload->reserve(BriandTorCell::PAYLOAD_LEN); // reserve some bytes
 
 		for (const char& c: hostname) {
 			requestPayload->push_back(static_cast<unsigned char>(c));
@@ -1359,7 +1361,7 @@ namespace Briand {
 		*/
 
 		auto payload = make_unique<vector<unsigned char>>();
-		payload->reserve(BriandTorCell::PAYLOAD_LEN); // reserve some bytes
+		//payload->reserve(BriandTorCell::PAYLOAD_LEN); // reserve some bytes
 		for (const char& c : hostname) {
 			payload->push_back(static_cast<unsigned char>(c));
 		}

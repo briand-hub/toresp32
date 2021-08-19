@@ -28,6 +28,8 @@
 
 namespace Briand {
 
+	const char* BriandTorRelaySearcher::LOGTAG = "briandsearch";
+
 	void BriandTorRelaySearcher::randomize() {
 		// Doing an Onionoo query could drive on data leak by MITM
 		// Asking just a single relay that matches leds to "I know you are using node XX in your circuit path"
@@ -126,7 +128,8 @@ namespace Briand {
 				continue;
 			}
 
-			string path = "/tor/status-vote/current/consensus-microdesc";
+			// Old microdescriptors string path = "/tor/status-vote/current/consensus-microdesc";
+			string path = "/tor/status-vote/current/consensus";
 			string agent = string(BriandUtils::GetRandomHostName().get());
 
 			auto request = make_unique<string>();
@@ -151,7 +154,7 @@ namespace Briand {
 
 			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache request sent.\n");
 
-			// Now read results (example: http://128.31.0.34:9131/tor/status-vote/current/consensus-microdesc)
+			// Now read results (example: http://45.66.33.45/tor/status-vote/current/consensus)
 			// Searching for "r " string (a row for a starting node)
 			bool newLine = false;
 			unique_ptr<vector<unsigned char>> rawData = nullptr;
@@ -185,7 +188,7 @@ namespace Briand {
 				if (sData->substr(0, 2).compare("r ") == 0) {
 
 					sData->erase(0, 2);
-					// [NAME] [FINGERPRINT_BASE64] [DATE] [TIME] [IPv4] [ORPORT] 0
+					// [NAME] [FINGERPRINT_BASE64] [OTHER_BASE64] [DATE] [TIME] [IPv4] [ORPORT] 0
 					auto pos = sData->find(' ');
 					
 					if (pos == string::npos) continue;
@@ -214,6 +217,11 @@ namespace Briand {
 						rFingerprint.append(buf);
 					}
 					rFingerprintV.reset();
+
+					pos = sData->find(' ');
+					if (pos == string::npos) continue;
+					// Other info base64: ignore
+					sData->erase(0, pos+1);
 					
 					pos = sData->find(' ');
 					if (pos == string::npos) continue;
@@ -236,16 +244,17 @@ namespace Briand {
 					sData->erase(0, pos+1);
 
 					// OK! Now there shuld be an "m " line (ignorable)
-					rawData = client->ReadDataUntil('\n', 512, newLine);
-					if (!newLine || rawData->size() < 2) {
-						// error occoured!
-						continue;
-					}
-					if (static_cast<char>(rawData->at(0)) == 'r' && static_cast<char>(rawData->at(1) == ' ')) {
-						// a new router line !?!?
-						lostR = std::move(rawData);
-						continue;
-					} 
+					// Not listed in full consensus
+					// rawData = client->ReadDataUntil('\n', 512, newLine);
+					// if (!newLine || rawData->size() < 2) {
+					// 	// error occoured!
+					// 	continue;
+					// }
+					// if (static_cast<char>(rawData->at(0)) == 'r' && static_cast<char>(rawData->at(1) == ' ')) {
+					// 	// a new router line !?!?
+					// 	lostR = std::move(rawData);
+					// 	continue;
+					// } 
 
 					// OK! Now there shuld be an "s " line (contains flags!!)
 					rawData = client->ReadDataUntil('\n', 512, newLine);
@@ -284,8 +293,75 @@ namespace Briand {
 						if (sData->find("V2DIR") != string::npos) rFlags = rFlags | BriandTorRelayFlag::V2DIR;
 						if (sData->find("VALID") != string::npos) rFlags = rFlags | BriandTorRelayFlag::VALID;
 
+						// If Exit node and some ports in the settings TOR_MUST_HAVE_PORTS, check the policy
+						bool exitCheck = true;
+						if (TOR_MUST_HAVE_PORTS_SIZE > 0 && fExitNodes < TOR_NODES_CACHE_SIZE && (rFlags & TOR_FLAGS_EXIT_MUST_HAVE) == TOR_FLAGS_EXIT_MUST_HAVE) {
+							// Read data until a "p " line is reached
+							bool policyFound = false;
+							while (!policyFound) {
+								rawData = client->ReadDataUntil('\n', 512, newLine);
+								if (!newLine || rawData->size() < 2) {
+									// error occoured!
+									exitCheck = false;
+									break;
+								}
+								if (static_cast<char>(rawData->at(0)) == 'r' && static_cast<char>(rawData->at(1) == ' ')) {
+									// a new router line !?!?
+									lostR = std::move(rawData);
+									exitCheck = false;
+									break;
+								}
+								if (static_cast<char>(rawData->at(0)) == 'p' && static_cast<char>(rawData->at(1) == ' ')) {
+									policyFound = true;
+									/*
+										"p" SP ("accept" / "reject") SP PortList NL
+
+										[At most once.]
+
+										PortList = PortOrRange
+										PortList = PortList "," PortOrRange
+										PortOrRange = INT "-" INT / INT
+
+										A list of those ports that this router supports (if 'accept') or does not support (if 'reject') for exit to "most addresses".
+									*/
+									
+									// Convert to string, use same buffers
+									sData->clear();
+									for (auto&& c : *rawData.get()) { sData->push_back(static_cast<char>(c)); }
+									sData->erase(0, 2); // erase first chars
+
+									// "accept"/"reject" has same length, so...
+									string policyType = sData->substr(0, 7);
+									policyType.pop_back(); // remove space
+									sData->erase(0, 7); // leave the port list only
+
+									if (policyType.compare("accept") == 0) {
+										// Check ports are listed
+										for (unsigned char i = 0; i < TOR_MUST_HAVE_PORTS_SIZE; i++) {
+											exitCheck = exitCheck && this->IsPortListed(TOR_MUST_HAVE_PORTS[i], *sData.get());
+										}
+									}
+									else if (policyType.compare("reject") == 0) {
+										// Check ports are NOT listed
+										for (unsigned char i = 0; i < TOR_MUST_HAVE_PORTS_SIZE; i++) {
+											exitCheck = exitCheck && !this->IsPortListed(TOR_MUST_HAVE_PORTS[i], *sData.get());
+										}
+									}
+									else {
+										// Whooops...
+										exitCheck = false;
+									}
+								}
+							}
+						}
+						else {
+							// It is not the case, so true by default
+							exitCheck = true;
+						}
+
 						// Check if this node is suitable as EXIT, GUARD or MIDDLE
-						if (fExitNodes < TOR_NODES_CACHE_SIZE && (rFlags & TOR_FLAGS_EXIT_MUST_HAVE) == TOR_FLAGS_EXIT_MUST_HAVE ) {
+						// If the exitCheck is false then exit node is not suitable or an "r " line has been found, so error, do not insert anything!
+						if (exitCheck && fExitNodes < TOR_NODES_CACHE_SIZE && (rFlags & TOR_FLAGS_EXIT_MUST_HAVE) == TOR_FLAGS_EXIT_MUST_HAVE) {
 							fExit << rName << "\t";
 							fExit << rFingerprint << "\t";
 							fExit << rIP << "\t";
@@ -294,7 +370,7 @@ namespace Briand {
 							if (fExitNodes+1 < TOR_NODES_CACHE_SIZE) fExit << "\n"; // skip last \n
 							fExitNodes++;
 						}
-						else if (fGuardNodes < TOR_NODES_CACHE_SIZE && (rFlags & TOR_FLAGS_GUARD_MUST_HAVE) == TOR_FLAGS_GUARD_MUST_HAVE ) {
+						else if (exitCheck && fGuardNodes < TOR_NODES_CACHE_SIZE && (rFlags & TOR_FLAGS_GUARD_MUST_HAVE) == TOR_FLAGS_GUARD_MUST_HAVE) {
 							fGuard << rName << "\t";
 							fGuard << rFingerprint << "\t";
 							fGuard << rIP << "\t";
@@ -303,7 +379,7 @@ namespace Briand {
 							if (fGuardNodes+1 < TOR_NODES_CACHE_SIZE) fGuard << "\n"; // skip last \n
 							fGuardNodes++;
 						}
-						else if (fMiddleNodes < TOR_NODES_CACHE_SIZE && (rFlags & TOR_FLAGS_MIDDLE_MUST_HAVE) == TOR_FLAGS_MIDDLE_MUST_HAVE ) {
+						else if (exitCheck && fMiddleNodes < TOR_NODES_CACHE_SIZE && (rFlags & TOR_FLAGS_MIDDLE_MUST_HAVE) == TOR_FLAGS_MIDDLE_MUST_HAVE) {
 							fMiddle << rName << "\t";
 							fMiddle << rFingerprint << "\t";
 							fMiddle << rIP << "\t";
@@ -430,6 +506,56 @@ namespace Briand {
 
 		// Elegant :)
 		return ip1.s_addr == ip2.s_addr;
+	}
+
+	bool BriandTorRelaySearcher::IsPortListed(const unsigned short& port, const string& portList) {
+		size_t posStart = 0;
+		size_t posEnd = 0;
+		cout << "list is: " << portList << endl;
+		while (posStart < portList.size()) {
+			posEnd = portList.find(',', posStart);
+			
+			if (posEnd == string::npos && posStart < portList.length()) {
+				// This is the last entry, take all the remaining.
+				posEnd = portList.length();
+			}
+			
+			if (posEnd != string::npos) {
+				string temp = portList.substr(posStart, posEnd-posStart);
+				cout << "temp = " << temp;
+				
+				size_t rangeSepPos = temp.find("-");
+				if (rangeSepPos == string::npos) {
+					// Single entry
+					if (port == atoi(temp.c_str())) {
+						return true;
+					}
+				}
+				else {
+					// Range entry
+					unsigned short min, max, swap;
+					min = atoi(temp.substr(0, rangeSepPos).c_str());
+					max = atoi(temp.substr(rangeSepPos+1, temp.length()-rangeSepPos).c_str());
+					// ensure order
+					if (min > max) {
+						swap = min;
+						min = max;
+						max = swap;
+					}
+					cout << " translated to min=" << min << " max = " << max;
+					if (port >= min && port <= max) {
+						return true;
+					}
+				}
+				
+				cout << endl;
+				
+				posStart = posEnd + 1;
+			}
+		}
+
+		// When arrives here, sure not listed!
+		return false;
 	}
 
 	BriandTorRelaySearcher::BriandTorRelaySearcher() {

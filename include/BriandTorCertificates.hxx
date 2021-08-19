@@ -33,6 +33,8 @@ namespace Briand {
 
 		public:
 
+		static const char* LOGTAG;
+
 		/** Cert Type */
 		unsigned char Type;
 		/** Maximum allowed certType */
@@ -78,6 +80,9 @@ namespace Briand {
 	*/
 	class BriandTorEd25519CertificateExtension : public BriandESPHeapOptimize {
 		public:
+
+		static const char* LOGTAG;
+
 		unsigned short ExtLength; 	// [2 bytes]
         unsigned char ExtType;   	// [1 byte]
         unsigned char ExtFlags;		// [1 byte]
@@ -121,6 +126,9 @@ namespace Briand {
 		unique_ptr<vector<unsigned char>> non_signature_parts;
 
 		public:
+
+		static const char* LOGTAG;
+
 		/** Cert Type */
 		unsigned char Type;
 		unsigned char VERSION; // [1 Byte]
@@ -210,6 +218,9 @@ namespace Briand {
 		protected:
 
 		public:
+
+		static const char* LOGTAG;
+
 		/** Cert Type */
 		unsigned char Type;
 		unique_ptr<vector<unsigned char>> ED25519_KEY; // [32 bytes]

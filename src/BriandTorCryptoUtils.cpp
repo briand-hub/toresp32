@@ -26,6 +26,8 @@ using namespace std;
 
 namespace Briand {
 
+	const char* BriandTorCryptoUtils::LOGTAG = "briandcrypto";
+
 	unique_ptr<vector<unsigned char>> BriandTorCryptoUtils::GetDigest_SHA256(const unique_ptr<vector<unsigned char>>& input) {	
 		// Using mbedtls
 
@@ -189,14 +191,14 @@ namespace Briand {
 		*/
 
 		auto hkdfOutput = make_unique<vector<unsigned char>>();
-		hkdfOutput->reserve(128); // reserve some bytes
+		//hkdfOutput->reserve(128); // reserve some bytes
 		unsigned char INT8 = 1;
 		auto lastHmacOutput = make_unique<vector<unsigned char>>();
-		lastHmacOutput->reserve(128); // reserve some bytes
+		//lastHmacOutput->reserve(128); // reserve some bytes
 
 		while (hkdfOutput->size() < bytesToProduce) {
 			auto hmacInput = make_unique<vector<unsigned char>>();
-			hmacInput->reserve(128); // reserve some bytes
+			//hmacInput->reserve(128); // reserve some bytes
 			hmacInput->insert(hmacInput->end(), lastHmacOutput->begin(), lastHmacOutput->end());
 			hmacInput->insert(hmacInput->end(), mExpand->begin(), mExpand->end());
 			hmacInput->push_back(INT8);
@@ -365,7 +367,7 @@ namespace Briand {
 		
 		// test the output size
 		mbedtls_base64_decode(NULL, 0, &outSize, reinterpret_cast<const unsigned char*>(input.c_str()), input.length());
-		output->reserve(outSize); // reserve some bytes
+		//output->reserve(outSize); // reserve some bytes
 		
 		if (outSize > 0) {
 			// prepare buffer
@@ -433,12 +435,9 @@ namespace Briand {
 
 		// Key generation
 		
-		//auto keypair = make_unique<mbedtls_ecp_keypair>();
-		// Moved to static
-		mbedtls_ecp_keypair keypair;
-		bzero(&keypair, sizeof(keypair));
+		auto keypair = make_unique<mbedtls_ecp_keypair>();
 		//ret = mbedtls_ecp_gen_keypair_base(&ecpGroup, &G, &keypair->d, &keypair->Q, mbedtls_ctr_drbg_random, &ctr_drbg);
-		ret = mbedtls_ecp_gen_keypair(&ecpGroup, &keypair.d, &keypair.Q, mbedtls_ctr_drbg_random, &ctr_drbg);
+		ret = mbedtls_ecp_gen_keypair(&ecpGroup, &keypair->d, &keypair->Q, mbedtls_ctr_drbg_random, &ctr_drbg);
 		if (ret != 0) {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
@@ -454,17 +453,17 @@ namespace Briand {
 
 		// d contains the PRIVATE key, Q contains the public key (Q.X is the required field).
 		unsigned int keyBufSize;
-		keyBufSize = mbedtls_mpi_size(&keypair.d);
+		keyBufSize = mbedtls_mpi_size(&keypair->d);
 		auto keyBuf = make_unique<unsigned char[]>( keyBufSize );
-		mbedtls_mpi_write_binary(&keypair.d, keyBuf.get(), keyBufSize);
+		mbedtls_mpi_write_binary(&keypair->d, keyBuf.get(), keyBufSize);
 		relay.CURVE25519_PRIVATE_KEY = BriandUtils::ArrayToVector(keyBuf, keyBufSize);
 		// The private key has no need to be reversed (my own use)
 
 		//unsigned long int oLen;
-		keyBufSize = mbedtls_mpi_size(&keypair.Q.X);
+		keyBufSize = mbedtls_mpi_size(&keypair->Q.X);
 		keyBuf = make_unique<unsigned char[]>( keyBufSize );
 		//keyBufSize = mbedtls_ecp_point_write_binary(&keypair->grp, &keypair->Q, MBEDTLS_ECP_PF_COMPRESSED, &oLen, keyBuf.get(), keyBufSize);
-		mbedtls_mpi_write_binary(&keypair.Q.X, keyBuf.get(), keyBufSize);
+		mbedtls_mpi_write_binary(&keypair->Q.X, keyBuf.get(), keyBufSize);
 		relay.CURVE25519_PUBLIC_KEY = BriandUtils::ArrayToVector(keyBuf, keyBufSize);
 
 		// The public key sent to server as tor specifies, must be in little-endian format.
@@ -473,7 +472,7 @@ namespace Briand {
 		std::reverse(relay.CURVE25519_PUBLIC_KEY->begin(), relay.CURVE25519_PUBLIC_KEY->end());
 
 		// Free
-		mbedtls_ecp_keypair_free(&keypair);
+		mbedtls_ecp_keypair_free(keypair.get());
 		//mbedtls_ecp_point_free(&G);
 		mbedtls_ecp_group_free(&ecpGroup);
 		mbedtls_ctr_drbg_free( &ctr_drbg );
@@ -486,7 +485,7 @@ namespace Briand {
 		// using mbedtls
 
 		auto sharedSecret = make_unique<vector<unsigned char>>();
-		sharedSecret->reserve(128); // reserve some bytes
+		//sharedSecret->reserve(128); // reserve some bytes
 
 		// Initialize data structures needed
 		unique_ptr<unsigned char[]> tempBuffer;
@@ -538,7 +537,7 @@ namespace Briand {
 		// Public key received (only X must be filled!)
 		// this must be reversed to compute secret
 		auto tempV = make_unique<vector<unsigned char>>();
-		tempV->reserve(64); // reserve some bytes
+		//tempV->reserve(64); // reserve some bytes
 		tempV->insert(tempV->begin(), serverPublic->begin(), serverPublic->end());
 		std::reverse(tempV->begin(), tempV->end());
 
@@ -697,7 +696,7 @@ namespace Briand {
 		}
 
 		auto secret_input = make_unique<vector<unsigned char>>();
-		secret_input->reserve(64); // reserve some bytes
+		//secret_input->reserve(64); // reserve some bytes
 
 		// EXP(Y,x)
 		auto tempVector = BriandTorCryptoUtils::ECDH_Curve25519_ComputeSharedSecret(relay.CREATED_EXTENDED_RESPONSE_SERVER_PK, relay.CURVE25519_PRIVATE_KEY);
@@ -766,7 +765,7 @@ namespace Briand {
 		/* auth_input = verify | ID | B | Y | X | PROTOID | "Server" */
 		
 		auto auth_input = make_unique<vector<unsigned char>>();
-		auth_input->reserve(128); // reserve some bytes
+		//auth_input->reserve(128); // reserve some bytes
 		auth_input->insert(auth_input->end(), verify->begin(), verify->end());
 		auth_input->insert(auth_input->end(), fingerprintVector->begin(), fingerprintVector->end());
 		auth_input->insert(auth_input->end(), ntorKeyVec->begin(), ntorKeyVec->end());
@@ -910,7 +909,7 @@ namespace Briand {
 		hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
 
 		relay.KEY_Forward_Kf = make_unique<vector<unsigned char>>();
-		relay.KEY_Forward_Kf->reserve(128); // reserve some bytes
+		//relay.KEY_Forward_Kf->reserve(128); // reserve some bytes
 		relay.KEY_Forward_Kf->insert(relay.KEY_Forward_Kf->begin(), hkdf->begin(), hkdf->begin() + KEY_LEN);
 		hkdf->erase(hkdf->begin(), hkdf->begin() + KEY_LEN);
 
@@ -920,7 +919,7 @@ namespace Briand {
 		}
 
 		relay.KEY_Backward_Kb = make_unique<vector<unsigned char>>();
-		relay.KEY_Backward_Kb->reserve(128); // reserve some bytes
+		//relay.KEY_Backward_Kb->reserve(128); // reserve some bytes
 		relay.KEY_Backward_Kb->insert(relay.KEY_Backward_Kb->begin(), hkdf->begin(), hkdf->begin() + KEY_LEN);
 		hkdf->erase(hkdf->begin(), hkdf->begin() + KEY_LEN);
 
@@ -930,7 +929,7 @@ namespace Briand {
 		}
 
 		relay.KEY_HiddenService_Nonce = make_unique<vector<unsigned char>>();
-		relay.KEY_HiddenService_Nonce->reserve(128); // reserve some bytes
+		//relay.KEY_HiddenService_Nonce->reserve(128); // reserve some bytes
 		relay.KEY_HiddenService_Nonce->insert(relay.KEY_HiddenService_Nonce->begin(), hkdf->begin(), hkdf->begin() + DIGEST_LEN);
 
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {

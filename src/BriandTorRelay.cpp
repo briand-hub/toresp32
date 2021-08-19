@@ -29,6 +29,8 @@ using namespace std;
 
 namespace Briand {
 
+	const char* BriandTorRelay::LOGTAG = "briandrelay";
+
 	BriandTorRelay::BriandTorRelay() {
 		this->nickname = make_unique<string>("");
 		this->address = make_unique<string>("");

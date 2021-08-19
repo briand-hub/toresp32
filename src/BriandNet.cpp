@@ -22,6 +22,7 @@ using namespace std;
 
 namespace Briand
 {
+	const char* BriandNet::LOGTAG = "briandnet";
 
 	unique_ptr<vector<unsigned char>> BriandNet::StringToUnsignedCharVector(unique_ptr<string>& input, bool emptyContents /* = true*/) {
 		auto output = make_unique<vector<unsigned char>>();
