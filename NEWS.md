@@ -32,6 +32,7 @@
 * Added command to change proxy port
 * Removed all old Onionoo commented implementations
 * Reset cache size to 100 nodes, too much time required when exit port filtering is needed!
+* No. of max open sockets setting promoted to 16.
 
 ## 2021-08-17
 
