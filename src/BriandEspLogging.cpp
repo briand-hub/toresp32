@@ -29,17 +29,26 @@
         #include <map>
 
         // Use an efficient map!
-        map<const char*, esp_log_level_t> BRIAND_LOG_LEVEL_MAP;
+        map<string, esp_log_level_t> BRIAND_LOG_LEVEL_MAP;
 
         void BRIAND_SET_LOG(const char* tag, esp_log_level_t newLevel) { 
-            BRIAND_LOG_LEVEL_MAP[tag] = newLevel;
+            // If wildcard, all to level.
+            if (strcmp(tag, "*") == 0) {
+                for (auto it = BRIAND_LOG_LEVEL_MAP.begin(); it != BRIAND_LOG_LEVEL_MAP.end(); ++it) {
+                    it->second = newLevel;
+                }
+            }
+            else {
+                BRIAND_LOG_LEVEL_MAP[string(tag)] = newLevel;
+            }
+
             esp_log_level_set(tag, newLevel);
         }
         
         esp_log_level_t esp_log_level_get(const char* tag) { 
-            auto it = BRIAND_LOG_LEVEL_MAP.find(tag);
-            if (it == BRIAND_LOG_LEVEL_MAP.end()) BRIAND_LOG_LEVEL_MAP[tag] = ESP_LOG_NONE;
-            return BRIAND_LOG_LEVEL_MAP[tag]; 
+            auto it = BRIAND_LOG_LEVEL_MAP.find(string(tag));
+            if (it == BRIAND_LOG_LEVEL_MAP.end()) BRIAND_LOG_LEVEL_MAP[string(tag)] = ESP_LOG_NONE;
+            return BRIAND_LOG_LEVEL_MAP[string(tag)]; 
         }
 
     #endif
