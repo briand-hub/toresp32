@@ -41,7 +41,7 @@
     constexpr unsigned short TOR_CIRCUITS_MAX_REQUESTS = 60;    // After N requests the Tor circuit will be closed and changed.
     constexpr unsigned char TOR_NODES_CACHE_SIZE = 255;		    // No. of Tor nodes, for each type (guard/exit/middle) to keep saved. (higher parameter leds to higher cache download!)
     constexpr unsigned char TOR_NODES_CACHE_VAL_H = 24;		    // Hours since the chache of nodes is considered OLD and must be downloaded again
-    constexpr unsigned short TOR_SOCKS5_PROXY_PORT = 80;        // Port of the Socks5 Proxy
+    constexpr unsigned short TOR_SOCKS5_PROXY_PORT = 80;        // Default port of the Socks5 Proxy
     constexpr unsigned short TOR_SOCKS5_PROXY_TIMEOUT_S = 30;   // Timeout in seconds the Socks5 Proxy select/read/write calls
     
     /** The following setting will define the size of the TOR_MUST_HAVE_PORTS array. */

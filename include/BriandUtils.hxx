@@ -200,5 +200,12 @@ namespace Briand
 		 * @return string containing the reason
 		*/
 		static string RelayTruncatedReasonToString(const BriandTorDestroyReason& reason);
+
+		/**
+		 * Checks if the provided string is a valid number
+		 * @param doubt input string
+		 * @return true if string contains only numbers
+		*/
+		static bool IsNumber(const string& doubt);
 	};
 }

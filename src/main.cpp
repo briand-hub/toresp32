@@ -59,6 +59,7 @@ unsigned long HEAP_MAX = 0;
 unsigned long HEAP_MIN = ULONG_MAX;
 /** Flags for STA: LSB (bit 1) = autoreconnect, bit 2 set = disconnect, bit 3 set = connect/reconnect, MSB => reserved for not fire event each time before completed  */
 unsigned char STA_ACTIONFLAGS = 0b00000001;
+unsigned short proxyCustomPort = 0;
 
 /* Early declarations */
 void reboot();
@@ -627,6 +628,7 @@ void executeCommand(string& cmd) {
 		printf("torcircuits : print out the current tor circuit status.\n");
 		printf("torcircuits [restart|stop] : Invalidate all circuits pool, if restart rebuild again.\n");
 		printf("torproxy [start|stop|status] : Starts/Stops/Prints info SOCKS5 Proxy.\n");
+		printf("torproxyport [PORT] : Restarts the proxy on the provided custom port.\n");
 		printf("tor resolve [hostname] : Resolve IPv4 address through tor.\n");
     }
     else if (cmd.compare("time") == 0) {
@@ -855,9 +857,9 @@ void executeCommand(string& cmd) {
 		printf("done.\n");
 	}
 	else if (cmd.compare("torproxy start") == 0) {
-		printf("Starting SOCKS5 Proxy on port %hu...", TOR_SOCKS5_PROXY_PORT);
+		printf("Starting SOCKS5 Proxy on port %hu...", (proxyCustomPort != 0 ? proxyCustomPort : TOR_SOCKS5_PROXY_PORT));
 		if (SOCKS5_PROXY == nullptr) SOCKS5_PROXY = make_unique<Briand::BriandTorSocks5Proxy>();
-		SOCKS5_PROXY->StartProxyServer(TOR_SOCKS5_PROXY_PORT, CIRCUITS_MANAGER);
+		SOCKS5_PROXY->StartProxyServer((proxyCustomPort != 0 ? proxyCustomPort : TOR_SOCKS5_PROXY_PORT), CIRCUITS_MANAGER);
 		printf("done.\n");
 	}
 	else if (cmd.compare("torproxy stop") == 0) {
@@ -871,6 +873,28 @@ void executeCommand(string& cmd) {
 		}
 		else {
 			printf("Error, Proxy not instanced.\n");
+		}
+	}
+	else if (cmd.substr(0,12).compare("torproxyport") == 0) {
+		string temp = cmd.substr(13, cmd.length() - 13);
+		if (Briand::BriandUtils::IsNumber(temp)) {
+			proxyCustomPort = static_cast<unsigned short>(atoi(temp.c_str()));
+			if (SOCKS5_PROXY != nullptr) {
+				printf("Stopping proxy...");
+				SOCKS5_PROXY->StopProxyServer();
+				printf("done.\nRestarting proxy on port <%hu>...", proxyCustomPort);
+				SOCKS5_PROXY->StartProxyServer(proxyCustomPort, CIRCUITS_MANAGER);
+				printf("done.\n");
+			}
+			else {
+				printf("Starting proxy on port <%hu>...", proxyCustomPort);
+				SOCKS5_PROXY = make_unique<Briand::BriandTorSocks5Proxy>();
+				SOCKS5_PROXY->StartProxyServer(proxyCustomPort, CIRCUITS_MANAGER);
+				printf("done.\n");
+			}
+		}
+		else {
+			printf("Invalid port <%s>.\n", temp.c_str());
 		}
 	}
 	else if (cmd.compare("torcache") == 0) {

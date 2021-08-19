@@ -454,4 +454,13 @@ namespace Briand
 
 		return s;
 	}
+
+	bool BriandUtils::IsNumber(const string& doubt) {
+		for (const char& c : doubt) {
+			if (c < 48 || c > 57)
+				return false;
+		}
+
+		return true;
+	}
 }

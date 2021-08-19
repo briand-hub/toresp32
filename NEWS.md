@@ -29,6 +29,8 @@
   * With 8 circuits built, connected to AP, proxy after use with firefox: HEAP FREE: 87740 / 368696 bytes. MAX FREE 213128 MIN FREE 42680 LARGEST FREE BLOCK: 32768
 * New cache size of 255 nodes does not increase so much spiffs usage and makes things more reliable in relay searching
 * Added settings TOR_MUST_HAVE_PORTS in order to select only the exit nodes that accepts connections to the listed ports. This leds to download full consensus!
+* Added command to change proxy port
+* Removed all old Onionoo commented implementations
 
 ## 2021-08-17
 

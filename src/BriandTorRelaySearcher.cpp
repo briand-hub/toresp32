@@ -50,18 +50,6 @@ namespace Briand {
 		if (TOR_DIR_LAST_USED == 0x0000) {
 			TOR_DIR_LAST_USED = BriandUtils::GetRandomByte() % TOR_DIR_AUTHORITIES_NUMBER;
 		}
-
-		/* DELTED old implementation
-		this->limitRandom = 0;
-
-		// Limit to max 5 result to save RAM!! Never ask for just 1!
-		while (this->limitRandom <= 1)
-			this->limitRandom = ( Briand::BriandUtils::GetRandomByte() % 5 ) + 1;
-		
-		// Random pick one from the list
-		//this->randomPick = ( Briand::BriandUtils::GetRandomByte() % this->limitRandom );
-		
-		*/
 	}
 
 	void BriandTorRelaySearcher::RefreshNodesCache() {
@@ -128,7 +116,6 @@ namespace Briand {
 				continue;
 			}
 
-			// Old microdescriptors string path = "/tor/status-vote/current/consensus-microdesc";
 			string path = "/tor/status-vote/current/consensus";
 			string agent = string(BriandUtils::GetRandomHostName().get());
 
@@ -426,43 +413,6 @@ namespace Briand {
 		ifstream file(filename, ios::in);
 
 		if (file.good()) {
-			/* OLD Onionoo implementation
-			auto json = make_unique<string>("");
-			string line;
-
-			while (file.good()) {
-				getline(file, line);
-				json->append(line);
-			}
-			
-			file.close();
-
-			cJSON* root = cJSON_Parse(json->c_str());
-
-			if (root == NULL) {
-				// Get last error
-				const char *error_ptr = cJSON_GetErrorPtr();
-				ESP_LOGD(LOGTAG, "[DEBUG] %s cache deserialization error: %s\n", filename, error_ptr);
-				// Free resources
-				cJSON_Delete(root);
-				return false;
-			}
-
-			unsigned long int cacheAge = 0;
-			auto cacheField = cJSON_GetObjectItemCaseSensitive(root, "cachecreatedon");
-			if (cacheField != NULL && cJSON_IsNumber(cacheField)) {
-				cacheAge = static_cast<unsigned long int>(cacheField->valueint);
-			}
-
-			ESP_LOGD(LOGTAG, "[DEBUG] %s cache created on %lu.\n", filename, cacheAge);
-
-			if ( (cacheAge + (TOR_NODES_CACHE_VAL_H*3600)) >= BriandUtils::GetUnixTime() ) {
-				valid = true;
-			}
-
-			cJSON_Delete(root);
-			*/
-
 			// Check just the first line timestamp and how many lines are in the file
 			string firstLine("");
 			std::getline(file, firstLine, '\n');
@@ -574,9 +524,6 @@ namespace Briand {
 
 		if (!this->cacheValid) {
 			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache invalid, download and rebuilding.\n");
-			/* OLD Onionoo implementation
-			RefreshOnionooCache();
-			*/
 			RefreshNodesCache();
 		}
 		if (this->cacheValid) {
@@ -640,58 +587,6 @@ namespace Briand {
 			relay->port = std::stoi( line.substr(0, line.find('\t')) );
 			// unecessary till new fields to manage
 			// line.erase(0, line.find('\t')+1);
-			
-
-			/* OLD Onionoo implementation
-			auto json = make_unique<string>("");
-			string line;
-			while (file.good()) {
-				getline(file, line);
-				json->append(line);
-			}
-			file.close();
-			cJSON* root = cJSON_Parse(json->c_str());
-
-			if (root == NULL || cJSON_GetObjectItemCaseSensitive(root, "relays") == NULL) {
-				// Get last error
-				const char *error_ptr = cJSON_GetErrorPtr();
-				ESP_LOGD(LOGTAG, "[DEBUG] Guard cache deserialization error: %s\n", error_ptr);
-				// Free resources
-				cJSON_Delete(root);
-				return relay;
-			}
-
-			auto relays = cJSON_GetObjectItemCaseSensitive(root, "relays");
-			if (!cJSON_IsArray(relays)) {
-				ESP_LOGD(LOGTAG, "[DEBUG] Guard cache deserialization error (no relays array)\n");
-				// Free resources
-				cJSON_Delete(root);
-				return relay;
-			}
-
-			relay = make_unique<Briand::BriandTorRelay>();
-			int relaysNo = cJSON_GetArraySize(relays);
-			while (this->randomPick >= relaysNo)
-				this->randomize();
-			
-			auto randomRelay = cJSON_GetArrayItem(relays, this->randomPick);
-			relay->nickname->assign( cJSON_GetObjectItemCaseSensitive(randomRelay, "nickname")->valuestring );
-			relay->fingerprint->assign( cJSON_GetObjectItemCaseSensitive(randomRelay, "fingerprint")->valuestring );
-			
-			// Take first address, separate host and port
-			auto addresses = cJSON_GetObjectItemCaseSensitive(randomRelay, "or_addresses");
-			string firstAddress = cJSON_GetArrayItem(addresses, 0)->valuestring;
-			size_t pos = firstAddress.find(':');
-			relay->address->assign(firstAddress.substr(0, pos));
-			relay->port = std::stoi(firstAddress.substr(pos+1, 5));
-
-			// Could not be here
-			auto effective_family = cJSON_GetObjectItemCaseSensitive(randomRelay, "effective_family");
-			if (effective_family != NULL && cJSON_IsString(effective_family))
-				relay->effective_family->assign(effective_family->valuestring);
-			
-			cJSON_Delete(root);
-			*/
 		}
 		else {
 			ESP_LOGW(LOGTAG, "[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
@@ -705,9 +600,6 @@ namespace Briand {
 
 		if (!this->cacheValid) {
 			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache invalid, download and rebuilding.\n");
-			/* OLD Onionoo implementation
-			RefreshOnionooCache();
-			*/
 		}
 		if (this->cacheValid) {
 			bool sameFamily = true;
@@ -780,78 +672,6 @@ namespace Briand {
 				}
 
 			} while (sameFamily);
-
-			/* OLD Onionoo implementation
-			
-			// randomize for random picking
-			this->randomize();
-			
-			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
-
-			ifstream file(this->NODES_FILE_MIDDLE, ios::in);
-			auto json = make_unique<string>("");
-			string line;
-			while (file.good()) {
-				getline(file, line);
-				json->append(line);
-			}
-			file.close();
-			cJSON* root = cJSON_Parse(json->c_str());
-
-			if (root == NULL || cJSON_GetObjectItemCaseSensitive(root, "relays") == NULL) {
-				// Get last error
-				const char *error_ptr = cJSON_GetErrorPtr();
-				ESP_LOGD(LOGTAG, "[DEBUG] Guard cache deserialization error: %s\n", error_ptr);
-				// Free resources
-				cJSON_Delete(root);
-				return relay;
-			}
-
-			auto relays = cJSON_GetObjectItemCaseSensitive(root, "relays");
-			if (!cJSON_IsArray(relays)) {
-				ESP_LOGD(LOGTAG, "[DEBUG] Guard cache deserialization error (no relays array)\n");
-				// Free resources
-				cJSON_Delete(root);
-				return relay;
-			}
-
-			relay = make_unique<Briand::BriandTorRelay>();
-			int relaysNo = cJSON_GetArraySize(relays);
-			
-			// Must be avoided the guard IP!
-			bool sameFamily = false;
-
-			do {
-				do {
-					this->randomize();
-				} while (this->randomPick >= relaysNo);
-				
-				auto randomRelay = cJSON_GetArrayItem(relays, this->randomPick);
-				relay->nickname->assign( cJSON_GetObjectItemCaseSensitive(randomRelay, "nickname")->valuestring );
-				relay->fingerprint->assign( cJSON_GetObjectItemCaseSensitive(randomRelay, "fingerprint")->valuestring );
-				
-				// Take first address, separate host and port
-				auto addresses = cJSON_GetObjectItemCaseSensitive(randomRelay, "or_addresses");
-				string firstAddress = cJSON_GetArrayItem(addresses, 0)->valuestring;
-				size_t pos = firstAddress.find(':');
-				relay->address->assign(firstAddress.substr(0, pos));
-				relay->port = std::stoi(firstAddress.substr(pos+1, 5));
-
-				// Check if in the same family
-				if (avoidGuardIp.length() > 0) {
-					sameFamily = this->IPsInSameFamily(avoidGuardIp, *relay->address.get());
-				}
-				
-				// Could not be here
-				auto effective_family = cJSON_GetObjectItemCaseSensitive(randomRelay, "effective_family");
-				if (effective_family != NULL && cJSON_IsString(effective_family))
-					relay->effective_family->assign(effective_family->valuestring);
-
-			} while (sameFamily);
-			
-			
-			cJSON_Delete(root);
-			*/
 		}
 		else {
 			ESP_LOGW(LOGTAG, "[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
@@ -865,9 +685,6 @@ namespace Briand {
 
 		if (!this->cacheValid) {
 			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache invalid, download and rebuilding.\n");
-			/* OLD Onionoo implementation
-			RefreshOnionooCache();
-			*/
 		}
 		if (this->cacheValid) {
 			bool sameFamily = false;
@@ -944,84 +761,6 @@ namespace Briand {
 				}
 
 			} while (sameFamily);
-
-			/* OLD Onionoo implementation
-
-
-
-			// randomize for random picking
-			this->randomize();
-			
-			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
-
-			ifstream file(this->NODES_FILE_EXIT, ios::in);
-			auto json = make_unique<string>("");
-			string line;
-			while (file.good()) {
-				getline(file, line);
-				json->append(line);
-			}
-			file.close();
-			cJSON* root = cJSON_Parse(json->c_str());
-
-			if (root == NULL || cJSON_GetObjectItemCaseSensitive(root, "relays") == NULL) {
-				// Get last error
-				const char *error_ptr = cJSON_GetErrorPtr();
-				ESP_LOGD(LOGTAG, "[DEBUG] Guard cache deserialization error: %s\n", error_ptr);
-				// Free resources
-				cJSON_Delete(root);
-				return relay;
-			}
-
-			auto relays = cJSON_GetObjectItemCaseSensitive(root, "relays");
-			if (!cJSON_IsArray(relays)) {
-				ESP_LOGD(LOGTAG, "[DEBUG] Guard cache deserialization error (no relays array)\n");
-				// Free resources
-				cJSON_Delete(root);
-				return relay;
-			}
-
-			relay = make_unique<Briand::BriandTorRelay>();
-			int relaysNo = cJSON_GetArraySize(relays);
-			
-			// Must be avoided the guard IP and also the middle IP!
-			bool sameFamily = false;
-
-			do {
-				do {
-					this->randomize();
-				} while (this->randomPick >= relaysNo);
-				
-				auto randomRelay = cJSON_GetArrayItem(relays, this->randomPick);
-				relay->nickname->assign( cJSON_GetObjectItemCaseSensitive(randomRelay, "nickname")->valuestring );
-				relay->fingerprint->assign( cJSON_GetObjectItemCaseSensitive(randomRelay, "fingerprint")->valuestring );
-				
-				// Take first address, separate host and port
-				auto addresses = cJSON_GetObjectItemCaseSensitive(randomRelay, "or_addresses");
-				string firstAddress = cJSON_GetArrayItem(addresses, 0)->valuestring;
-				size_t pos = firstAddress.find(':');
-				relay->address->assign(firstAddress.substr(0, pos));
-				relay->port = std::stoi(firstAddress.substr(pos+1, 5));
-
-				// Check if in the same family with guard
-				if (avoidGuardIp.length() > 0) {
-					sameFamily = this->IPsInSameFamily(avoidGuardIp, *relay->address.get());
-				}
-				// Check if in the same family with middle
-				if (avoidMiddleIp.length() > 0) {
-					sameFamily = sameFamily || this->IPsInSameFamily(avoidMiddleIp, *relay->address.get());
-				}
-				
-				// Could not be here
-				auto effective_family = cJSON_GetObjectItemCaseSensitive(randomRelay, "effective_family");
-				if (effective_family != NULL && cJSON_IsString(effective_family))
-					relay->effective_family->assign(effective_family->valuestring);
-
-			} while (sameFamily);
-			
-			cJSON_Delete(root);
-			
-			*/
 		}
 		else {
 			ESP_LOGW(LOGTAG, "[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
@@ -1035,9 +774,6 @@ namespace Briand {
 		std::remove(this->NODES_FILE_MIDDLE);
 		std::remove(this->NODES_FILE_EXIT);
 		if (forceRefresh) {
-			/* OLD Onionoo implementation
-			RefreshOnionooCache();
-			*/
 			this->RefreshNodesCache();
 		}
 	}
