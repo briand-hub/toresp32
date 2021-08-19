@@ -45,9 +45,9 @@
     constexpr unsigned short TOR_SOCKS5_PROXY_TIMEOUT_S = 30;   // Timeout in seconds the Socks5 Proxy select/read/write calls
     
     /** The following setting will define the size of the TOR_MUST_HAVE_PORTS array. */
-    constexpr const unsigned char TOR_MUST_HAVE_PORTS_SIZE = 2;
+    constexpr const unsigned char TOR_MUST_HAVE_PORTS_SIZE = 1;
     /** The following setting will make relay searcher to choose only exit nodes that accept the listed ports. */
-    constexpr const unsigned short TOR_MUST_HAVE_PORTS[TOR_MUST_HAVE_PORTS_SIZE] = { 80, 443 };
+    constexpr const unsigned short TOR_MUST_HAVE_PORTS[TOR_MUST_HAVE_PORTS_SIZE] = { 443 };
     
 
     // Includes needed (with linux porting enabled)
