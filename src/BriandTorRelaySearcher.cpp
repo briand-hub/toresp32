@@ -64,6 +64,8 @@ namespace Briand {
 
 		ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache invoked.\n");
 		
+		// Always show an alert because this is a long operation!
+		printf("\n\n*** System warning: Tor node cache is rebuilding, may take time.\n\n");
 
 		// Start with the first authority, check not to start an infinite loop 
 		unsigned short loopStartsWith = 0;
