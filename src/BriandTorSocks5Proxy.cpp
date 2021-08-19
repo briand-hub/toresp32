@@ -34,6 +34,7 @@ namespace Briand
     BriandTorSocks5Proxy::BriandTorSocks5Proxy() {
         this->proxySocket = -1;
         this->torCircuits = nullptr;
+        this->proxyPort = TOR_SOCKS5_PROXY_PORT; // default port
         this->proxyStarted = false;
         bzero(&this->proxyTaskHandle, sizeof(this->proxyTaskHandle));
 
@@ -89,6 +90,7 @@ namespace Briand
         serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
         serverAddr.sin_family = AF_INET;
         serverAddr.sin_port = htons(port);
+        this->proxyPort = port;
 
         // Create a socket
         this->proxySocket = socket(AF_INET, SOCK_STREAM, 0);
@@ -751,7 +753,7 @@ namespace Briand
         
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy SelfTest connecting.\n");
         
-        if (!client->Connect("127.0.0.1", TOR_SOCKS5_PROXY_PORT)) {
+        if (!client->Connect("127.0.0.1", this->proxyPort)) {
             ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy SelfTest error on connecting.\n");
             return;
         }
@@ -900,7 +902,7 @@ namespace Briand
 
     void BriandTorSocks5Proxy::PrintStatus() {
         if (this->proxyStarted) {
-            printf("PROXY STATUS: started on port %hu\n", TOR_SOCKS5_PROXY_PORT);
+            printf("PROXY STATUS: started on port %hu\n", this->proxyPort);
             printf("PROXY USERNAME: %s\n", this->proxyUser.c_str());
             printf("PROXY PASSWORD: %s\n", this->proxyPassword.c_str());
         }

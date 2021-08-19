@@ -884,13 +884,15 @@ void executeCommand(string& cmd) {
 				SOCKS5_PROXY->StopProxyServer();
 				printf("done.\nRestarting proxy on port <%hu>...", proxyCustomPort);
 				SOCKS5_PROXY->StartProxyServer(proxyCustomPort, CIRCUITS_MANAGER);
-				printf("done.\n");
+				printf("done.\n\n");
+				SOCKS5_PROXY->PrintStatus();
 			}
 			else {
 				printf("Starting proxy on port <%hu>...", proxyCustomPort);
 				SOCKS5_PROXY = make_unique<Briand::BriandTorSocks5Proxy>();
 				SOCKS5_PROXY->StartProxyServer(proxyCustomPort, CIRCUITS_MANAGER);
-				printf("done.\n");
+				printf("done.\n\n");
+				SOCKS5_PROXY->PrintStatus();
 			}
 		}
 		else {

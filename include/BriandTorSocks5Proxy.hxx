@@ -68,6 +68,9 @@ namespace Briand
         /** Proxy server socket */
         int proxySocket;
 
+        /** Port of running proxy */
+        unsigned short proxyPort;
+
         /** IDF vTask handle */
         TaskHandle_t proxyTaskHandle;
 
