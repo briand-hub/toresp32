@@ -354,8 +354,8 @@ namespace Briand
 
                 // At this point client sends a request to connect
 
-                recBuf = make_unique<unsigned char[]>(32);  // request could be max 22 bytes long
-                len = recv(clientSock, recBuf.get(), 32, 0);
+                recBuf = make_unique<unsigned char[]>(512);  // hey, now you support host too, more size please!
+                len = recv(clientSock, recBuf.get(), 512, 0);
 
                 if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
                     printf("[DEBUG] SOCKS5 Proxy connect request received %d bytes: ", len);
