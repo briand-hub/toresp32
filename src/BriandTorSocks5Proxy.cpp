@@ -847,22 +847,7 @@ namespace Briand
         }
 
         // Close socket for writing
-        // WARNING: USING SHUTDOWN() CAUSES TCP/IP LWIP following error:
-        /*
-        PC: 0x4008e485: tlsf_free at C:\Users\info\.platformio\packages\framework-espidf\components\heap\heap_tlsf.c line 213
-        EXCVADDR: 0x0000000b
-
-        Decoding stack results
-        0x4008e482: tlsf_free at C:\Users\info\.platformio\packages\framework-espidf\components\heap\heap_tlsf.c line 213
-        0x4008e915: multi_heap_free_impl at C:\Users\info\.platformio\packages\framework-espidf\components\heap\multi_heap.c line 220
-        0x4008240a: heap_caps_free at C:\Users\info\.platformio\packages\framework-espidf\components\heap\heap_caps.c line 305
-        0x4008ebc9: free at C:\Users\info\.platformio\packages\framework-espidf\components\newlib\heap.c line 46
-        0x40104f7f: mem_free at C:\Users\info\.platformio\packages\framework-espidf\components\lwip\lwip\src\core\mem.c line 264
-        0x40104fc3: do_memp_free_pool at C:\Users\info\.platformio\packages\framework-espidf\components\lwip\lwip\src\core\memp.c line 383
-        0x40104ff7: memp_free at C:\Users\info\.platformio\packages\framework-espidf\components\lwip\lwip\src\core\memp.c line 440
-        0x40103afe: tcpip_thread at C:\Users\info\.platformio\packages\framework-espidf\components\lwip\lwip\src\api\tcpip.c line 183
-        */
-        // shutdown(client->GetSocketDescriptor(), SHUT_WR);
+        shutdown(client->GetSocketDescriptor(), SHUT_WR);
 
         wBuf.reset(); // no more needed
 
