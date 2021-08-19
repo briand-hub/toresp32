@@ -196,7 +196,9 @@ namespace Briand
 		string randomAgent = string( Briand::BriandUtils::GetRandomHostName().get() );
 
 		// Using APIFY but also ifconfig.me could be used
-		auto ipString = Briand::BriandNet::HttpsGet("api.ipfy.org", 443, "/", httpCode, randomAgent);
+		//auto ipString = Briand::BriandNet::HttpsGet("api.ipfy.org", 443, "/", httpCode, randomAgent);
+		// APIFY seems not so reliable, back to ifconfig
+		auto ipString = Briand::BriandNet::HttpsGet("ifconfig.me", 443, "/ip", httpCode, randomAgent, true);
 
 		if (ipString == nullptr) return "Error (HTTP/" + to_string(httpCode) + ")";
 		else return *ipString.get();
