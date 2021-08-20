@@ -706,7 +706,7 @@ namespace Briand {
 
 		// Set circuit busy (long work!)
 		this->StatusResetTo(CircuitStatusFlag::BUSY);
-		
+
 		// Prepare for search
 		this->relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
 
@@ -737,6 +737,7 @@ namespace Briand {
 		// GUARD
 		if (!this->FindAndPopulateRelay(0)) { 
 			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
+			BriandTorStatistics::STAT_NUM_CACHE_GUARD_MISS++;
 			return false;  
 		}
 
@@ -747,6 +748,7 @@ namespace Briand {
 		// MIDDLE
 		if (!this->FindAndPopulateRelay(1)) { 
 			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
+			BriandTorStatistics::STAT_NUM_CACHE_MIDDLE_MISS++;
 			return false;  
 		} 
 
@@ -757,6 +759,7 @@ namespace Briand {
 		// EXIT
 		if (!this->FindAndPopulateRelay(2)) { 
 			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
+			BriandTorStatistics::STAT_NUM_CACHE_EXIT_MISS++;
 			return false;  
 		} 
 
@@ -784,6 +787,7 @@ namespace Briand {
 		if ( ! this->sClient->Connect(this->guardNode->GetHost().c_str(), this->guardNode->GetPort() ) ) {
 			ESP_LOGW(LOGTAG, "[ERR] Failed to connect to Guard.\n");
 			this->Cleanup();
+			BriandTorStatistics::STAT_NUM_GUARD_CONN_ERR++;
 			return false;
 		}
 
@@ -846,6 +850,7 @@ namespace Briand {
 		if (!stepDone) {
 			ESP_LOGD(LOGTAG, "[DEBUG] Failed to conclude CREATE2 with guard.\n");
 			this->TearDown();
+			BriandTorStatistics::STAT_NUM_CREATE2_FAIL++;
 			return false;
 		}
 
@@ -863,6 +868,7 @@ namespace Briand {
 		if (!stepDone) {
 			ESP_LOGD(LOGTAG, "[DEBUG] Failed to conclude EXTEND2 with middle node.\n");
 			this->TearDown();
+			BriandTorStatistics::STAT_NUM_EXTEND2_FAIL++;
 			return false;
 		}
 
@@ -875,6 +881,7 @@ namespace Briand {
 		if (!stepDone) {
 			ESP_LOGD(LOGTAG, "[DEBUG] Failed to conclude EXTEND2 with exit node.\n");
 			this->TearDown();
+			BriandTorStatistics::STAT_NUM_EXTEND2_FAIL++;
 			return false;
 		}
 
@@ -976,6 +983,9 @@ namespace Briand {
 		// If a DESTROY given must tear down, tell me why
 		if (tempCell->GetCommand() == BriandTorCellCommand::DESTROY) {
 			ESP_LOGW(LOGTAG, "[ERR] TorStreamReadData error, DESTROY received! Reason = 0x%02X (%s)\n", tempCell->GetPayload()->at(0), BriandUtils::RelayTruncatedReasonToString(static_cast<BriandTorDestroyReason>(tempCell->GetPayload()->at(0))).c_str());
+			
+			BriandTorStatistics::SaveStatistic(tempCell);
+			
 			this->TearDown();
 			this->Cleanup();
 			return std::move(tempCell);
@@ -1101,6 +1111,26 @@ namespace Briand {
 
 					// Re-increment by 50 the window
 					this->CURRENT_STREAM_WINDOW += 50;
+				}
+
+				/* To fit this requirement:
+					 To ensure unpredictability, random bytes should be added to at least one
+					RELAY_DATA cell within one increment window. In other word, every 100 cells
+					(increment), random bytes should be introduced in at least one cell.
+				*/
+
+				// When the window reaches 955 (five cells remaining) send an EMPTY relay data cell (only random bytes)
+				if (this->CURRENT_STREAM_WINDOW <= 955) {
+					ESP_LOGD(LOGTAG, "[DEBUG] Sending and empty (random bytes) RELAY_DATA cell.\n");
+					auto emptyPayload = make_unique<vector<unsigned char>>();
+					if (!this->TorStreamWriteData(BriandTorCellRelayCommand::RELAY_DATA, emptyPayload)) {
+						ESP_LOGW(LOGTAG, "[WARN] Empty RELAY_DATA cell NOT sent (errors). Circuit will be torn down.\n");
+						this->TearDown();
+						return nullptr;
+					}
+					else {
+						ESP_LOGD(LOGTAG, "[DEBUG] Empty RELAY_DATA cell sent.\n");
+					}
 				}
 			}
 		}
@@ -1483,6 +1513,7 @@ namespace Briand {
 
 			// If PADDING cell or CIRCID not matching, ignore it.
 			if (readCell->GetCircID() != this->CIRCID || readCell->GetCommand() == BriandTorCellCommand::PADDING) {
+				BriandTorStatistics::SaveStatistic(readCell);
 				ESP_LOGD(LOGTAG, "[DEBUG] TorStreamRead ignoring cell.\n");
 				this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
 				continue;
@@ -1490,6 +1521,7 @@ namespace Briand {
 
 			// If DESTROY, return error.
 			if (readCell->GetCommand() == BriandTorCellCommand::DESTROY) {
+				BriandTorStatistics::SaveStatistic(readCell);
 				ESP_LOGW(LOGTAG, "[WARN] TorStreamRead received circuit DESTROY.\n");
 				finished = true;
 				this->TearDown();
@@ -1503,6 +1535,7 @@ namespace Briand {
 				// If RELAY cell but command is TRUNCATE => error
 				if (readCell->GetRelayCommand() == BriandTorCellRelayCommand::RELAY_TRUNCATE || readCell->GetRelayCommand() == BriandTorCellRelayCommand::RELAY_TRUNCATED) 
 				{
+					BriandTorStatistics::SaveStatistic(readCell);
 					ESP_LOGW(LOGTAG, "[WARN] TorStreamRead received RELAY_TRUNCATE / RELAY_TRUNCATED, reason = %s.\n", BriandUtils::RelayTruncatedReasonToString(static_cast<BriandTorDestroyReason>(readCell->GetPayload()->at(0))).c_str());
 					finished = true;
 					this->TearDown();
@@ -1512,6 +1545,7 @@ namespace Briand {
 
 				// Check if the stream id is the right one (otherwise is a protocol violation!)
 				if (readCell->GetStreamID() != this->CURRENT_STREAM_ID) {
+					BriandTorStatistics::SaveStatistic(readCell);
 					ESP_LOGW(LOGTAG, "[WARN] TorStreamRead received a non-matching StreamID (current: %04X received: %04X) Destroy with protocol violation.\n", this->CURRENT_STREAM_ID, readCell->GetStreamID());
 					finished = true;
 					this->TearDown();
@@ -1521,6 +1555,7 @@ namespace Briand {
 
 				// Check if this is a RELAY_END, in this case no data should be returned, just finished
 				if (readCell->GetRelayCommand() == BriandTorCellRelayCommand::RELAY_END) {
+					BriandTorStatistics::SaveStatistic(readCell);
 					ESP_LOGD(LOGTAG, "[DEBUG] TorStreamRead received RELAY_END. Finished.\n");
 					finished = true;
 					this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
@@ -1530,6 +1565,8 @@ namespace Briand {
 
 				// Check if this is the desidered command
 				if (readCell->GetRelayCommand() != BriandTorCellRelayCommand::RELAY_DATA) {
+					BriandTorStatistics::SaveStatistic(readCell);
+
 					if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 						printf("[ERR] TorStreamRead failed, received unexpected cell from exit node: %s, payload: ", BriandUtils::BriandTorRelayCellCommandToString(readCell->GetRelayCommand()).c_str());
 						readCell->PrintCellPayloadToSerial();
@@ -1600,6 +1637,8 @@ namespace Briand {
 	void BriandTorCircuit::TearDown(BriandTorDestroyReason reason /*  = BriandTorDestroyReason::NONE */) {
 		this->StatusSetFlag(CircuitStatusFlag::CLOSING);
 		this->StatusSetFlag(CircuitStatusFlag::BUSY);
+
+		BriandTorStatistics::SaveStatistic(reason);
 
 		/*
 			To tear down a circuit completely, an OR or OP sends a DESTROY

@@ -22,6 +22,7 @@
 #include "BriandTorCircuit.hxx"
 #include "BriandTorCircuitsManager.hxx"
 #include "BriandNet.hxx"
+#include "BriandTorStatistics.hxx"
 
 using namespace std;
 

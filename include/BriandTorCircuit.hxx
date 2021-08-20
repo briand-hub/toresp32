@@ -23,6 +23,7 @@
 #include "BriandTorCell.hxx"
 #include "BriandTorRelay.hxx"
 #include "BriandTorRelaySearcher.hxx"
+#include "BriandTorStatistics.hxx"
 
 using namespace std;
 

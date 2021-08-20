@@ -890,6 +890,8 @@ namespace Briand
             printf("PROXY STATUS: started on port %hu\n", this->proxyPort);
             printf("PROXY USERNAME: %s\n", this->proxyUser.c_str());
             printf("PROXY PASSWORD: %s\n", this->proxyPassword.c_str());
+            printf("MAX CONNECTIONS: %hu\n", this->REQUEST_QUEUE_LIMIT);
+            printf("ACTIVE CONNECTIONS: %hu\n", this->REQUEST_QUEUE);
         }
         else {
             printf("PROXY STATUS: not started.\n");

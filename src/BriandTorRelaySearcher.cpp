@@ -65,7 +65,7 @@ namespace Briand {
 		ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache invoked.\n");
 		
 		// Always show an alert because this is a long operation!
-		printf("\n\n*** System warning: Tor node cache is rebuilding, may take time.\n\n");
+		printf("\n*** System warning: Tor node cache is rebuilding, may take time.\n\n");
 
 		// Start with the first authority, check not to start an infinite loop 
 		unsigned short loopStartsWith = 0;
@@ -406,6 +406,13 @@ namespace Briand {
 		// If all dirs fault
 		if (loopStartsWith == TOR_DIR_LAST_USED && !cacheCreated) {
 			ESP_LOGE(LOGTAG, "[ERR] RefreshNodesCache FATAL ERROR: all directories failed to build a cache. Too many TOR Nodes required in cache? Network down? TOR dirs all down?\n");
+		}
+
+		if (cacheCreated) {
+			printf("\n*** System warning: Tor node cache rebuilding SUCCEDED.\n\n");
+		}
+		else {
+			printf("\n*** System warning: Tor node cache rebuilding has FAILED.\n\n");
 		}
 	}
 

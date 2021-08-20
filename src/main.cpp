@@ -29,6 +29,7 @@
 #include "BriandTorCryptoUtils.hxx"
 #include "BriandTorCircuitsManager.hxx"
 #include "BriandTorSocks5Proxy.hxx"
+#include "BriandTorStatistics.hxx"
 
 /* Startup tests */
 
@@ -433,7 +434,7 @@ void TorEsp32Main(void* taskArg) {
 			// Sync time with NTP (VERY IMPORTANT!)
 			syncTimeWithNTP();
 
-			printf("[INFO] Free heap at system start is %lu bytes.\n", Briand::BriandESPDevice::GetFreeHep());
+			printf("[INFO] Free heap at system start is %zu bytes.\n", Briand::BriandESPDevice::GetFreeHeap());
 
 			// Proceed to next steps
 			nextStep = 1000;
@@ -630,6 +631,7 @@ void executeCommand(string& cmd) {
 		printf("torproxy [start|stop|status] : Starts/Stops/Prints info SOCKS5 Proxy.\n");
 		printf("torproxyport [PORT] : Restarts the proxy on the provided custom port.\n");
 		printf("tor resolve [hostname] : Resolve IPv4 address through tor.\n");
+		printf("torstats : Prints tor statistics (even if proxy disabled).\n");
     }
     else if (cmd.compare("time") == 0) {
         printLocalTime();
@@ -655,7 +657,7 @@ void executeCommand(string& cmd) {
 		printf("\t briandsearch : the relay searcher component.\n");
 		printf("\t briandproxy : the proxy component.\n");
 		printf("\t briandutils : the misc utilities helper.\n");
-		printf("Some of the ESP system tags are: wifi, wifi_init, esp_netif_handler, phy, system_api, tcpip_adapter, esp_netif_lwip, device, dhcpc ...\n");
+		printf("Some of the ESP system tags are: wifi, wifi_init, esp_netif_handler, phy, system_api, tcpip_adapter, esp_netif_lwip, esp_netif_handlers, device, dhcpc ...\n");
 		printf("\t Using tag wildcard * sets ALL the logs to the level specified.\n");
 		printf("WARNING: setting high log level could cause unexpected crashes due to limited stack sizes and printf's high use of stack!!\n");
 	}
@@ -692,11 +694,9 @@ void executeCommand(string& cmd) {
 		else printf("Wrong format for command. Type help log.\n");
 	}
     else if (cmd.compare("devinfo") == 0) {
-        printf("CPU Frequency: %luMHz\n", Briand::BriandESPDevice::GetCpuFreqMHz());
-        printf("Heap size: %lu bytes\n", Briand::BriandESPDevice::GetHeapSize());
-        printf("Free heap: %u bytes\n", esp_get_free_heap_size());
-		// TODO printf("PSram size: %d bytes\n", Briand::BriandESPDevice::GetPsramSize());
-        // TODO printf("Free PSram: %d bytes\n", Briand::BriandESPDevice::GetFreePsram());
+        printf("CPU Frequency: %lu\n", Briand::BriandESPDevice::GetCpuFreqMHz());
+		
+		Briand::BriandESPDevice::PrintMemoryStatus();
         
 		unsigned int total = 0, used = 0;
 		esp_spiffs_info(NULL, &total, &used);
@@ -705,9 +705,8 @@ void executeCommand(string& cmd) {
         printf("File system free: %d bytes\n", (total-used));
     }
 	else if (cmd.compare("meminfo") == 0) {
-        // TODO printf("HEAP FREE: %u / %u bytes. PSRAM FREE: %u / %u bytes.\n", esp_get_free_heap_size(), Briand::BriandESPDevice::GetHeapSize(), Briand::BriandESPDevice::GetFreePsram(), Briand::BriandESPDevice::GetPsramSize());
-		printf("HEAP FREE: %u / %lu bytes. MAX FREE %lu MIN FREE %lu LARGEST FREE BLOCK: %zu\n", esp_get_free_heap_size(), Briand::BriandESPDevice::GetHeapSize(), HEAP_MAX, HEAP_MIN, heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
-    }
+        Briand::BriandESPDevice::PrintMemoryStatus();
+	}
 	else if (cmd.compare("netinfo") == 0) {
         printf("AP Hostname: %s\n", AP_HOSTNAME->c_str());
 		printf("AP MAC: %s\n", WiFi->GetApMAC().c_str());
@@ -918,6 +917,9 @@ void executeCommand(string& cmd) {
 			printf("IPv4 address: %s\n", Briand::BriandUtils::IPv4ToString(circuit->TorResolve(cmd)).c_str());
 		}
 	}
+	else if (cmd.compare("torstats") == 0) {
+		Briand::BriandTorStatistics::Print();
+	}
 	// other commands implementation...
     else {
         printf("Unknown command.\n");
@@ -930,7 +932,7 @@ void executeCommand(string& cmd) {
 void heapStats(void* param) {
 	// IDF Task cannot return
 	while (1) {
-		unsigned long currentHeap = esp_get_free_heap_size();
+		unsigned long currentHeap = Briand::BriandESPDevice::GetFreeHeap();
 		if (currentHeap > HEAP_MAX) HEAP_MAX = currentHeap;
 		if (currentHeap < HEAP_MIN) HEAP_MIN = currentHeap;
 		vTaskDelay(500 / portTICK_PERIOD_MS);

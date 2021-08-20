@@ -7,6 +7,18 @@
 * Implement a vector of nodes.
 * Authenticate cell? => Prepare stub method to authenticate client
 
+## 2021-08-19
+
+* Implemented circuit statistics
+* Added support for ESP32-S2 and testing PSram
+* Upgraded LibBriandIDF to test with ESP Wrover and ESP32S2
+* Added and edited sdkconfig files
+
+* Additional settings are required to work with SPI RAM (ESP WRover, ESP32-S2):
+  * (SPI RAM settings) *Try to allocate memories of WiFi and LWIP in SPIRAM firstly. If failed, allocate internal memory* required 
+  * *Component config -> Wi-Fi -> Max Number of Wifi static TX buffers = 32*
+  * *Component config -> Wi-Fi -> Max number of WiFi cache TX buffers = 32*
+
 ## 2021-08-18
 
 * Solved the BIIIIIIIG bug in the while() that was causing heap paaaaaaaain :/ left the set parameters in previous news. Reset the previously commented "// reserve some bytes"

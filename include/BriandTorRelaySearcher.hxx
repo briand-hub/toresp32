@@ -21,6 +21,7 @@
 #include "BriandDefines.hxx"
 #include "BriandTorRelay.hxx"
 #include "BriandTorCertificates.hxx"
+#include "BriandTorStatistics.hxx"
 
 using namespace std;
 
