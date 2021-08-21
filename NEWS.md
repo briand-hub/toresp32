@@ -25,7 +25,7 @@
 * Better stack sizes when log suppressed
 
 * Possible bug in stream: after some cells exchanged, seems unrecognize all. Maybe due to the additional bytes download?
-* Possible bug in tor relay searcher: too much rebuild cache requests...
+* Possible bug in tor relay searcher: too much rebuild cache requests... SOLVED!
 
 ## 2021-08-18
 

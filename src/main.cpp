@@ -106,6 +106,7 @@ void TorEsp32Setup() {
 	// Disable default ESP log to Error only, set the log of this code to WARNING by default
 	printf("[INFO] Setting ESP default log level to error...\n");
 	esp_log_level_set("*", ESP_LOG_ERROR);
+	BRIAND_SET_LOG("*", ESP_LOG_ERROR);
 
 	// Initialize the NVS
 	printf("[INFO] Initializing NVS...");

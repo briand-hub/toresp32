@@ -658,12 +658,14 @@ namespace Briand {
 			std::getline(file, line, '\n');
 
 			// Try to reach line number, if fails randomize again
+			// Attention! randomPick must be at least 1 (first file line is timestamp!)
+			if (this->randomPick == 0) this->randomPick++;
 			bool validLine = false;
 			unsigned char fileLines = 0;
 			while (!validLine) {
 				if (file.eof()) {
 					// Here file is EOF but line was not reached, so check.
-					while (this->randomPick >= fileLines) 
+					while (this->randomPick >= fileLines || this->randomPick == 0) 
 						this->randomize();
 
 					// restart
@@ -686,7 +688,7 @@ namespace Briand {
 
 			// If line is empty or not valid, error
 			if (line.size() < 32) {
-				ESP_LOGW(LOGTAG, "[WARN] Cache file is not valid.\n");
+				ESP_LOGW(LOGTAG, "[WARN] Cache file is not valid (guard) line #%hu / #%hu has size %zu: <%s>.\n", this->randomPick, fileLines, line.size(), line.c_str());
 				std::remove(NODES_FILE_MIDDLE);
 				return relay;
 			}
@@ -755,12 +757,14 @@ namespace Briand {
 				std::getline(file, line, '\n');
 
 				// Try to reach line number, if fails randomize again
+				// Attention! randomPick must be at least 1 (first file line is timestamp!)
+				if (this->randomPick == 0) this->randomPick++;
 				bool validLine = false;
 				unsigned char fileLines = 0;
 				while (!validLine) {
 					if (file.eof()) {
 						// Here file is EOF but line was not reached, so check.
-						while (this->randomPick >= fileLines) 
+						while (this->randomPick >= fileLines || this->randomPick == 0) 
 							this->randomize();
 
 						// restart
@@ -783,7 +787,7 @@ namespace Briand {
 
 				// If line is empty or not valid, error
 				if (line.size() < 32) {
-					ESP_LOGW(LOGTAG, "[WARN] Cache file is not valid.\n");
+					ESP_LOGW(LOGTAG, "[WARN] Cache file is not valid (middle) line #%hu / #%hu has size %zu: <%s>.\n", this->randomPick, fileLines, line.size(), line.c_str());
 					std::remove(NODES_FILE_MIDDLE);
 					return relay;
 				}
@@ -859,6 +863,8 @@ namespace Briand {
 				std::getline(file, line, '\n');
 
 				// Try to reach line number, if fails randomize again
+				// Attention! randomPick must be at least 1 (first file line is timestamp!)
+				if (this->randomPick == 0) this->randomPick++;
 				bool validLine = false;
 				unsigned char fileLines = 0;
 				while (!validLine) {
@@ -869,7 +875,7 @@ namespace Briand {
 						#endif
 
 						// Here file is EOF but line was not reached, so check.
-						while (this->randomPick >= fileLines) 
+						while (this->randomPick >= fileLines || this->randomPick == 0) 
 							this->randomize();
 
 						// restart
@@ -892,7 +898,7 @@ namespace Briand {
 
 				// If line is empty or not valid, error
 				if (line.size() < 32) {
-					ESP_LOGW(LOGTAG, "[WARN] Cache file is not valid.\n");
+					ESP_LOGW(LOGTAG, "[WARN] Cache file is not valid (exit) line #%hu / #%hu has size %zu: <%s>.\n", this->randomPick, fileLines, line.size(), line.c_str());
 					std::remove(NODES_FILE_EXIT);
 					return relay;
 				}
