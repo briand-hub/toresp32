@@ -40,8 +40,9 @@ namespace Briand {
 
 		// Implementation reviewed with a spiffs cache of N nodes.
 
-		// Always skip at least 1
-		this->skipRandomResults = Briand::BriandUtils::GetRandomByte() + 1;
+		// Always skip some nodees
+		// When consensus is set, limit random skip lines to 3000.
+		this->skipRandomResults = esp_random() % 3001;
 
 		// Random picking for the array (see method GetGuard etc.)
 		this->randomPick = BriandUtils::GetRandomByte() % TOR_NODES_CACHE_SIZE;
@@ -62,7 +63,12 @@ namespace Briand {
 
 		*/
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache invoked.\n");
+		#endif
+
+		// Statistics
+		auto buildStartTime = BriandUtils::GetUnixTime();
 		
 		// Always show an alert because this is a long operation!
 		printf("\n*** System warning: Tor node cache is rebuilding, may take time.\n\n");
@@ -89,7 +95,9 @@ namespace Briand {
 			}
 			fExit << std::to_string(BriandUtils::GetUnixTime()) << "\n";
 			unsigned char fExitNodes = 0;
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache recreated exit cache.\n");
+			#endif
 			
 			ofstream fMiddle(NODES_FILE_MIDDLE, ios::out | ios::trunc);
 			if (!fMiddle.good()) {
@@ -98,7 +106,9 @@ namespace Briand {
 			}
 			fMiddle << std::to_string(BriandUtils::GetUnixTime()) << "\n";
 			unsigned char fMiddleNodes = 0;
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache recreated middle cache.\n");
+			#endif
 			
 			ofstream fGuard(NODES_FILE_GUARD, ios::out | ios::trunc);
 			if (!fGuard.good()) {
@@ -107,12 +117,23 @@ namespace Briand {
 			}
 			fGuard << std::to_string(BriandUtils::GetUnixTime()) << "\n";
 			unsigned char fGuardNodes = 0;
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache recreated guard cache.\n");
+			#endif
 
 			// Connect
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache Connecting to dir #%hu (%s) %s:%hu\n", TOR_DIR_LAST_USED, curDir.nickname, curDir.host, curDir.port);
+			#endif
+
 			if (!client->Connect(string(curDir.host), curDir.port)) {
+
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache Failed to connect to dir #%hu (%s)\n", TOR_DIR_LAST_USED, curDir.nickname);
+				#endif
+				
 				TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED+1) % TOR_DIR_AUTHORITIES_NUMBER;
 				client->Disconnect();
 				continue;
@@ -132,7 +153,11 @@ namespace Briand {
 			auto requestV = BriandNet::StringToUnsignedCharVector(request, true);
 
 			if (!client->WriteData(requestV)) {
+
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache Failed to write request to dir #%hu (%s)\n", TOR_DIR_LAST_USED, curDir.nickname);
+				#endif
+				
 				TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED+1) % TOR_DIR_AUTHORITIES_NUMBER;
 				client->Disconnect();
 				continue;
@@ -141,7 +166,17 @@ namespace Briand {
 			// free ram
 			requestV.reset();
 
+			// Skip some lines to randomize results
+			this->randomize();
+			unsigned short skipped = 0;
+			while (skipped < this->skipRandomResults) {
+				bool skippedNewLine = true;
+				auto skippedLine = client->ReadDataUntil('\n', 512, skippedNewLine);
+			}
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache request sent.\n");
+			#endif
 
 			// Now read results (example: http://45.66.33.45/tor/status-vote/current/consensus)
 			// Searching for "r " string (a row for a starting node)
@@ -164,8 +199,11 @@ namespace Briand {
 					
 				if (!newLine || rawData->size() < 2) {
 					// something is wrong!
+					#if !SUPPRESSDEBUGLOG
 					ESP_LOGD(LOGTAG, "[DEBUG] Wrong read from directory response, newline %s, line is: ", (newLine ? "found" : "not found"));
 					if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) BriandUtils::PrintByteBuffer(*rawData.get());
+					#endif
+
 					break;
 				}
 
@@ -358,6 +396,7 @@ namespace Briand {
 							fExit << std::to_string(rFlags) << "\t";
 							if (fExitNodes+1 < TOR_NODES_CACHE_SIZE) fExit << "\n"; // skip last \n
 							fExitNodes++;
+							fExit.flush();
 						}
 						else if (exitCheck && fGuardNodes < TOR_NODES_CACHE_SIZE && (rFlags & TOR_FLAGS_GUARD_MUST_HAVE) == TOR_FLAGS_GUARD_MUST_HAVE) {
 							fGuard << rName << "\t";
@@ -367,6 +406,7 @@ namespace Briand {
 							fGuard << std::to_string(rFlags) << "\t";
 							if (fGuardNodes+1 < TOR_NODES_CACHE_SIZE) fGuard << "\n"; // skip last \n
 							fGuardNodes++;
+							fGuard.flush();
 						}
 						else if (exitCheck && fMiddleNodes < TOR_NODES_CACHE_SIZE && (rFlags & TOR_FLAGS_MIDDLE_MUST_HAVE) == TOR_FLAGS_MIDDLE_MUST_HAVE) {
 							fMiddle << rName << "\t";
@@ -376,6 +416,7 @@ namespace Briand {
 							fMiddle << std::to_string(rFlags) << "\t";
 							if (fMiddleNodes+1 < TOR_NODES_CACHE_SIZE) fMiddle << "\n"; // skip last \n
 							fMiddleNodes++;
+							fMiddle.flush();
 						}
 					}
 				}
@@ -410,6 +451,9 @@ namespace Briand {
 
 		if (cacheCreated) {
 			printf("\n*** System warning: Tor node cache rebuilding SUCCEDED.\n\n");
+
+			// Update statistics
+			BriandTorStatistics::STAT_CACHE_BUILD_TIME = BriandUtils::GetUnixTime() - buildStartTime;
 		}
 		else {
 			printf("\n*** System warning: Tor node cache rebuilding has FAILED.\n\n");
@@ -420,6 +464,14 @@ namespace Briand {
 		bool valid = false;
 
 		ifstream file(filename, ios::in);
+
+		// Make some tentatives to open file (ESP32 Flash could be doing else!)
+		unsigned char fopenMaxTentatives = 5;
+		while (!file.good() && fopenMaxTentatives > 0) {
+			file.open(filename, ios::in);
+			fopenMaxTentatives--;
+			vTaskDelay(500/portTICK_PERIOD_MS);
+		}
 
 		if (file.good()) {
 			// Check just the first line timestamp and how many lines are in the file
@@ -433,7 +485,9 @@ namespace Briand {
 			}
 			file.close(); 
 
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] %s cache file has %u rows.\n", filename, lines);
+			#endif
 
 			if (firstLine.size() > 3) {
 				unsigned long int cacheAge = stoul(firstLine);
@@ -446,7 +500,9 @@ namespace Briand {
 			}	
 		}
 		else {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] %s cache file does not exist.\n", filename);
+			#endif
 		}
 
 		return valid;
@@ -463,6 +519,8 @@ namespace Briand {
 		ip1.s_addr = ip1.s_addr & 0x0000FFFF;
 		ip2.s_addr = ip2.s_addr & 0x0000FFFF;
 
+		if (ip1.s_addr == ip2.s_addr) BriandTorStatistics::STAT_NUM_CACHE_SAME_IP_DROP++;
+
 		// Elegant :)
 		return ip1.s_addr == ip2.s_addr;
 	}
@@ -470,6 +528,7 @@ namespace Briand {
 	bool BriandTorRelaySearcher::IsPortListed(const unsigned short& port, const string& portList) {
 		size_t posStart = 0;
 		size_t posEnd = 0;
+
 		while (posStart < portList.size()) {
 			posEnd = portList.find(',', posStart);
 			
@@ -532,16 +591,29 @@ namespace Briand {
 		unique_ptr<BriandTorRelay> relay = nullptr;
 
 		if (!this->cacheValid) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache invalid, download and rebuilding.\n");
-			RefreshNodesCache();
+			#endif
+
+			this->InvalidateCache(true);
 		}
 		if (this->cacheValid) {
 			// randomize for random picking
 			this->randomize();
 			
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
+			#endif
 
 			ifstream file(this->NODES_FILE_GUARD, ios::in);
+
+			// Make some tentatives to open file (ESP32 Flash could be doing else!)
+			unsigned char fopenMaxTentatives = 5;
+			while (!file.good() && fopenMaxTentatives > 0) {
+				file.open(this->NODES_FILE_GUARD, ios::in);
+				fopenMaxTentatives--;
+				vTaskDelay(500/portTICK_PERIOD_MS);
+			}
 
 			// Skip the first line
 			string line; 
@@ -608,7 +680,11 @@ namespace Briand {
 		unique_ptr<BriandTorRelay> relay = nullptr;
 
 		if (!this->cacheValid) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache invalid, download and rebuilding.\n");
+			#endif
+
+			this->InvalidateCache(true);
 		}
 		if (this->cacheValid) {
 			bool sameFamily = true;
@@ -617,9 +693,19 @@ namespace Briand {
 				// randomize for random picking
 				this->randomize();
 				
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
+				#endif
 
 				ifstream file(this->NODES_FILE_MIDDLE, ios::in);
+
+				// Make some tentatives to open file (ESP32 Flash could be doing else!)
+				unsigned char fopenMaxTentatives = 5;
+				while (!file.good() && fopenMaxTentatives > 0) {
+					file.open(this->NODES_FILE_MIDDLE, ios::in);
+					fopenMaxTentatives--;
+					vTaskDelay(500/portTICK_PERIOD_MS);
+				}
 
 				// Skip the first line
 				string line; 
@@ -693,7 +779,11 @@ namespace Briand {
 		unique_ptr<BriandTorRelay> relay = nullptr;
 
 		if (!this->cacheValid) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache invalid, download and rebuilding.\n");
+			#endif
+
+			this->InvalidateCache(true);
 		}
 		if (this->cacheValid) {
 			bool sameFamily = false;
@@ -702,9 +792,19 @@ namespace Briand {
 				// randomize for random picking
 				this->randomize();
 				
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] Nodes cache is valid. Picking random node #%d.\n", this->randomPick);
+				#endif
 
 				ifstream file(this->NODES_FILE_EXIT, ios::in);
+
+				// Make some tentatives to open file (ESP32 Flash could be doing else!)
+				unsigned char fopenMaxTentatives = 5;
+				while (!file.good() && fopenMaxTentatives > 0) {
+					file.open(this->NODES_FILE_EXIT, ios::in);
+					fopenMaxTentatives--;
+					vTaskDelay(500/portTICK_PERIOD_MS);
+				}
 
 				// Skip the first line
 				string line; 
@@ -715,6 +815,11 @@ namespace Briand {
 				unsigned char fileLines = 0;
 				while (!validLine) {
 					if (file.eof()) {
+
+						#if !SUPPRESSDEBUGLOG
+						ESP_LOGD(LOGTAG, "[DEBUG] Cache reached EOF, lines are %d requested line %d\n.", fileLines, this->randomPick);
+						#endif
+
 						// Here file is EOF but line was not reached, so check.
 						while (this->randomPick >= fileLines) 
 							this->randomize();
@@ -788,7 +893,9 @@ namespace Briand {
 	}
 
 	void BriandTorRelaySearcher::PrintCacheContents() {
-		if (true || esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
+
+		#if !SUPPRESSDEBUGLOG
+		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] GUARDS CACHE:\n");
 			BriandUtils::PrintFileContent(this->NODES_FILE_GUARD);
 			printf("\n");
@@ -800,6 +907,8 @@ namespace Briand {
 			printf("\n");
 			printf("[DEBUG] Cache status is: %s\n", (this->cacheValid ? "Valid" : "Invalid"));
 		}
+		#endif
+		
 	}
 
 	size_t BriandTorRelaySearcher::GetObjectSize() {
