@@ -533,7 +533,6 @@ namespace Briand {
 			}	
 		}
 		else {
-			file.close();
 			ESP_LOGE(LOGTAG, "[DEBUG] %s cache file unavailable for read. Tentatives made were %hu.\n", filename, fopenTentatives);
 		}
 
@@ -647,7 +646,6 @@ namespace Briand {
 				fopenTentatives++;
 			}
 			if (!file.good()) {
-				file.close();
 				ESP_LOGE(LOGTAG, "[WARN] Search failed due to %hu failed tentatives to open file %s.\n", fopenTentatives, this->NODES_FILE_GUARD);
 				return nullptr;
 			}
@@ -744,7 +742,6 @@ namespace Briand {
 					fopenTentatives++;
 				}
 				if (!file.good()) {
-					file.close();
 					ESP_LOGE(LOGTAG, "[WARN] Search failed due to %hu failed tentatives to open file %s.\n", fopenTentatives, this->NODES_FILE_MIDDLE);
 					return nullptr;
 				}
@@ -848,7 +845,6 @@ namespace Briand {
 					fopenTentatives++;
 				}
 				if (!file.good()) {
-					file.close();
 					ESP_LOGE(LOGTAG, "[WARN] Search failed due to %hu failed tentatives to open file %s.\n", fopenTentatives, this->NODES_FILE_EXIT);
 					return nullptr;
 				}

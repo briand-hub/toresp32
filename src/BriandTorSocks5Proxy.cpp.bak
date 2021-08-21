@@ -818,7 +818,6 @@ namespace Briand
             #if !SUPPRESSDEBUGLOG
             ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy closing socket.\n");    
             #endif
-            shutdown(this->proxySocket, SHUT_RDWR);
             close(this->proxySocket);
             this->proxyStarted = false;
         }

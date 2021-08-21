@@ -67,7 +67,8 @@ namespace Briand
     /*static*/ void BriandTorCircuitsManager::CircuitsTaskSingle(void* noparam) {
         // ESP-IDF task must never return 
         while (1) {
-            if (!BriandTorCircuitsManager::isStopped) {
+            // If circuit manager stopped OR nodes cache is rebuilding, DO NOT DO ANYTHING!
+            if (!BriandTorCircuitsManager::isStopped && !BriandTorRelaySearcher::CACHE_REBUILDING) {
                 #if !SUPPRESSDEBUGLOG
                 ESP_LOGD(LOGTAG, "[DEBUG] CircuitsManager main task invoked, checking for instances to be created.\n");
                 #endif

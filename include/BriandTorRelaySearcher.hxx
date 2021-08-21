@@ -96,6 +96,8 @@ namespace Briand {
 
 		static const char* LOGTAG;
 
+		static bool CACHE_REBUILDING;
+
 		BriandTorRelaySearcher();
 
 		~BriandTorRelaySearcher();
