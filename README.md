@@ -1,4 +1,4 @@
-# toresp32
+# toresp32 - Tor for IoT
 Briand's project to turn an ESP32 into a Tor client "plug&amp;play"
 
 ## Development status
