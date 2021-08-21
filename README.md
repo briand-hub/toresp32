@@ -5,7 +5,7 @@ Briand's project to turn an ESP32 into a Tor client "plug&amp;play"
 
 For details check always [NEWS FILE](NEWS.md)
 
-* Working to **version 1.1.0**, new features: 
+* Working to **version 1.1.0**, new features [See full changelog](): 
 	* consensus for cache (no more microdescriptors)
 	* exit policy check with default ports
 	* faster proxy with async and parallel read/write, custom port enabled.
@@ -13,7 +13,10 @@ For details check always [NEWS FILE](NEWS.md)
 	* better performances
 	* less memory used
 	* better log output
-	* Support for ESP32-S2 and ESP32-WRover, full support for SPI RAM
+	* support for ESP32-S2 and ESP32-WRover, full support for SPI RAM
+	* statistics
+	* total debug suppression (performances)
+	* new commands
 
 **FIRST RELEASE AVAILABLE [link to release v1.0.0](https://github.com/briand-hub/toresp32/releases/tag/v1.0.0)**
 

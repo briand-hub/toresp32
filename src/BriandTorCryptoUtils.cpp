@@ -35,10 +35,12 @@ namespace Briand {
 
 		auto hashedMessageRaw = BriandUtils::GetOneOldBuffer(mdInfo->size);
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] SHA256 Raw message to encode: ");
 			BriandUtils::PrintByteBuffer(*input.get());
 		} 
+		#endif
 		
 		// Using mbedtls_md() not working as expected!!
 
@@ -50,10 +52,12 @@ namespace Briand {
 		mbedtls_md_update(&mdCtx, input->data(), input->size());
 		mbedtls_md_finish(&mdCtx, hashedMessageRaw.get());
 		
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] SHA256 Raw output: ");
 			BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size, mdInfo->size);
 		} 
+		#endif
 
 		auto digest = BriandUtils::ArrayToVector(hashedMessageRaw, mdInfo->size);
 
@@ -69,10 +73,12 @@ namespace Briand {
 		auto mdInfo = mbedtls_md_info_from_type(MBEDTLS_MD_SHA1);
 		auto hashedMessageRaw = BriandUtils::GetOneOldBuffer(mdInfo->size);
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] SHA1 Raw message to encode: ");
 			BriandUtils::PrintByteBuffer(*input.get());
 		} 
+		#endif
 		
 		// Using mbedtls_md() not working as expected!!
 
@@ -84,10 +90,12 @@ namespace Briand {
 		mbedtls_md_update(&mdCtx, input->data(), input->size());
 		mbedtls_md_finish(&mdCtx, hashedMessageRaw.get());
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] SHA1 Raw output: ");
 			BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size, mdInfo->size);
 		} 
+		#endif
 
 		auto digest = BriandUtils::ArrayToVector(hashedMessageRaw, mdInfo->size);
 
@@ -103,10 +111,12 @@ namespace Briand {
 		auto mdInfo = mbedtls_md_info_from_type(MBEDTLS_MD_SHA1);
 		auto hashedMessageRaw = BriandUtils::GetOneOldBuffer(mdInfo->size);
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] RELAY CELL DIGEST Raw message to encode: ");
 			BriandUtils::PrintByteBuffer(*relayCellPayload.get());
 		} 
+		#endif
 				
 		// Update with input bytes
 		mbedtls_md_update(relayCurrentDigest.get(), relayCellPayload->data(), relayCellPayload->size());
@@ -122,10 +132,12 @@ namespace Briand {
 		// Free (MUST!)
 		mbedtls_md_free(&mdCopy);
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] RELAY CELL DIGEST Raw output: ");
 			BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size, mdInfo->size);
 		} 
+		#endif
 
 		auto digest = BriandUtils::ArrayToVector(hashedMessageRaw, mdInfo->size);
 
@@ -139,8 +151,10 @@ namespace Briand {
 
 		auto hashedMessageRaw = BriandUtils::GetOneOldBuffer(mdInfo->size);
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] HMAC-SHA256 Raw message to encode: ");
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) BriandUtils::PrintByteBuffer(*input.get());
+		#endif
 		
 		// Using mbedtls_md() not working as expected!!
 
@@ -165,8 +179,10 @@ namespace Briand {
 		// however not calling will leak heap!
 		// solution found: use unique_ptr , always working! Thanks C++
 		
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] HMAC-SHA256 Raw output: ");
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) BriandUtils::PrintOldStyleByteBuffer(hashedMessageRaw.get(), mdInfo->size, mdInfo->size, mdInfo->size);
+		#endif
 
 		auto digest = BriandUtils::ArrayToVector(hashedMessageRaw, mdInfo->size);
 
@@ -226,7 +242,9 @@ namespace Briand {
 		// Extract the PK from the certificate
 
 		if ( mbedtls_x509_crt_parse(&rsaIde, x509DerCertificate->data(), x509DerCertificate->size()) != 0) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] CheckSignature RSA/SHA256: failed to parse certificate.\n");
+			#endif
 			
 			// Free
 			mbedtls_x509_crt_free(&rsaIde);
@@ -243,7 +261,9 @@ namespace Briand {
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(verifyResult, reinterpret_cast<char*>(errBuf.get()), 128);
 
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] CheckSignature RSA/SHA256 signature INVALID: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			#endif
 			
 			// Free
 			mbedtls_x509_crt_free(&rsaIde);
@@ -253,7 +273,9 @@ namespace Briand {
 		// Free (MUST!)
 		mbedtls_x509_crt_free(&rsaIde);
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] CheckSignature RSA/SHA256 signature valid.\n");
+		#endif
 
 		return true;
 	}	
@@ -283,7 +305,9 @@ namespace Briand {
 
 		// Parse CA and add to chain
 		if (mbedtls_x509_crt_parse(&chain, x509CACertificate->data(), x509CACertificate->size()) != 0) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] X509Validate: failed to parse CA certificate.\n");
+			#endif
 
 			// free
 			mbedtls_x509_crt_free(&chain);
@@ -297,7 +321,9 @@ namespace Briand {
 
 		// Parse Peer and add to chain
 		if ( mbedtls_x509_crt_parse(&chain, x509PeerCertificate->data(), x509PeerCertificate->size()) != 0) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] X509Validate: failed to parse peer certificate.\n");
+			#endif
 
 			// free
 			mbedtls_x509_crt_free(&chain);
@@ -311,11 +337,14 @@ namespace Briand {
 		unsigned int verification_flags;
 		
 		if (mbedtls_x509_crt_verify_with_profile(&chain, &root_ca, NULL,  &profile, NULL, &verification_flags, NULL, NULL) != 0) {
+
+			#if !SUPPRESSDEBUGLOG
 			if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 				auto tempBuffer = BriandUtils::GetOneOldBuffer(256 + 1);
 				mbedtls_x509_crt_verify_info( reinterpret_cast<char*>(tempBuffer.get()), 256, "", verification_flags);
 				printf("[DEBUG] X509Validate failed because %s\n", reinterpret_cast<const char*>(tempBuffer.get()));
 			} 
+			#endif
 
 			// free 
 			mbedtls_x509_crt_free(&chain);
@@ -324,7 +353,9 @@ namespace Briand {
 			return false;
 		}
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] X509Validate: success.\n");
+		#endif
 
 		// free data structs
 		mbedtls_x509_crt_free(&chain);
@@ -343,18 +374,24 @@ namespace Briand {
 		// Multiple calls to sodium_init() do not cause additional descriptors to be opened.
 		// sodium_init() returns 0 on success, -1 on failure, and 1 if the library had already been initialized
 		if (sodium_init() < 0) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] CheckSignature Ed25519 Error on sodium_init()\n");
+			#endif
 			return false;
 		}
 
 		// Verify
 
 		if (crypto_sign_verify_detached(signature->data(), message->data(), message->size(), ed25519PK->data()) != 0) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] CheckSignature Ed25519 signature is not valid.\n");
+			#endif
 			return false;
 		}
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] CheckSignature Ed25519 signature valid.\n");
+		#endif
 
 		return true;
 	}
@@ -404,7 +441,9 @@ namespace Briand {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] ECDH_Curve25519_GenKeys failed initialize RNG: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			#endif
 			// Free
 			mbedtls_ctr_drbg_free( &ctr_drbg );
 			mbedtls_entropy_free( &entropy );
@@ -442,7 +481,9 @@ namespace Briand {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] ECDH_Curve25519_GenKeys failed on generating keys: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			#endif
 			// Free
 			//mbedtls_ecp_point_free(&G);
 			mbedtls_ecp_group_free(&ecpGroup);
@@ -468,7 +509,9 @@ namespace Briand {
 
 		// The public key sent to server as tor specifies, must be in little-endian format.
 		// Mbedtls uses always big endian so must be reversed.
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] ECDH_Curve25519_GenKeys using mbedtls, reversing the key for little endian format.\n");
+		#endif
 		std::reverse(relay.CURVE25519_PUBLIC_KEY->begin(), relay.CURVE25519_PUBLIC_KEY->end());
 
 		// Free
@@ -525,7 +568,9 @@ namespace Briand {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] ECDH_Curve25519_ComputeSharedSecret failed to read private key: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			#endif
 			// Free
 			mbedtls_ecp_group_free(&ecpGroup);
 			mbedtls_mpi_free(&shared_secret);
@@ -547,7 +592,9 @@ namespace Briand {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] ECDH_Curve25519_ComputeSharedSecret failed to read public key: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			#endif
 			// Free
 			mbedtls_ecp_group_free(&ecpGroup);
 			mbedtls_mpi_free(&shared_secret);
@@ -565,7 +612,9 @@ namespace Briand {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] ECDH_Curve25519_ComputeSharedSecret failed to compute shared secret: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			#endif
 			// Free
 			mbedtls_ecp_group_free(&ecpGroup);
 			mbedtls_mpi_free(&shared_secret);
@@ -582,7 +631,9 @@ namespace Briand {
 			// Error description
 			auto errBuf = BriandUtils::GetOneOldBuffer(128 + 1);
 			mbedtls_strerror(ret, reinterpret_cast<char*>(errBuf.get()), 128);
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] ECDH_Curve25519_ComputeSharedSecret failed to write out the shared secret: %s\n", reinterpret_cast<char*>(errBuf.get()));
+			#endif
 			// Free
 			mbedtls_ecp_group_free(&ecpGroup);
 			mbedtls_mpi_free(&shared_secret);
@@ -612,19 +663,27 @@ namespace Briand {
 		// Check if fields are OK (should be but...)
 
 		if (relay.CURVE25519_PRIVATE_KEY == nullptr) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] NtorHandshakeComplete: error! Relay CURVE25519_PRIVATE_KEY is null!\n");
+			#endif
 			return false;
 		}
 		if (relay.CURVE25519_PUBLIC_KEY == nullptr) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] NtorHandshakeComplete: error! Relay CURVE25519_PUBLIC_KEY context is null!\n");
+			#endif
 			return false;
 		}
 		if (relay.CREATED_EXTENDED_RESPONSE_SERVER_PK == nullptr) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] NtorHandshakeComplete: error! CREATED_EXTENDED_RESPONSE_SERVER_PK context is null!\n");
+			#endif
 			return false;
 		}
 		if (relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH == nullptr) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] NtorHandshakeComplete: error! CREATED_EXTENDED_RESPONSE_SERVER_AUTH context is null!\n");
+			#endif
 			return false;
 		}
 
@@ -679,6 +738,7 @@ namespace Briand {
 			secret_input = EXP(Y,x) | EXP(B,x) | ID | B | X | Y | PROTOID
 		*/
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] X = My Curve25519 public key: ");
 			BriandUtils::PrintByteBuffer(*relay.CURVE25519_PUBLIC_KEY.get());
@@ -694,6 +754,7 @@ namespace Briand {
 			printf("[DEBUG] PROTOID: ");
 			BriandUtils::PrintByteBuffer(*PROTOID.get());
 		}
+		#endif
 
 		auto secret_input = make_unique<vector<unsigned char>>();
 		//secret_input->reserve(64); // reserve some bytes
@@ -701,14 +762,18 @@ namespace Briand {
 		// EXP(Y,x)
 		auto tempVector = BriandTorCryptoUtils::ECDH_Curve25519_ComputeSharedSecret(relay.CREATED_EXTENDED_RESPONSE_SERVER_PK, relay.CURVE25519_PRIVATE_KEY);
 		if (tempVector->size() == 0) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] NtorHandshakeComplete: shared secret failed to compute: EXP(Y,x)!\n");
+			#endif
 			return false;
 		}
 		
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] NtorHandshakeComplete: EXP(Y,x) = ");
 			BriandUtils::PrintByteBuffer(*tempVector.get());
 		}
+		#endif
 
 		// Append EXP(Y,x)
 		secret_input->insert(secret_input->end(), tempVector->begin(), tempVector->end());
@@ -717,14 +782,18 @@ namespace Briand {
 		// EXP(B,x)
 		tempVector = BriandTorCryptoUtils::ECDH_Curve25519_ComputeSharedSecret(ntorKeyVec, relay.CURVE25519_PRIVATE_KEY);
 		if (tempVector->size() == 0) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] NtorHandshakeComplete: shared secret failed to compute: EXP(B,x)!\n");
+			#endif
 			return false;
 		}
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] NtorHandshakeComplete: EXP(B,x) = ");
 			BriandUtils::PrintByteBuffer(*tempVector.get());
 		}
+		#endif
 		
 		// Append EXP(B,x)
 		secret_input->insert(secret_input->end(), tempVector->begin(), tempVector->end());
@@ -744,19 +813,23 @@ namespace Briand {
 		// Append PROTOID
 		secret_input->insert(secret_input->end(), PROTOID->begin(), PROTOID->end());
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG)  {
 			printf("[DEBUG] NtorHandshakeComplete (complete) secret_input: ");
 			BriandUtils::PrintByteBuffer(*secret_input.get(), secret_input->size(), secret_input->size());
 		}
+		#endif
 
 		/*	KEY_SEED = H(secret_input, t_key) */
 
 		relay.KEYSEED = GetDigest_HMAC_SHA256(secret_input, t_key);
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG)  {
 			printf("[DEBUG] NtorHandshakeComplete KEYSEED: ");
 			BriandUtils::PrintByteBuffer(*relay.KEYSEED.get(), relay.KEYSEED->size(), relay.KEYSEED->size());
 		}
+		#endif
 
 		/* verify = H(secret_input, t_verify) */
 
@@ -778,15 +851,21 @@ namespace Briand {
 		/* The client verifies that AUTH == H(auth_input, t_mac). */
 		auto auth_verify = GetDigest_HMAC_SHA256(auth_input, t_mac);
 		if (auth_verify->size() != relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size()) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] NtorHandshakeComplete Error, AUTH size and H(auth_input, t_mac) size does not match!\n");
+			#endif
 			return false;
 		}
 		if (!std::equal(auth_verify->begin(), auth_verify->end(), relay.CREATED_EXTENDED_RESPONSE_SERVER_AUTH->begin())) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] NtorHandshakeComplete Error, AUTH and H(auth_input, t_mac) not matching!\n");
+			#endif
 			return false;
 		}
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] NtorHandshakeComplete Relay response to CREATE2/EXTEND2 verified (success).\n");
+		#endif
 	
 		/*
 			The client then checks Y is in G^* =======>>>> Both parties check that none of the EXP() operations produced the 
@@ -822,7 +901,9 @@ namespace Briand {
 
 		// Clear and simple:
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] Generating keys with HKDF.\n");
+		#endif
 
 		unsigned short KEY_LEN = 16;
 	   	unsigned short HASH_LEN = 20;
@@ -853,10 +934,12 @@ namespace Briand {
 		
 		#endif
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] HKDF expansion for keys: ");
 			BriandUtils::PrintByteBuffer(*hkdf.get());
 		}
+		#endif
 
 		/*
 			When used in the ntor handshake, the first HASH_LEN bytes form the
@@ -887,10 +970,12 @@ namespace Briand {
 		mbedtls_md_starts(relay.KEY_ForwardDigest_Df.get());
 		mbedtls_md_update(relay.KEY_ForwardDigest_Df.get(), hkdf->data(), HASH_LEN);
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Relay digest forward seed: ");
 			BriandUtils::PrintByteBuffer(*hkdf.get(), 0, HASH_LEN);
 		}
+		#endif
 
 		hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
 
@@ -901,10 +986,12 @@ namespace Briand {
 		mbedtls_md_starts(relay.KEY_BackwardDigest_Db.get());
 		mbedtls_md_update(relay.KEY_BackwardDigest_Db.get(), hkdf->data(), HASH_LEN);
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Relay digest backward seed: ");
 			BriandUtils::PrintByteBuffer(*hkdf.get(), 0, HASH_LEN);
 		}
+		#endif
 
 		hkdf->erase(hkdf->begin(), hkdf->begin() + HASH_LEN);
 
@@ -913,29 +1000,35 @@ namespace Briand {
 		relay.KEY_Forward_Kf->insert(relay.KEY_Forward_Kf->begin(), hkdf->begin(), hkdf->begin() + KEY_LEN);
 		hkdf->erase(hkdf->begin(), hkdf->begin() + KEY_LEN);
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] KEY forward: ");
 			BriandUtils::PrintByteBuffer(*relay.KEY_Forward_Kf.get());
 		}
+		#endif
 
 		relay.KEY_Backward_Kb = make_unique<vector<unsigned char>>();
 		//relay.KEY_Backward_Kb->reserve(128); // reserve some bytes
 		relay.KEY_Backward_Kb->insert(relay.KEY_Backward_Kb->begin(), hkdf->begin(), hkdf->begin() + KEY_LEN);
 		hkdf->erase(hkdf->begin(), hkdf->begin() + KEY_LEN);
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] KEY backward: ");
 			BriandUtils::PrintByteBuffer(*relay.KEY_Backward_Kb.get());
 		}
+		#endif
 
 		relay.KEY_HiddenService_Nonce = make_unique<vector<unsigned char>>();
 		//relay.KEY_HiddenService_Nonce->reserve(128); // reserve some bytes
 		relay.KEY_HiddenService_Nonce->insert(relay.KEY_HiddenService_Nonce->begin(), hkdf->begin(), hkdf->begin() + DIGEST_LEN);
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] HS nonce: ");
 			BriandUtils::PrintByteBuffer(*relay.KEY_HiddenService_Nonce.get());
 		}
+		#endif
 
 		hkdf.reset();
 		
@@ -945,7 +1038,9 @@ namespace Briand {
 		esp_aes_init(relay.AES_BackwardContext.get());
 		esp_aes_setkey(relay.AES_BackwardContext.get(), relay.KEY_Backward_Kb->data(), relay.KEY_Backward_Kb->size() * 8);
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] All done!\n");
+		#endif
 
 		return true;
 	}

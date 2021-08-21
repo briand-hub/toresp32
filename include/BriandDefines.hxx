@@ -22,7 +22,10 @@
 
 /* Avoid error of multiple definitions (first defined here...) */
 #ifndef BRIANDDEFINES_H_ 
-    #define BRIANDDEFINES_H_             
+    #define BRIANDDEFINES_H_        
+
+    /* If set to 1, NO DEBUG log for components will be compiled. To have debug log on just set to 0 (#define SUPPRESSDEBUGLOG 0) */
+    #define SUPPRESSDEBUGLOG 0
 
     constexpr unsigned char BUILTIN_LED_MODE = 1;               // Built-in led mode: 0 = OFF, 1 = ON
     constexpr bool CHANGE_MAC_TO_RANDOM = true;				    // choose if you want to change the MAC address to a random one for improved security

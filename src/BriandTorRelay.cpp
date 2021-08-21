@@ -130,7 +130,9 @@ namespace Briand {
 				combination, the initiator MUST check the following.
 			*/
 
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Relay has Ed25519+RSA identity keys.\n");
+			#endif
 
 			/*
 				* The CERTS cell contains exactly one CertType 2 "ID" certificate.
@@ -148,7 +150,9 @@ namespace Briand {
 				this->certTLSLink == nullptr ||
 				this->certRSAEd25519CrossCertificate == nullptr ) 
 			{
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] Relay has invalid number of certificates.\n");
+				#endif
 				return false;
 			}
 
@@ -167,7 +171,9 @@ namespace Briand {
 				(this->certRsa1024AuthenticateCell != nullptr && !this->certRsa1024AuthenticateCell->IsValid( *this->certRsa1024Identity.get() ))
 				) 
 			{
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] Relay has invalid or expired X.509 certificates.\n");
+				#endif
 				return false;
 			}
 
@@ -176,14 +182,18 @@ namespace Briand {
 			/* The certified key in the ID certificate is a 1024-bit RSA key. */
 			unsigned short keyLen = this->certRsa1024Identity->GetRsaKeyLength();
 			if (keyLen != 1024) {
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] Error, RSA1024_Identity_Self_Signed has an invalid key size of %d bit, expected 1024.\n", keyLen);
+				#endif
 				return false;
 			}
 
 			/* The RSA->Ed25519 cross-certificate certifies the Ed25519 identity, and is signed with the RSA identity listed in the "ID" certificate. */
 			if (!this->certRSAEd25519CrossCertificate->IsValid( *this->certRsa1024Identity.get() )) 
 			{
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] Error, RSAEd25519CrossCertificate is expired or not correctly signed by RSA identity.\n");
+				#endif
 				return false;
 			}
 
@@ -194,7 +204,9 @@ namespace Briand {
 			*/
 
 			if (!this->certTLSLink->IsValid( *this->certEd25519SigningKey.get(), *this->certLinkKey.get() )) {
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] Error, TLS Link is expired, not correctly signed by RSA identity or included certified key not matching SHA256 digest of Link certificate.\n");
+				#endif
 				return false;
 			}
 
@@ -202,16 +214,22 @@ namespace Briand {
 			
 			// This is not understood, unclear. The Link (certype 5) certified key contains the sha256 digest of the full content of the link (certtype 1) certificate :/
 
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] WARNING: this test is skipped because unclear: \"The certified key in the Link certificate matches the link key that was used to negotiate the TLS connection.\"\n");
+			#endif
 			// TODO
 
 			/* The identity key listed in the ID->Signing cert was used to sign the ID->Signing Cert. (CertType 4 Ed25519) */
 			if (!this->certEd25519SigningKey->IsValid( *this->certRSAEd25519CrossCertificate.get() )) {
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] Error, Ed25519SigningKey is expired or not correctly signed by RSAEd25519CrossCertificate's ED25519KEY.\n");
+				#endif
 				return false;
 			}
 
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Relay with RSA+Ed25519 identity has the right and valid certificates.\n");
+			#endif
 			
 			return true;
 		}
@@ -221,7 +239,9 @@ namespace Briand {
 				the initiator MUST check the following:
 			*/
 
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Relay has RSA identity key only.\n");
+			#endif
 
 			/*
 				* The CERTS cell contains exactly one CertType 1 "Link" certificate.
@@ -230,7 +250,9 @@ namespace Briand {
 
 			if (this->certRsa1024Identity == nullptr || this->certLinkKey == nullptr ) 
 			{
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] Relay has invalid number of certificates.\n");
+				#endif
 				return false;
 			}
 
@@ -246,14 +268,18 @@ namespace Briand {
 				(this->certRsa1024AuthenticateCell != nullptr && !this->certRsa1024AuthenticateCell->IsValid( *this->certRsa1024Identity.get() ))
 				) 
 			{
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] Relay has invalid or expired X.509 certificates.\n");
+				#endif
 				return false;
 			}
 	
 			/*	The certified key in the ID certificate is a 1024-bit RSA key. */
 			unsigned short keyLen = this->certRsa1024Identity->GetRsaKeyLength();
 			if (keyLen != 1024) {
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] Error, RSA1024_Identity_Self_Signed has an invalid key size of %d bit, expected 1024.\n", keyLen);
+				#endif
 				return false;
 			}
 
@@ -263,12 +289,16 @@ namespace Briand {
 			// TODO
 			//
 
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Relay with RSA identity key only has the right and valid certificates.\n");
+			#endif
 
 			return true;
 		}
 		else {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Relay has no valid certificates to verify (no identity)!\n");
+			#endif
 			return false;
 		}
 
@@ -294,7 +324,9 @@ namespace Briand {
 			auto curDir = TOR_DIR_AUTHORITIES[TOR_DIR_LAST_USED];
 
 			if (!client->Connect(string(curDir.host), curDir.port)) {
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] FetchDescriptorsFromAuthority Failed to connect to dir #%hu (%s)\n", TOR_DIR_LAST_USED, curDir.nickname);
+				#endif
 				TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED+1) % TOR_DIR_AUTHORITIES_NUMBER;
 				client->Disconnect();
 				continue;
@@ -313,7 +345,9 @@ namespace Briand {
 			auto requestV = BriandNet::StringToUnsignedCharVector(request, true);
 
 			if (!client->WriteData(requestV)) {
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] FetchDescriptorsFromAuthority Failed to write request to dir #%hu (%s)\n", TOR_DIR_LAST_USED, curDir.nickname);
+				#endif
 				TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED+1) % TOR_DIR_AUTHORITIES_NUMBER;
 				client->Disconnect();
 				continue;
@@ -322,7 +356,9 @@ namespace Briand {
 			// free ram
 			requestV.reset();
 
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] FetchDescriptorsFromAuthority request sent.\n");
+			#endif
 
 			bool newLine;
 			do {
@@ -406,10 +442,12 @@ namespace Briand {
 				created2_extended2_payload->begin() + 2 + G_LENGTH
 			);
 		
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Relay's PK: ");
 			BriandUtils::PrintByteBuffer(*this->CREATED_EXTENDED_RESPONSE_SERVER_PK.get(), this->CREATED_EXTENDED_RESPONSE_SERVER_PK->size(), this->CREATED_EXTENDED_RESPONSE_SERVER_PK->size());
 		}
+		#endif
 
 		// And the other H_LENGTH 32 bytes
 		this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH = make_unique<vector<unsigned char>>();
@@ -420,10 +458,12 @@ namespace Briand {
 				created2_extended2_payload->begin() + 2 + G_LENGTH + H_LENGTH
 			);
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Relay's AUTH: ");
 			BriandUtils::PrintByteBuffer(*this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH.get(), this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size(), this->CREATED_EXTENDED_RESPONSE_SERVER_AUTH->size());
 		}
+		#endif
 
 		// Prepare relay's fields if, for any error, were populated
 		if(this->KEYSEED != nullptr) this->KEYSEED.reset();
@@ -437,10 +477,13 @@ namespace Briand {
 		bool keysReady = BriandTorCryptoUtils::NtorHandshakeComplete(*this);
 
 		if (!keysReady) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] The handshake is failed, no keys have been exchanged.\n");
+			#endif
 			return false;
 		}
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Forward key: ");
 			BriandUtils::PrintByteBuffer( *this->KEY_Forward_Kf.get() );
@@ -453,6 +496,7 @@ namespace Briand {
 			printf("[DEBUG] Hidden service nonce: ");
 			BriandUtils::PrintByteBuffer( *this->KEY_HiddenService_Nonce.get() );
 		}
+		#endif
 
 		// After that, clean no more needed fields!
 		this->CREATED_EXTENDED_RESPONSE_SERVER_PK.reset();
@@ -467,6 +511,8 @@ namespace Briand {
 	}
 
 	void BriandTorRelay::PrintAllCertificateShortInfo() {
+
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			if (this->certLinkKey != nullptr) this->certLinkKey->PrintCertInfo();
 			if (this->certRsa1024Identity != nullptr) this->certRsa1024Identity->PrintCertInfo();
@@ -475,8 +521,9 @@ namespace Briand {
 			if (this->certTLSLink != nullptr) this->certTLSLink->PrintCertInfo();
 			if (this->certEd25519AuthenticateCellLink != nullptr) this->certEd25519AuthenticateCellLink->PrintCertInfo();
 			if (this->certRSAEd25519CrossCertificate != nullptr) this->certRSAEd25519CrossCertificate->PrintCertInfo();
-			
 		}
+		#endif
+
 	}
 
 	void BriandTorRelay::ResetCertificates() {
@@ -490,6 +537,8 @@ namespace Briand {
 	}
 
 	void BriandTorRelay::PrintRelayInfo() {
+
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Nickame: %s\n", this->nickname->c_str());
 			printf("[DEBUG] Address: %s\n", this->address->c_str());
@@ -501,6 +550,8 @@ namespace Briand {
 			auto dec = BriandTorCryptoUtils::Base64Decode(*this->descriptorNtorOnionKey.get());
 			BriandUtils::PrintByteBuffer(*dec.get(), dec->size(), dec->size());
 		}
+		#endif
+		
 	}
 
 	size_t BriandTorRelay::GetObjectSize() {

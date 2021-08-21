@@ -50,9 +50,13 @@ namespace Briand
 
     void BriandTorCircuitsManager::Start() {
         // If not empty, clear out the current circuit pool (useful if Stop() not called and want to re-Start the manager)
+        #if !SUPPRESSDEBUGLOG
         ESP_LOGD(LOGTAG, "Stopping old instances.\n");
+        #endif
         this->Stop();
+        #if !SUPPRESSDEBUGLOG
         ESP_LOGD(LOGTAG, "Starting circuits.\n");
+        #endif
 
         this->isStopped = false;
 
@@ -64,13 +68,17 @@ namespace Briand
         // ESP-IDF task must never return 
         while (1) {
             if (!BriandTorCircuitsManager::isStopped) {
+                #if !SUPPRESSDEBUGLOG
                 ESP_LOGD(LOGTAG, "[DEBUG] CircuitsManager main task invoked, checking for instances to be created.\n");
+                #endif
 
                 // Check if there are the number of needed circuits built, if not add the needed
                 for (unsigned short i = 0; i < BriandTorCircuitsManager::CIRCUIT_POOL_SIZE; i++) {
                     // A new circuit to be instanced?
                     if (BriandTorCircuitsManager::CIRCUITS[i] == nullptr) {
+                        #if !SUPPRESSDEBUGLOG
                         ESP_LOGD(LOGTAG, "[DEBUG] Adding a new circuit to pool as #%hu.\n", i);
+                        #endif
                         BriandTorCircuitsManager::CIRCUITS[i] = make_unique<BriandTorCircuit>();
                         BriandTorCircuitsManager::CIRCUITS[i]->internalID = i;
                     }
@@ -83,7 +91,9 @@ namespace Briand
                         !BriandTorCircuitsManager::CIRCUITS[i]->StatusGetFlag(BriandTorCircuit::CircuitStatusFlag::BUILDING)) 
                     {
                         // A new circuit to be built
+                        #if !SUPPRESSDEBUGLOG
                         ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu needs to be built, building.\n", i);
+                        #endif
 
                         // Here circuit is not built nor in creating, so build it.
                         if (!BriandTorCircuitsManager::CIRCUITS[i]->BuildCircuit(false)) {
@@ -93,7 +103,9 @@ namespace Briand
                     }
                     // A circuit that should be deleted?
                     else if (BriandTorCircuitsManager::CIRCUITS[i]->StatusGetFlag(BriandTorCircuit::CircuitStatusFlag::CLOSED)) {
+                        #if !SUPPRESSDEBUGLOG
                         ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is closed, removing from pool.\n", i);
+                        #endif
                         // Reset the pointer
                         BriandTorCircuitsManager::CIRCUITS[i].reset();
                     }   
@@ -101,25 +113,33 @@ namespace Briand
                     else if(BriandTorCircuitsManager::CIRCUITS[i]->StatusGetFlag(BriandTorCircuit::CircuitStatusFlag::BUILT)) {
                         if (BriandUtils::GetUnixTime() >= BriandTorCircuitsManager::CIRCUITS[i]->GetCreatedOn() + BriandTorCircuitsManager::CIRCUIT_MAX_TIME) {
                             // The circuit should be closed for elapsed time
+                            #if !SUPPRESSDEBUGLOG
                             ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu has reached maximum life time, sending destroy.\n", i);
+                            #endif
                             BriandTorCircuitsManager::CIRCUITS[i]->TearDown(Briand::BriandTorDestroyReason::FINISHED);
                         }
                         else if (BriandTorCircuitsManager::CIRCUITS[i]->GetCurrentStreamID() >= BriandTorCircuitsManager::CIRCUIT_MAX_REQUESTS) {
                             // The circuit should be closed for maximum requests
+                            #if !SUPPRESSDEBUGLOG
                             ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu has reached maximum requests, sending destroy.\n", i);
+                            #endif
                             BriandTorCircuitsManager::CIRCUITS[i]->TearDown(Briand::BriandTorDestroyReason::FINISHED);
                         }
                         else if (!BriandTorCircuitsManager::CIRCUITS[i]->StatusGetFlag(BriandTorCircuit::CircuitStatusFlag::STREAMING)) {
                             // No problems                     
                             // Send a PADDING to keep alive!
+                            #if !SUPPRESSDEBUGLOG
                             ESP_LOGD(LOGTAG, "[DEBUG] Circuit #%hu is alive and not busy, sending PADDING.\n", i);
+                            #endif
                             BriandTorCircuitsManager::CIRCUITS[i]->SendPadding();
                         }
                     }
                 }
             }
             else {
+                #if !SUPPRESSDEBUGLOG
                 ESP_LOGD(LOGTAG, "[DEBUG] Stopping CircuitsManager main task.\n");
+                #endif
                 // delete this task
                 vTaskDelete(NULL);
             }

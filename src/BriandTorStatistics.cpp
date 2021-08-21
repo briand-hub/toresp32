@@ -32,6 +32,13 @@ namespace Briand {
 	unsigned int BriandTorStatistics::STAT_NUM_GUARD_CONN_ERR = 0;
 	unsigned int BriandTorStatistics::STAT_NUM_CREATE2_FAIL = 0;
 	unsigned int BriandTorStatistics::STAT_NUM_EXTEND2_FAIL = 0;
+	unsigned int BriandTorStatistics::STAT_BUILD_TIME_MAX = 0;
+	unsigned int BriandTorStatistics::STAT_NUM_CACHE_SAME_IP_DROP = 0;
+	unsigned int BriandTorStatistics::STAT_TOR_SEND_TIME_AVG = 0;
+	unsigned int BriandTorStatistics::STAT_TOR_SEND_N = 0;
+	unsigned int BriandTorStatistics::STAT_TOR_RECV_TIME_AVG = 0;
+	unsigned int BriandTorStatistics::STAT_TOR_RECV_N = 0;
+	unsigned int BriandTorStatistics::STAT_CACHE_BUILD_TIME = 0;
 
 	BriandTorStatistics::BriandTorStatistics() { }
 
@@ -77,12 +84,17 @@ namespace Briand {
 		printf("No. of received paddings: %u\n", BriandTorStatistics::STAT_NUM_RECV_PADDINGS);
 		printf("No. of exit policy errors: %u\n", BriandTorStatistics::STAT_NUM_EXIT_POLICY_ERR);
 		printf("No. of protocol errors: %u\n", BriandTorStatistics::STAT_NUM_PROTOCOL_ERR);
+		printf("Cache build time (s): %u\n", BriandTorStatistics::STAT_CACHE_BUILD_TIME);
 		printf("No. of cache guard fail: %u\n", BriandTorStatistics::STAT_NUM_CACHE_GUARD_MISS);
 		printf("No. of cache middle fail: %u\n", BriandTorStatistics::STAT_NUM_CACHE_MIDDLE_MISS);
 		printf("No. of cache exit fail: %u\n", BriandTorStatistics::STAT_NUM_CACHE_EXIT_MISS);
+		printf("No. of cache fail for same family ip: %u\n", BriandTorStatistics::STAT_NUM_CACHE_SAME_IP_DROP);
 		printf("No. of failed connections to guard: %u\n", BriandTorStatistics::STAT_NUM_GUARD_CONN_ERR);
 		printf("No. of failed create2: %u\n", BriandTorStatistics::STAT_NUM_CREATE2_FAIL);
 		printf("No. of failed extend2: %u\n", BriandTorStatistics::STAT_NUM_EXTEND2_FAIL);
+		printf("Max time to build a circuit (ms): %u\n", BriandTorStatistics::STAT_BUILD_TIME_MAX);
+		printf("Avg time Tor stream recv (ms): %u (based on %u stream cells)\n", BriandTorStatistics::STAT_TOR_RECV_TIME_AVG, BriandTorStatistics::STAT_TOR_RECV_N);
+		printf("Avg time Tor stream send (ms): %u (based on %u stream cells)\n", BriandTorStatistics::STAT_TOR_SEND_TIME_AVG, BriandTorStatistics::STAT_TOR_SEND_N);
 
 		printf("------------------------\n");
 	}

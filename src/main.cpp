@@ -400,7 +400,7 @@ void TorEsp32Main(void* taskArg) {
 				cfg->WPASSWORD.append(STA_PASSW->c_str());
 				cfg->SERIAL_ENC_KEY.append(SERIAL_ENC_KEY->c_str());
 				cfg->WriteConfig();
-				printf("\n[INFO] Configuration file written!\n");
+				printf("[INFO] Configuration file written!\n");
 			}
 			else {
 				printf("\n[INFO] Password must be 16 chars! Configuration file NOT written!\n");
@@ -662,6 +662,11 @@ void executeCommand(string& cmd) {
 		printf("WARNING: setting high log level could cause unexpected crashes due to limited stack sizes and printf's high use of stack!!\n");
 	}
 	else if (cmd.length() > 3 && cmd.substr(0,4).compare("log ") == 0) {
+
+		#if SUPPRESSLOG
+		printf("*** Warning: log is suppressed, change by setting SUPPRESSDEBUGLOG to 0 in BriandDefines.hxx files and recompile.\n");
+		#endif
+
 		cmd.erase(0, 4);
 		auto lPos = cmd.find(' ');
 		if (lPos == string::npos) printf("Wrong format for command. Type help log.\n");

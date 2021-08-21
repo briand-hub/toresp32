@@ -57,7 +57,7 @@ namespace Briand {
 
 		protected:
 
-		unsigned char skipRandomResults;
+		unsigned short skipRandomResults;
 		unsigned char randomPick;
 		bool cacheValid;
 

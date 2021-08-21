@@ -13,11 +13,14 @@
 * Added support for ESP32-S2 and testing PSram
 * Upgraded LibBriandIDF to test with ESP Wrover and ESP32S2
 * Added and edited sdkconfig files
-
-* Additional settings are required to work with SPI RAM (ESP WRover, ESP32-S2):
+* Additional settings tuning are required to work with SPI RAM (ESP WRover, ESP32-S2 **only**):
   * (SPI RAM settings) *Try to allocate memories of WiFi and LWIP in SPIRAM firstly. If failed, allocate internal memory* required 
   * *Component config -> Wi-Fi -> Max Number of Wifi static TX buffers = 32*
   * *Component config -> Wi-Fi -> Max number of WiFi cache TX buffers = 32*
+* Added more statistics, compare with Linux porting.
+* Added suppress-log
+* Added random-skip lines to consensus download and file flushing
+* Removed parameter *Component config -> FreeRTOS -> ENABLED Place FreeRTOS functions into Flash* I think causing cache failures and frequent download.
 
 ## 2021-08-18
 
@@ -138,8 +141,6 @@
   *Component config -> Wi-Fi Provisioning manager -> Max Wi-Fi Scan result entries = 6*
 
   *Component config -> FreeRTOS -> FreeRTOS assertions -> Print and continue (useful for debugging)*
-
-  *Component config -> FreeRTOS -> ENABLED Place FreeRTOS functions into Flash (saves up to 7KB RAM)*
 
   *Component config -> mbedTLS -> TLS maximum incoming fragment length = 4096 (default was 16384)*
 

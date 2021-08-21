@@ -209,10 +209,14 @@ namespace Briand {
 
 		this->cellTotalSizeBytes = cellBuffer->size();
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] %s Cell of %d bytes is going to be sent. Contents: ", Briand::BriandUtils::BriandTorCellCommandToString(this->Command).c_str(), cellBuffer->size());
+		
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			Briand::BriandUtils::PrintByteBuffer( *(cellBuffer.get()), this->cellTotalSizeBytes, this->cellTotalSizeBytes );
 		} 
+
+		#endif
 
 		// That's all, send cell through network!
 		auto response = BriandNet::RawSecureRequest(client, cellBuffer, true, closeConnection, expectResponse); // clear cell buffer after request to save ram.
@@ -237,7 +241,11 @@ namespace Briand {
 		
 		// check length
 		if (buffer->size() < 5) {
+			
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Insufficient length (less than 5 bytes).\n");
+			#endif
+
 			return false;
 		}
 
@@ -246,7 +254,11 @@ namespace Briand {
 		// CircID
 		if (this->linkProtocolVersion < 4) {
 			// CircID is 2 bytes, VERSION cells are always 2 bytes
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Link protocol <4 (Ver.%u)\n", this->linkProtocolVersion);
+			#endif
+
 			this->CircID += static_cast<unsigned int>(buffer->at(0) << 8);
 			this->CircID += static_cast<unsigned int>(buffer->at(1));
 			nextFrom = 2;
@@ -254,7 +266,11 @@ namespace Briand {
 		}
 		else {
 			// CircID is 4 bytes
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Link protocol >=4. (Ver. %u)\n", this->linkProtocolVersion);
+			#endif
+
 			this->CircID += static_cast<unsigned int>(buffer->at(0) << 24);
 			this->CircID += static_cast<unsigned int>(buffer->at(1) << 16);
 			this->CircID += static_cast<unsigned int>(buffer->at(2) << 8);
@@ -268,7 +284,9 @@ namespace Briand {
 		nextFrom += 1;
 		cellTotalSizeBytes += 1;
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] Cell command is %s\n", Briand::BriandUtils::BriandTorCellCommandToString(this->Command).c_str() );
+		#endif
 
 		// Command => I know if is variable length cell
 		if (this->Command == Briand::BriandTorCellCommand::VERSIONS || static_cast<unsigned int>(this->Command) >= 128) 
@@ -276,7 +294,11 @@ namespace Briand {
 
 		// If variable length cell then I must have 2 bytes for Length and [Length] bytes more
 		if(this->isVariableLengthCell && (buffer->size() - nextFrom) < 2) {
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Variable-length cell has insufficient length.\n");
+			#endif
+
 			return false;
 		}
 		
@@ -289,17 +311,24 @@ namespace Briand {
 			cellTotalSizeBytes += 2;
 
 			if ((buffer->size() - nextFrom) < length) {
+
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] Variable-length cell has insufficient payload length.\n");
+				#endif
+
 				return false;
 			}
 
 			// Read all payload
 			this->Payload->insert(this->Payload->begin(), buffer->begin() + nextFrom, buffer->begin() + nextFrom + length);
 
+			#if !SUPPRESSDEBUGLOG
 			if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 				printf("[DEBUG] Variable-length cell payload: ");
 				Briand::BriandUtils::PrintByteBuffer( *(this->Payload.get()), 128 );
 			} 
+			#endif
+
 		}
 		else {
 			// All the rest, for a maximum of PAYLOAD_LEN, is payload
@@ -313,7 +342,11 @@ namespace Briand {
 			else {
 				// Save the full payload
 				this->Payload->insert(this->Payload->begin(), buffer->begin() + nextFrom, buffer->begin() + nextFrom + PAYLOAD_LEN);
+
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] Fixed cell payload of %d bytes.\n", this->Payload->size());
+				#endif
+
 			}
 		}
 
@@ -385,7 +418,11 @@ namespace Briand {
 
 			// check if ok
 			if ( certType <= 0 || certType > BriandTorCertificateBase::MAX_CERT_VALUE ) {
+
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] Invalid CERTS cell content (%d is not a valid range certType).\n", certType);
+				#endif
+
 				return false;
 			}
 
@@ -400,7 +437,9 @@ namespace Briand {
 				7: Ed25519 identity, signed with RSA identity.
 			*/
 
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Certificate %u (of %u) is certType %u.\n", curCert+1, NCerts, certType);
+			#endif
 
 			// 2 bytes for length
 			unsigned short certLen = 0;
@@ -408,11 +447,17 @@ namespace Briand {
 			certLen += static_cast<unsigned short>(this->Payload->at(startIndex+1));
 			startIndex += 2;
 
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Certificate len is %u bytes.\n", certLen);
+			#endif
 
 			// Payload should contain at least this length
 			if (this->Payload->size() - startIndex < certLen) {
+
+				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG] Invalid CERTS cell content size.\n");
+				#endif
+
 				return false;
 			}
 
@@ -612,7 +657,11 @@ namespace Briand {
 
 		// Generate Curve25519 keys
 		if (!BriandTorCryptoUtils::ECDH_Curve25519_GenKeys(relay)) {
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] CREATE2 construction failed because Curve25519 key generation failed.\n");
+			#endif
+
 			return false;
 		}
 
@@ -641,7 +690,11 @@ namespace Briand {
 		// Check
 		auto fingerprintBytes = BriandUtils::HexStringToVector(*relay.fingerprint.get(), "");
 		if (fingerprintBytes->size() != ID_LENGTH) {
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] CREATE2 construction failed because relay fingerprint was expected to have %u bytes but it has %u\n", ID_LENGTH, fingerprintBytes->size());
+			#endif
+
 			return false;
 		}
 		this->AppendBytesToPayload(*fingerprintBytes.get());
@@ -650,7 +703,11 @@ namespace Briand {
 		auto KEYID = BriandTorCryptoUtils::Base64Decode(*relay.descriptorNtorOnionKey.get());
 		// Check
 		if (KEYID->size() != H_LENGTH) {
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] CREATE2 construction failed because relay ntor key was expected to have %u bytes but decoded has %u\n", H_LENGTH, KEYID->size());
+			#endif
+
 			return false;
 		}
 		this->AppendBytesToPayload(*KEYID.get());
@@ -658,12 +715,18 @@ namespace Briand {
 		// Append the CLIENT_PK
 		// Check
 		if (relay.CURVE25519_PUBLIC_KEY->size() != G_LENGTH) {
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] CREATE2 construction failed because Curve25519 size was expected to be %u bytes but has %u\n", G_LENGTH, relay.CURVE25519_PUBLIC_KEY->size());
+			#endif
+
 			return false;
 		}
 		this->AppendBytesToPayload(*relay.CURVE25519_PUBLIC_KEY.get());
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] CREATE2 cell built with success.\n");
+		#endif
 
 		return true;
 	}
@@ -674,7 +737,11 @@ namespace Briand {
 
 		// The contents of EXTEND2 are the same as CREATE2, with more header data.
 		if (!this->BuildAsCREATE2(extendWithRelay)) {
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] EXTEND2 Relay cell failed construction because CREATE2 contents in failure!\n");
+			#endif
+
 			return false;
 		}
 
@@ -747,7 +814,9 @@ namespace Briand {
 		// Prepend header bytes
 		this->Payload->insert(this->Payload->begin(), extend2Header->begin(), extend2Header->end());
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] EXTEND2 cell built with success.\n");
+		#endif
 
 		return true;
 	}
@@ -871,11 +940,13 @@ namespace Briand {
 			this->Digest += static_cast<unsigned int>( this->FullDigest->at(i) << (8*(3-i)));
 		}
 		
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] PrepareAsRelayCell digest is: ");
 			BriandUtils::PrintByteBuffer(*this->FullDigest.get());
 			printf("[DEBUG] Relay cell saved digest: %08X\n", this->Digest);
 		}
+		#endif
 	}
 
 	void BriandTorCell::ApplyOnionSkin(BriandTorRelay& relay) {
@@ -897,7 +968,11 @@ namespace Briand {
 
 		// Check if RELAY or RELAY_EARLY command
 		if (this->Command != BriandTorCellCommand::RELAY && this->Command != BriandTorCellCommand::RELAY_EARLY) {
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Cell is not a RELAY cell! Command is %s\n", Briand::BriandUtils::BriandTorCellCommandToString(this->Command).c_str() );
+			#endif
+
 			return false;
 		}
 
@@ -915,26 +990,36 @@ namespace Briand {
 
 		// Check if enough payload size
 		if (this->Payload->size() < 11) {
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RELAY Cell has too poor bytes.\n");
+			#endif
+
 			return false;
 		}
 
 		// Get the relay command
 		this->RelayCommand = static_cast<BriandTorCellRelayCommand>( this->Payload->at(0) );
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] RELAY Cell command is %s\n", BriandUtils::BriandTorRelayCellCommandToString(this->RelayCommand).c_str());
+		#endif
 
 		// Get the recognized field
 		this->Recognized = static_cast<unsigned short>( this->Payload->at(1) << 8 );
 		this->Recognized += static_cast<unsigned short>( this->Payload->at(2) );
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] RELAY Cell recognized: %04X\n", this->Recognized );
+		#endif
 
 		// Get the streamid field
 		this->StreamID = static_cast<unsigned short>( this->Payload->at(3) << 8 );
 		this->StreamID += static_cast<unsigned short>( this->Payload->at(4) );
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] RELAY Cell StreamID: %04X\n", this->StreamID);
+		#endif
 
 		// Get the Digest field
 		this->Digest = static_cast<unsigned int>( this->Payload->at(5) << 24 );
@@ -942,7 +1027,9 @@ namespace Briand {
 		this->Digest += static_cast<unsigned int>( this->Payload->at(7) << 8 );
 		this->Digest += static_cast<unsigned int>( this->Payload->at(8) );
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] RELAY Cell Digest: %08X\n", this->Digest);
+		#endif
 		
 		// Update the digest field to all zeros
 		for (unsigned char i=5; i<=8; i++)
@@ -958,7 +1045,11 @@ namespace Briand {
 
 		// Check the digest matching
 		if (this->Digest != calculatedDigest) {
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Calculated backward digest %08X does not match cell backward digest %08X.\n", this->Digest, calculatedDigest);
+			#endif
+
 			return false;
 		}
 
@@ -967,11 +1058,17 @@ namespace Briand {
 		payloadLength = static_cast<unsigned short>( this->Payload->at(9) << 8 );
 		payloadLength += static_cast<unsigned short>( this->Payload->at(10) );
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] RELAY Cell real payload Length: %04X\n", payloadLength);
+		#endif
 
 		// check if enough size for payload
 		if (this->Payload->size() < payloadLength + 11) {
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RELAY Cell real payload length is of %u bytes but buffer has only %d\n", payloadLength + 11, this->Payload->size());
+			#endif
+
 			return false;
 		}
 
@@ -981,7 +1078,9 @@ namespace Briand {
 		// REAL Payload, exclude padding bytes.
 		this->Payload->erase(this->Payload->begin() + payloadLength, this->Payload->end());
 		
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] RELAY real Payload size is now %d bytes.\n", this->Payload->size());
+		#endif
 
 		return true;
 	}
@@ -989,7 +1088,11 @@ namespace Briand {
 	bool BriandTorCell::IsRelayCellRecognized(const unsigned short& streamID, const unique_ptr<mbedtls_md_context_t>& digestBackward) {
 		// Check if RELAY or RELAY_EARLY command
 		if (this->Command != BriandTorCellCommand::RELAY && this->Command != BriandTorCellCommand::RELAY_EARLY) {
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Cell is not a RELAY cell! Command is %s\n", Briand::BriandUtils::BriandTorCellCommandToString(this->Command).c_str() );
+			#endif
+
 			return false;
 		}
 
@@ -1007,7 +1110,11 @@ namespace Briand {
 
 		// Check if enough payload size
 		if (this->Payload->size() < 11) {
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RELAY Cell has too poor bytes.\n");
+			#endif
+
 			return false;
 		}
 
@@ -1017,9 +1124,12 @@ namespace Briand {
 		cellRecognized += static_cast<unsigned short>( this->Payload->at(2) );
 
 		if (cellRecognized != 0) {
+
+			#if !SUPPRESSDEBUGLOG
 			if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 				printf("[DEBUG] Cell is not recognized.\n");
 			}
+			#endif
 
 			return false;
 		}
@@ -1031,9 +1141,12 @@ namespace Briand {
 
 		// Cell StreamID could be zero for some cells (RELAY_TRUNCATED etc.)
 		if (cellStreamID != streamID && cellStreamID != 0x0000) {
+
+			#if !SUPPRESSDEBUGLOG
 			if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 				printf("[DEBUG] Cell StreamID does not match the expected one, unrecognized.\n");
 			}
+			#endif
 
 			return false;
 		}
@@ -1064,10 +1177,12 @@ namespace Briand {
 		mbedtls_md_finish(digestCopy.get(), outBuf.get());
 		mbedtls_md_free(digestCopy.get());
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Calculated temporary cell digest for verification: ");
 			BriandUtils::PrintOldStyleByteBuffer(outBuf.get(), digestBackward->md_info->size, 0, 0);
 		}
+		#endif
 
 		// Finish the digest
 
@@ -1078,14 +1193,19 @@ namespace Briand {
 		cellCalculatedDigest += static_cast<unsigned int>( outBuf[3] );
 
 		if (cellCalculatedDigest != cellDigest) {
+
+			#if !SUPPRESSDEBUGLOG
 			if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 				printf("[DEBUG] Cell backward calculated digest %08X does not match received backward digest %08X, unrecognized.\n", cellCalculatedDigest, cellDigest);
 			}
+			#endif
 
 			return false;
 		}
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] Relay cell passed verification!\n");
+		#endif
 
 		return true;
 	}

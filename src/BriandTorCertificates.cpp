@@ -61,9 +61,13 @@ namespace Briand {
 	}
 
 	void BriandTorCertificateBase::PrintCertInfo() {
+		
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] %s\n", this->GetCertificateShortInfo().c_str());
 		}
+		#endif 
+
 	}
 
 	size_t BriandTorCertificateBase::GetObjectSize() {
@@ -94,13 +98,19 @@ namespace Briand {
 		this->ExtData = make_unique<vector<unsigned char>>();
 		//this->ExtData->reserve(128); // reserve some bytes
 		
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Ed25519CertificateExtension raw bytes: ");
 			BriandUtils::PrintByteBuffer(*rawdata.get(), rawdata->size()+1, rawdata->size()+1);
 		}
+		#endif
 
 		if (rawdata->size() < 4) {
+			
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Ed25519CertificateExtension has poor bytes.\n");
+			#endif
+
 			return;
 		}
 
@@ -109,21 +119,31 @@ namespace Briand {
 		this->ExtType = rawdata->at(2);
 		this->ExtFlags = rawdata->at(3);
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] Ed25519CertificateExtension length is of %d bytes.\n", this->ExtLength);
+		#endif
 
 		if ( (rawdata->size() - 4) < this->ExtLength ) {
+			
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Ed25519CertificateExtension has poor bytes for content.\n");
+			#endif
+			
 			return;
 		}
 
 		this->ExtData->insert(this->ExtData->begin(), rawdata->begin() + 4, rawdata->begin() + 4 + this->ExtLength);
 		
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Ed25519CertificateExtension ExtData: ");
 			BriandUtils::PrintByteBuffer(*this->ExtData.get(), this->ExtLength + 1, this->ExtLength + 1);
 		} 
+		#endif
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] Ed25519CertificateExtension structure is valid.\n");
+		#endif
 
 		this->valid = true;
 	}
@@ -183,13 +203,17 @@ namespace Briand {
 
 		// start to build
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] Ed25519Certificate raw bytes: ");
 			BriandUtils::PrintByteBuffer(*raw_bytes.get(), raw_bytes->size() + 1, raw_bytes->size() +1);
 		} 
+		#endif
 
 		if (raw_bytes->size() < 40) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Ed25519Certificate has too poor bytes.\n");
+			#endif
 			return;
 		}
 
@@ -206,7 +230,9 @@ namespace Briand {
 		// The "VERSION" field holds the value [01]
 		// However I just check > 0 for future versions
 		if (this->VERSION < 0x01) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Ed25519Certificate has invalid VERSION.\n");
+			#endif
 			return;
 		}
 
@@ -229,7 +255,9 @@ namespace Briand {
 			// In order to do a right work, prepare a copy of the buffer 
 			// and erase for the first Extension->TotalSize() bytes to do the next one.
 
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Ed25519Certificate has %d extensions, checking.\n", this->N_EXTENSIONS);
+			#endif
 
 			unsigned int extensionsStartAt = 7 + certified_key_len + 1;
 			unsigned char remainingExtensions = this->N_EXTENSIONS;
@@ -240,7 +268,9 @@ namespace Briand {
 			while (remainingExtensions > 0) {
 				BriandTorEd25519CertificateExtension ext { extBuffer };
 				if (!ext.valid) {
+					#if !SUPPRESSDEBUGLOG
 					ESP_LOGD(LOGTAG, "[DEBUG] Ed25519Certificate extension %d of %d is invalid.\n", (this->N_EXTENSIONS - remainingExtensions) + 1, this->N_EXTENSIONS);
+					#endif
 					return;
 				}
 
@@ -262,7 +292,9 @@ namespace Briand {
 		// So... all bytes before are the non signature parts, used for certificate signature
 		this->non_signature_parts->insert(this->non_signature_parts->begin(), raw_bytes->begin(), raw_bytes->end() - signature_len);
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] Ed25519Certificate structure validated.\n");
+		#endif
 
 		this->isStructValid = true; 
 	}
@@ -286,16 +318,22 @@ namespace Briand {
 		// For ed certificates all signatures are made with an ed key from other certificates
 		// (listed somewhere else, thus parameter) and must not be expired
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] %s signature verification.\n", this->GetCertificateName().c_str());
+		#endif
 
 		bool signatureValid = BriandTorCryptoUtils::CheckSignature_Ed25519(this->non_signature_parts, ed25519PK, this->SIGNATURE);
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] %s signature verification result: %d\n", this->GetCertificateName().c_str(), signatureValid);
+		#endif
 
 		return signatureValid;
 	}
 
 	void BriandTorEd25519CertificateBase::PrintCertInfo() {
+
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {		
 			printf("[DEBUG] Certificate Type: %d/%s->EXPIRATION_DATE (Unix time HOURS) = 0x %08X\n", this->Type, this->GetCertificateName().c_str(), this->EXPIRATION_DATE);
 			printf("[DEBUG] Certificate Type: %d/%s->EXPIRATION_DATE valid = %d\n", this->Type, this->GetCertificateName().c_str(), !this->IsExpired() );
@@ -317,6 +355,7 @@ namespace Briand {
 			//BriandUtils::PrintOldStyleByteBuffer(this->SIGNATURE.get(), this->signature_len, this->signature_len+1, this->signature_len);
 			BriandUtils::PrintByteBuffer(*this->SIGNATURE.get(), this->SIGNATURE->size(), this->SIGNATURE->size());
 		}
+		#endif
 	}
 
 	size_t BriandTorEd25519CertificateBase::GetObjectSize() {
@@ -352,9 +391,13 @@ namespace Briand {
 		// This certificate is a DER-encoded X.509 
 		// The CA is the Cert type 2 and is ... myself!
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
+		#endif
 		bool validationResult = BriandTorCryptoUtils::X509Validate(this->Contents, this->Contents);
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
+		#endif
 
 		return validationResult;
 	}
@@ -375,7 +418,9 @@ namespace Briand {
 
 		// Parse certificate
 		if ( mbedtls_x509_crt_parse(&certificate, reinterpret_cast<const unsigned char*>(tempBuffer.get()), certSize) != 0) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RSA1024Identity certificate validation: failed to parse certificate.\n");
+			#endif
 
 			// free
 			mbedtls_x509_crt_free(&certificate);
@@ -403,15 +448,19 @@ namespace Briand {
 		this->SIGNATURE = nullptr; 
 		this->SIGLEN = 0x00;
 
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
 			printf("[DEBUG] RSAEd25519CrossCertificate raw bytes: ");
 			BriandUtils::PrintByteBuffer(*raw_bytes.get(), raw_bytes->size()+1, raw_bytes->size()+1);
 		}
+		#endif
 
 		// start to build
 
 		if (raw_bytes->size() < 37) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RSAEd25519CrossCertificate has too poor bytes.\n");
+			#endif
 			return;
 		} 
 		
@@ -426,11 +475,15 @@ namespace Briand {
 		this->SIGLEN += raw_bytes->at(this->ed25519_key_size + 4);
 
 		if (raw_bytes->size() < (this->ed25519_key_size + 4 + this->SIGLEN)) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RSAEd25519CrossCertificate has too poor bytes for signature.\n");
+			#endif
 			return;
 		} 
 		if (this->SIGLEN < 1) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RSAEd25519CrossCertificate has an invalid SIGLEN value.\n");
+			#endif
 			return;
 		}
 
@@ -441,7 +494,9 @@ namespace Briand {
 		//std::copy(raw_bytes->begin()+37, raw_bytes->begin()+37+this->SIGLEN, this->SIGNATURE.get());
 		this->SIGNATURE->insert(this->SIGNATURE->begin(), raw_bytes->begin()+this->ed25519_key_size+4+1, raw_bytes->begin()+37+this->SIGLEN);
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] RSAEd25519CrossCertificate structure validated.\n");
+		#endif
 
 		this->isStructValid = true; 
 	}
@@ -461,12 +516,16 @@ namespace Briand {
 
 	bool BriandTorCertificate_RSAEd25519CrossCertificate::IsValid(const BriandTorCertificate_RSA1024Identity& signAuthenticator) {
 		if (this->IsExpired()) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RSAEd25519CrossCertificate is expired.\n");
+			#endif
 			return false;
 		}
 			
 		// Check signature
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] RSAEd25519CrossCertificate check if signed by RSA1024 Identity.\n");
+		#endif
 
 		/*The signature is computed on the SHA256 hash of the non-signature parts of the certificate, prefixed with the	string "Tor TLS RSA/Ed25519 cross-certificate".*/
 
@@ -483,16 +542,22 @@ namespace Briand {
 		bool signedCorrectly = BriandTorCryptoUtils::CheckSignature_RSASHA256(messageToVerify, signAuthenticator.Contents, this->SIGNATURE);
 
 		if (signedCorrectly) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RSAEd25519CrossCertificate has valid signature.\n");
+			#endif
 		}
 		else { 
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RSAEd25519CrossCertificate has invalid signature!\n");
+			#endif
 		}
 
 		return signedCorrectly;
 	}
 
 	void BriandTorCertificate_RSAEd25519CrossCertificate::PrintCertInfo() {
+
+		#if !SUPPRESSDEBUGLOG
 		if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {				
 			printf("[DEBUG] RSAEd25519CrossCertificate->ED25519_KEY = ");
 			BriandUtils::PrintByteBuffer(*this->ED25519_KEY.get(), this->ed25519_key_size, this->ed25519_key_size);
@@ -501,6 +566,8 @@ namespace Briand {
 			printf("[DEBUG] RSAEd25519CrossCertificate->SIGNATURE = ");
 			BriandUtils::PrintByteBuffer(*this->SIGNATURE.get(), this->SIGLEN, this->SIGLEN);
 		}
+		#endif
+		
 	}
 
 	size_t BriandTorCertificate_RSAEd25519CrossCertificate::GetObjectSize() {
@@ -530,9 +597,13 @@ namespace Briand {
 		// This certificate is a DER-encoded X.509 
 		// The CA is the Cert type 2.
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
+		#endif
 		bool validationResult = BriandTorCryptoUtils::X509Validate(this->Contents, signAuthenticator.Contents);
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
+		#endif
 
 		return validationResult;
 	}
@@ -546,9 +617,13 @@ namespace Briand {
 		// This certificate is a DER-encoded X.509 
 		// The CA is the Cert type 2.
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] %s - Starting validate.\n", this->GetCertificateName().c_str());
+		#endif
 		bool validationResult = BriandTorCryptoUtils::X509Validate(this->Contents, signAuthenticator.Contents);
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] %s - Validation end with result %d.\n", this->GetCertificateName().c_str(), validationResult);
+		#endif
 
 		return validationResult;
 	}
@@ -560,7 +635,9 @@ namespace Briand {
 
 	bool BriandTorCertificate_Ed25519SigningKey::IsValid(const BriandTorCertificate_RSAEd25519CrossCertificate& signAuthenticator) {
 		if (this->IsExpired()) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Ed25519SigningKey is expired.\n");
+			#endif
 			return false;
 		}
 			
@@ -576,7 +653,9 @@ namespace Briand {
 					if (e.ExtData->size() != signAuthenticator.ED25519_KEY->size() || 
 						!std::equal(e.ExtData->begin(), e.ExtData->end(), signAuthenticator.ED25519_KEY->begin()) 
 						) {
+						#if !SUPPRESSDEBUGLOG
 						ESP_LOGD(LOGTAG, "[DEBUG] Error, Ed25519SigningKey has extension 0x04 not matching the ED25519_KEY in the RSAEd25519CrossCertificate. Validation fails!\n");
+						#endif
 						return false;
 					}
 				}
@@ -585,11 +664,15 @@ namespace Briand {
 
 		// Check if signed by RSAEd25519CrossCertificate
 		if (!this->IsSignatureIsValid(signAuthenticator.ED25519_KEY)) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Ed25519SigningKey has invalid signature.\n");
+			#endif
 			return false;
 		}
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] Ed25519SigningKey is valid.\n");
+		#endif
 
 		return true;
 	}
@@ -601,12 +684,16 @@ namespace Briand {
 
 	bool BriandTorCertificate_TLSLink::IsValid(const BriandTorCertificate_Ed25519SigningKey& signAuthenticator, const BriandTorCertificate_LinkKey& linkKeyCert) {
 		if (this->IsExpired()) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] TLSLink is expired.\n");
+			#endif
 			return false;
 		}
 			
 		if (!this->IsSignatureIsValid(signAuthenticator.CERTIFIED_KEY)) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] TLSLink has invalid signature.\n");
+			#endif
 			return false;
 		}
 
@@ -617,11 +704,15 @@ namespace Briand {
 		if (this->CERTIFIED_KEY->size() != linkKeyDigest->size() || 
 			!std::equal(CERTIFIED_KEY->begin(), CERTIFIED_KEY->end(), linkKeyDigest->begin()) 
 			) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Error, the SHA256 digest of LinkCertificate does not match the CertifiedKey.\n");
+			#endif
 			return false;
 		}
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] TLSLink is valid.\n");
+		#endif
 
 		return true;
 	}
@@ -633,12 +724,16 @@ namespace Briand {
 
 	bool BriandTorCertificate_Ed25519AuthenticateCellLink::IsValid(const BriandTorCertificate_Ed25519SigningKey& signAuthenticator) {
 		if (this->IsExpired()) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Ed25519AuthenticateCellLink is expired.\n");
+			#endif
 			return false;
 		}
 			
 		if (!this->IsSignatureIsValid(signAuthenticator.CERTIFIED_KEY)) {
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Ed25519AuthenticateCellLink has invalid signature.\n");
+			#endif
 			return false;
 		}
 
@@ -646,14 +741,18 @@ namespace Briand {
 		// TODO
 		//
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] Ed25519AuthenticateCellLink HAS NO WRITTEN VALIDATION METHODS (only signature and expiration is checked) !!!!!!!!!!!!\n");
+		#endif
 
 		//
 		// TODO
 		//
 
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] Ed25519AuthenticateCellLink is valid.\n");
+		#endif
 
 		return true;
 	}

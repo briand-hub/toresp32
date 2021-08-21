@@ -45,13 +45,26 @@ namespace Briand {
 		static unsigned int STAT_NUM_CACHE_MIDDLE_MISS;
 		/** Statistics field for exit node miss in cache */
 		static unsigned int STAT_NUM_CACHE_EXIT_MISS;
+		/** Cache time build (s) */
+		static unsigned int STAT_CACHE_BUILD_TIME;
+		/** No. of dropped node due to same-family ips */
+		static unsigned int STAT_NUM_CACHE_SAME_IP_DROP;
 		/** Statistics field for guard node connection error */
 		static unsigned int STAT_NUM_GUARD_CONN_ERR;
 		/** Statistics field for no. of failed CREATE2 */
 		static unsigned int STAT_NUM_CREATE2_FAIL;
 		/** Statistics field for no. of failed EXTEND2 */
 		static unsigned int STAT_NUM_EXTEND2_FAIL;
-
+		/** Max time to build a circuit, milliseconds */
+		static unsigned int STAT_BUILD_TIME_MAX;
+		/** Max time to send a stream cell through Tor, milliseconds */
+		static unsigned int STAT_TOR_SEND_TIME_AVG;
+		/** No. of stream cells sent */
+		static unsigned int STAT_TOR_SEND_N;
+		/** Max time to receive a stream cell from Tor, milliseconds */
+		static unsigned int STAT_TOR_RECV_TIME_AVG;
+		/** No. of stream cells sent */
+		static unsigned int STAT_TOR_RECV_N;
 
 		BriandTorStatistics();
 		~BriandTorStatistics();

@@ -29,7 +29,11 @@ namespace Briand
 		output->reserve(input->size()); // allocate the right memory
 
 		if (input == nullptr || input->size() == 0) {
+			
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] StringToUnsignedCharVector called with null data!\n");
+			#endif
+
 			return output;
 		} 
 
@@ -53,7 +57,11 @@ namespace Briand
 		output->reserve(input->size()); // allocate the right memory
 
 		if (input == nullptr || input->size() == 0) {
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] UnsignedCharVectorToString called with null data!\n");
+			#endif
+
 			return output;
 		} 
 
@@ -83,7 +91,11 @@ namespace Briand
 		output->reserve(1024); // min. 1KB reserved
 
 		if (content == nullptr || content->size() == 0) {
+			
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RawInsecureRequest called with null data!\n");
+			#endif
+
 			return output;
 		} 
 
@@ -99,7 +111,9 @@ namespace Briand
 			return output;
 		}
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] Connected.\n");
+		#endif
 
 		// Write request
 		if ( !client->WriteData(content) ) {
@@ -112,13 +126,17 @@ namespace Briand
 
 		// Wait response until timeout reached
 		
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] Request sent.\n");
 		ESP_LOGD(LOGTAG, "[DEBUG] Waiting response");
+		#endif
 
 		// Response
 		output = client->ReadData(false);
 		
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] Got response of %d bytes.\n", output->size());
+		#endif
 
 		client->Disconnect();
 
@@ -132,7 +150,11 @@ namespace Briand
 		output->reserve(1024); // min 1KB
 
 		if (content == nullptr || content->size() == 0) {
+			
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RawSecureRequest called with null data!\n");
+			#endif
+			
 			return output;
 		} 
 
@@ -149,7 +171,9 @@ namespace Briand
 			// Read response
 			output = client->ReadData();
 			
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Got response of %d bytes.\n", output->size());
+			#endif
 
 			if (client->IsConnected() && closeConnection)
 				client->Disconnect();
@@ -162,7 +186,11 @@ namespace Briand
 		auto output = make_unique<vector<unsigned char>>();
 
 		if (content == nullptr || content->size() == 0) {
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RawSecureRequest called with null data!\n");
+			#endif 
+
 			return output;
 		} 
 
@@ -179,7 +207,11 @@ namespace Briand
 			client->AddCACertificateToChainDER(*derCAcert.get());
 		}
 		else {
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] Insecure mode (no PEM/DER CA certificate).\n");
+			#endif
+
 		}
 
 		// Connect
@@ -189,7 +221,9 @@ namespace Briand
 			return output;
 		}
 
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] Connected.\n");
+		#endif
 
 		// Write request
 		client->WriteData(content);
@@ -200,13 +234,17 @@ namespace Briand
 
 		// Wait response until timeout reached
 		
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] Request sent.\n");
 		ESP_LOGD(LOGTAG, "[DEBUG] Waiting response\n");
+		#endif
 
 		// Response ready!
 		output = client->ReadData();
 		
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] Got response of %d bytes.\n", output->size());
+		#endif
 
 		if (client->IsConnected())
 			client->Disconnect();
@@ -217,7 +255,10 @@ namespace Briand
 	}
 
 	unique_ptr<string> BriandNet::HttpsGet(const string& host, const short& port, const string& path, short& httpReturnCode, const string& agent /* = "empty"*/, const bool& returnBodyOnly /* = false*/, const unique_ptr<string>& pemCAcert /*= nullptr*/, const unique_ptr<vector<unsigned char>>& derCAcert /*= nullptr*/) {
+		
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] HttpsGet called to https://%s:%d%s\n", host.c_str(), port, path.c_str());
+		#endif
 
 		// Prepare request
 
@@ -232,12 +273,18 @@ namespace Briand
 		auto contents = StringToUnsignedCharVector(request, true);
 		request.reset();
 		
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] HttpsGet sending raw request.\n");
+		#endif
+
 		auto response = RawSecureRequest(host, port, contents, true, pemCAcert, derCAcert);
 
 		if (response->size() > 0) {
 			// Success
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] HttpsGet success.\n");
+			#endif
 
 			// Convert to string
 			auto responseContent = UnsignedCharVectorToString(response, true);
@@ -256,13 +303,20 @@ namespace Briand
 			return responseContent;
 		}
 		else {
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] HttpsGet failed.\n");
+			#endif
+			
 			return nullptr;
 		}
 	}
 
 	unique_ptr<string> BriandNet::HttpInsecureGet(const string& host, const short& port, const string& path, short& httpReturnCode, const string& agent /* = "empty"*/, const bool& returnBodyOnly /* = false*/) {
+		
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] HttpInsecureGet called to http://%s:%d%s\n", host.c_str(), port, path.c_str());
+		#endif
 
 		// Prepare request
 
@@ -276,12 +330,18 @@ namespace Briand
 
 		auto contents = StringToUnsignedCharVector(request, true);
 		
+		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] HttpInsecureGet sending raw request.\n");
+		#endif
+		
 		auto response = RawInsecureRequest(host, port, contents, true);
 
 		if (response->size() > 0) {
 			// Success
+
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] HttpInsecureGet success.\n");
+			#endif
 
 			// Convert to string
 			auto responseContent = UnsignedCharVectorToString(response, true);
@@ -305,7 +365,11 @@ namespace Briand
 			return responseContent;
 		}
 		else {
+			
+			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] HttpInsecureGet failed.\n");
+			#endif
+			
 			return nullptr;
 		}
 	}
