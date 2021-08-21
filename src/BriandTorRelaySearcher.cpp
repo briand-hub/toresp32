@@ -172,6 +172,7 @@ namespace Briand {
 			while (skipped < this->skipRandomResults) {
 				bool skippedNewLine = true;
 				auto skippedLine = client->ReadDataUntil('\n', 512, skippedNewLine);
+				skipped++;
 			}
 
 			#if !SUPPRESSDEBUGLOG
@@ -463,26 +464,35 @@ namespace Briand {
 	bool BriandTorRelaySearcher::CheckCacheFile(const char* filename) {
 		bool valid = false;
 
+		// Check file exists
+		struct stat temp;
+		if (stat(filename, &temp) != 0) {
+			return false;
+		}
+
 		ifstream file(filename, ios::in);
 
-		// Make some tentatives to open file (ESP32 Flash could be doing else!)
-		unsigned char fopenMaxTentatives = 5;
-		while (!file.good() && fopenMaxTentatives > 0) {
-			file.open(filename, ios::in);
-			fopenMaxTentatives--;
+		// Make 15 tentatives to open file (ESP32 Flash could be doing else!)
+		unsigned char fopenTentatives = 0;
+		while (!file.good() && fopenTentatives < 15) {
 			vTaskDelay(500/portTICK_PERIOD_MS);
+			file.open(filename, ios::in);
+			fopenTentatives++;
 		}
 
 		if (file.good()) {
-			// Check just the first line timestamp and how many lines are in the file
+			// Check just the first line timestamp 
+			
+			// REMOVED:
+			// and how many lines are in the file
 			string firstLine("");
 			std::getline(file, firstLine, '\n');
-			unsigned int lines = 0;
-			string temp;
-			while (!file.eof()) { 
-				std::getline(file, temp, '\n');
-				lines++;
-			}
+			// unsigned int lines = 0;
+			// string temp;
+			// while (!file.eof()) { 
+			// 	std::getline(file, temp, '\n');
+			// 	lines++;
+			// }
 			file.close(); 
 
 			#if !SUPPRESSDEBUGLOG
@@ -494,15 +504,13 @@ namespace Briand {
 				if ( (cacheAge + (TOR_NODES_CACHE_VAL_H*3600)) >= BriandUtils::GetUnixTime() ) {
 					valid = true;
 				}
-				if (lines < TOR_NODES_CACHE_SIZE) {
-					valid = false;
-				}
+				// if (lines < TOR_NODES_CACHE_SIZE) {
+				// 	valid = false;
+				// }
 			}	
 		}
 		else {
-			#if !SUPPRESSDEBUGLOG
-			ESP_LOGD(LOGTAG, "[DEBUG] %s cache file does not exist.\n", filename);
-			#endif
+			ESP_LOGE(LOGTAG, "[DEBUG] %s cache file unavailable for read. Tentatives made were %hu.\n", filename, fopenTentatives);
 		}
 
 		return valid;
@@ -607,12 +615,16 @@ namespace Briand {
 
 			ifstream file(this->NODES_FILE_GUARD, ios::in);
 
-			// Make some tentatives to open file (ESP32 Flash could be doing else!)
-			unsigned char fopenMaxTentatives = 5;
-			while (!file.good() && fopenMaxTentatives > 0) {
-				file.open(this->NODES_FILE_GUARD, ios::in);
-				fopenMaxTentatives--;
+			// Make 15 tentatives to open file (ESP32 Flash could be doing else!)
+			unsigned char fopenTentatives = 0;
+			while (!file.good() && fopenTentatives < 15) {
 				vTaskDelay(500/portTICK_PERIOD_MS);
+				file.open(this->NODES_FILE_GUARD, ios::in);
+				fopenTentatives++;
+			}
+			if (!file.good()) {
+				ESP_LOGE(LOGTAG, "[WARN] Search failed due to %hu failed tentatives to open file %s.\n", fopenTentatives, this->NODES_FILE_GUARD);
+				return nullptr;
 			}
 
 			// Skip the first line
@@ -699,12 +711,16 @@ namespace Briand {
 
 				ifstream file(this->NODES_FILE_MIDDLE, ios::in);
 
-				// Make some tentatives to open file (ESP32 Flash could be doing else!)
-				unsigned char fopenMaxTentatives = 5;
-				while (!file.good() && fopenMaxTentatives > 0) {
-					file.open(this->NODES_FILE_MIDDLE, ios::in);
-					fopenMaxTentatives--;
+				// Make 15 tentatives to open file (ESP32 Flash could be doing else!)
+				unsigned char fopenTentatives = 0;
+				while (!file.good() && fopenTentatives < 15) {
 					vTaskDelay(500/portTICK_PERIOD_MS);
+					file.open(this->NODES_FILE_MIDDLE, ios::in);
+					fopenTentatives++;
+				}
+				if (!file.good()) {
+					ESP_LOGE(LOGTAG, "[WARN] Search failed due to %hu failed tentatives to open file %s.\n", fopenTentatives, this->NODES_FILE_MIDDLE);
+					return nullptr;
 				}
 
 				// Skip the first line
@@ -798,12 +814,16 @@ namespace Briand {
 
 				ifstream file(this->NODES_FILE_EXIT, ios::in);
 
-				// Make some tentatives to open file (ESP32 Flash could be doing else!)
-				unsigned char fopenMaxTentatives = 5;
-				while (!file.good() && fopenMaxTentatives > 0) {
-					file.open(this->NODES_FILE_EXIT, ios::in);
-					fopenMaxTentatives--;
+				// Make 15 tentatives to open file (ESP32 Flash could be doing else!)
+				unsigned char fopenTentatives = 0;
+				while (!file.good() && fopenTentatives < 15) {
 					vTaskDelay(500/portTICK_PERIOD_MS);
+					file.open(this->NODES_FILE_EXIT, ios::in);
+					fopenTentatives++;
+				}
+				if (!file.good()) {
+					ESP_LOGE(LOGTAG, "[WARN] Search failed due to %hu failed tentatives to open file %s.\n", fopenTentatives, this->NODES_FILE_EXIT);
+					return nullptr;
 				}
 
 				// Skip the first line
