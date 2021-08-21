@@ -21,6 +21,8 @@
 * Added suppress-log
 * Added random-skip lines to consensus download and file flushing
 * Removed parameter *Component config -> FreeRTOS -> ENABLED Place FreeRTOS functions into Flash* I think causing cache failures and frequent download.
+* Better cache access with waiting search requests
+* Better stack sizes when log suppressed
 
 ## 2021-08-18
 

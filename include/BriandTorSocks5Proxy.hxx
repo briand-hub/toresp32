@@ -87,8 +87,12 @@ namespace Briand
         /** Pointer to CircuitsManager instance */
         static BriandTorCircuitsManager* torCircuits;
 
-        /** Maximum payload available for read/write stream operations */
-        static const unsigned short MAX_FREE_PAYLOAD = 498;
+        /** 
+            Maximum payload available for read/write stream operations LESS 5 bytes, in order
+            to fit this requirement: To ensure unpredictability, random bytes should be added to at least one
+			RELAY_DATA cell within one increment window. In other word, every 100 cells (increment), random bytes should be introduced in at least one cell.
+        */
+        static const unsigned short MAX_FREE_PAYLOAD = 498 - 5;
 
         /** Delay in mseconds for stream read/write operations */
         static const unsigned short STREAM_WAIT_MS = 200;

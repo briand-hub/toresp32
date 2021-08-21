@@ -82,10 +82,10 @@ void app_main() {
 	TorEsp32Setup();
 
 	// Start Heap monitor
-	xTaskCreate(heapStats, "HeapStats", 1024, NULL, 1000, NULL);
+	xTaskCreate(heapStats, "HeapStats", STACK_HeapStats, NULL, 1000, NULL);
 
 	// Start application loop
-	xTaskCreate(TorEsp32Main, "TorEsp32", 4096, NULL, 15, NULL);
+	xTaskCreate(TorEsp32Main, "TorEsp32", STACK_TorEsp32, NULL, 15, NULL);
 }
 
 void TorEsp32Setup() {
@@ -373,7 +373,7 @@ void TorEsp32Main(void* taskArg) {
 			printf("[INFO] LAN IP Address: %s\n", WiFi->GetStaIP().c_str());
 
 			// Start WiFi Check
-			xTaskCreate(checkStaHealth, "StaCheck", 1280, NULL, 1000, NULL);
+			xTaskCreate(checkStaHealth, "StaCheck", STACK_StaCheck, NULL, 1000, NULL);
 
 			nextStep = 7;
 		}
@@ -705,9 +705,15 @@ void executeCommand(string& cmd) {
 		printf("File system size: %d bytes\n", total);
         printf("File system used: %d bytes\n", used);
         printf("File system free: %d bytes\n", (total-used));
+
+		printf("\n");
     }
 	else if (cmd.compare("meminfo") == 0) {
         Briand::BriandESPDevice::PrintMemoryStatus();
+		printf("\n");
+		printf("Max. heap free size: %lu\n", HEAP_MAX);
+		printf("Min. heap free size: %lu\n", HEAP_MIN);
+		printf("\n");
 	}
 	else if (cmd.compare("netinfo") == 0) {
         printf("AP Hostname: %s\n", AP_HOSTNAME->c_str());

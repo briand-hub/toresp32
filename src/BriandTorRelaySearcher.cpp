@@ -69,9 +69,6 @@ namespace Briand {
 
 		// Statistics
 		auto buildStartTime = BriandUtils::GetUnixTime();
-		
-		// Always show an alert because this is a long operation!
-		printf("\n*** System warning: Tor node cache is rebuilding, may take time.\n\n");
 
 		// Start with the first authority, check not to start an infinite loop 
 		unsigned short loopStartsWith = 0;
@@ -189,7 +186,21 @@ namespace Briand {
 			// will not read another time.
 			unique_ptr<vector<unsigned char>> lostR = nullptr;
 
+			float completed = 0.0;
+			float nextToPrint = 0.0;
+
 			do {
+				// Always show an alert because this is a long operation!
+				if ((fGuardNodes + fMiddleNodes + fExitNodes) >= 0.25*TOR_NODES_CACHE_SIZE*3) completed = 0.25;
+				if ((fGuardNodes + fMiddleNodes + fExitNodes) >= 0.50*TOR_NODES_CACHE_SIZE*3) completed = 0.50;
+				if ((fGuardNodes + fMiddleNodes + fExitNodes) >= 0.75*TOR_NODES_CACHE_SIZE*3) completed = 0.75;
+				if ((fGuardNodes + fMiddleNodes + fExitNodes) >= 1.00*TOR_NODES_CACHE_SIZE*3) completed = 1.00;
+				
+				if (completed == nextToPrint) {
+					printf("\n*** System warning: Tor node cache is rebuilding, may take time. Progress: %.0f%%\n", completed*100);
+					nextToPrint = completed + 0.25;
+				}
+				
 				if (lostR == nullptr) {
 					rawData = client->ReadDataUntil('\n', 512, newLine);
 				}

@@ -127,7 +127,7 @@ namespace Briand
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy listening.\n");
         #endif
 
-        xTaskCreate(this->HandleRequest, "TorProxy", 3*1024, reinterpret_cast<void*>(this->proxySocket), 25, &this->proxyTaskHandle);
+        xTaskCreate(this->HandleRequest, "TorProxy", STACK_TorProxy, reinterpret_cast<void*>(this->proxySocket), 25, &this->proxyTaskHandle);
 
         this->proxyStarted = true;
 
@@ -183,7 +183,7 @@ namespace Briand
                 REQUEST_QUEUE++;
 
                 // Start task to handle this client
-                xTaskCreate(HandleClient, "TorProxyReq", 4*1024, reinterpret_cast<void*>(clientSock), 24, NULL);
+                xTaskCreate(HandleClient, "TorProxyReq", STACK_TorProxyReq, reinterpret_cast<void*>(clientSock), 24, NULL);
             }
 
             // Wait before next run
@@ -199,7 +199,7 @@ namespace Briand
                 if (clientSocket != NULL && reinterpret_cast<int>(clientSocket) == -1) {
                     clientSocket = reinterpret_cast<void*>(-2);
                     // Reset the request queue
-                    if (REQUEST_QUEUE-1 > 0) REQUEST_QUEUE--;
+                    if (REQUEST_QUEUE-1 >= 0) REQUEST_QUEUE--;
                     vTaskDelete(NULL);
                 }
                 vTaskDelay(500/portTICK_PERIOD_MS);
@@ -547,11 +547,11 @@ namespace Briand
                 parameter->circuit = circuit;
 
                 // Start the reader task
-                xTaskCreate(ProxyClient_Stream_Reader, "StreamRD", 4*1024, reinterpret_cast<void*>(parameter.get()), 20, NULL);
+                xTaskCreate(ProxyClient_Stream_Reader, "StreamRD", STACK_StreamRD, reinterpret_cast<void*>(parameter.get()), 20, NULL);
                 // Wait a little (1 second) because client should write us before we write him
                 vTaskDelay(1000 / portTICK_PERIOD_MS);
                 // Then start the writer task
-                xTaskCreate(ProxyClient_Stream_Writer, "StreamWR", 4*1024, reinterpret_cast<void*>(parameter.get()), 20, NULL);
+                xTaskCreate(ProxyClient_Stream_Writer, "StreamWR", STACK_StreamWR, reinterpret_cast<void*>(parameter.get()), 20, NULL);
 
                 // Now wait that read/write finished.
                 while(!parameter->readerFinished || !parameter->writerFinished) {

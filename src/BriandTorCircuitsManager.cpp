@@ -61,7 +61,7 @@ namespace Briand
         this->isStopped = false;
 
         // Create a task to periodically check circuit instances situation
-        xTaskCreate(this->CircuitsTaskSingle, "MgrInst", this->TASK_STACK_SIZE, NULL, 500, NULL);
+        xTaskCreate(this->CircuitsTaskSingle, "MgrInst", STACK_MgrInst, NULL, 500, NULL);
     }
 
     /*static*/ void BriandTorCircuitsManager::CircuitsTaskSingle(void* noparam) {

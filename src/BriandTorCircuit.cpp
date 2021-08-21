@@ -1274,30 +1274,6 @@ namespace Briand {
 					// Re-increment by 50 the window
 					this->CURRENT_STREAM_WINDOW += 50;
 				}
-
-				/* To fit this requirement:
-					 To ensure unpredictability, random bytes should be added to at least one
-					RELAY_DATA cell within one increment window. In other word, every 100 cells
-					(increment), random bytes should be introduced in at least one cell.
-				*/
-
-				// When the window reaches 955 (five cells remaining) send an EMPTY relay data cell (only random bytes)
-				if (this->CURRENT_STREAM_WINDOW <= 955) {
-					#if !SUPPRESSDEBUGLOG
-					ESP_LOGD(LOGTAG, "[DEBUG] Sending and empty (random bytes) RELAY_DATA cell.\n");
-					#endif
-					auto emptyPayload = make_unique<vector<unsigned char>>();
-					if (!this->TorStreamWriteData(BriandTorCellRelayCommand::RELAY_DATA, emptyPayload)) {
-						ESP_LOGW(LOGTAG, "[WARN] Empty RELAY_DATA cell NOT sent (errors). Circuit will be torn down.\n");
-						this->TearDown();
-						return nullptr;
-					}
-					else {
-						#if !SUPPRESSDEBUGLOG
-						ESP_LOGD(LOGTAG, "[DEBUG] Empty RELAY_DATA cell sent.\n");
-						#endif
-					}
-				}
 			}
 		}
 

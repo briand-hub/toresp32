@@ -168,5 +168,29 @@
         #error "UNSUPPORTED PLATFORM (ESP32 OR LINUX REQUIRED)"
     #endif
 
+    
+    // STACK SIZE OPTIMIZATIONS
+
+
+    #if SUPPRESSDEBUGLOG
+        #define STACK_TorEsp32 4096
+        #define STACK_HeapStats 768
+        #define STACK_StaCheck 1024
+        #define STACK_MgrInst 5120
+        #define STACK_TorProxy 2816
+        #define STACK_TorProxyReq 2560
+        #define STACK_StreamWR 3072
+        #define STACK_StreamRD 3072
+    #else
+        #define STACK_TorEsp32 4096
+        #define STACK_HeapStats 1024
+        #define STACK_StaCheck 1280
+        #define STACK_MgrInst 5120
+        #define STACK_TorProxy 3072
+        #define STACK_TorProxyReq 4096
+        #define STACK_StreamWR 4096
+        #define STACK_StreamRD 4096
+    #endif
+
 #endif /* BRIANDDEFINES_H_ */
 

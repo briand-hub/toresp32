@@ -147,7 +147,7 @@ namespace Briand
 
 	unique_ptr<vector<unsigned char>> BriandNet::RawSecureRequest(const unique_ptr<BriandIDFSocketTlsClient>& client, unique_ptr<vector<unsigned char>>& content, bool emptyContents /* = true*/, bool closeConnection /* = false*/, bool expectResponse /* = true */) {
 		auto output = make_unique<vector<unsigned char>>();
-		output->reserve(1024); // min 1KB
+		output->reserve(512); // min 512KB
 
 		if (content == nullptr || content->size() == 0) {
 			

@@ -31,9 +31,6 @@ namespace Briand {
     class BriandTorCircuitsManager {
 		protected:
 
-        /** Task stack size in bytes, obtained by tests. If too low task will crash! */
-        static const unsigned short TASK_STACK_SIZE = 5120;
-
         #if defined(ESP_PLATFORM)
         /** Task re-execution time, obtained by tests, in milliseconds. (ESP, min.30 seconds) */
         static const unsigned short TASK_WAIT_BEFORE_NEXT = 30*1000;
