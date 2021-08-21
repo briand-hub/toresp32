@@ -111,6 +111,7 @@
         #include <lwip/netdb.h>
         #include <lwip/inet.h>
         #include <lwip/ip_addr.h>
+        #include <sys/stat.h>
 
         /* Custom specific libraries */
         #include "BriandESPDevice.hxx"
@@ -140,6 +141,7 @@
         #include <cstdio>
         #include <cstdlib>
         #include <unistd.h>
+        #include <sys/stat.h>
 
         /* Custom specific libraries */
         #include "BriandEspLinuxPorting.hxx"
