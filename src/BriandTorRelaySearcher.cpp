@@ -513,11 +513,12 @@ namespace Briand {
 			// 	std::getline(file, temp, '\n');
 			// 	lines++;
 			// }
+			
 			file.close(); 
 
-			#if !SUPPRESSDEBUGLOG
-			ESP_LOGD(LOGTAG, "[DEBUG] %s cache file has %u rows.\n", filename, lines);
-			#endif
+			// #if !SUPPRESSDEBUGLOG
+			// ESP_LOGD(LOGTAG, "[DEBUG] %s cache file has %u rows.\n", filename, lines);
+			// #endif
 
 			if (firstLine.size() > 3) {
 				unsigned long int cacheAge = stoul(firstLine);

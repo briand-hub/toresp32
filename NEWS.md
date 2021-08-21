@@ -23,7 +23,9 @@
 * Removed parameter *Component config -> FreeRTOS -> ENABLED Place FreeRTOS functions into Flash* I think causing cache failures and frequent download.
 * Better cache access with waiting search requests
 * Better stack sizes when log suppressed
+
 * Possible bug in stream: after some cells exchanged, seems unrecognize all. Maybe due to the additional bytes download?
+* Possible bug in tor relay searcher: too much rebuild cache requests...
 
 ## 2021-08-18
 

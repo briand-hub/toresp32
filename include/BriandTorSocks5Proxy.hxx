@@ -101,7 +101,7 @@ namespace Briand
         static unsigned char REQUEST_QUEUE;
 
         /** Number of MAX requests, limits the call to HandleClient(), fixed to TOR_CIRCUITS_KEEPALIVE */
-        static const unsigned char REQUEST_QUEUE_LIMIT = static_cast<unsigned char>((TOR_CIRCUITS_KEEPALIVE*2)/3);
+        static const unsigned char REQUEST_QUEUE_LIMIT = (static_cast<unsigned char>((TOR_CIRCUITS_KEEPALIVE*2)/3) > 0 ? static_cast<unsigned char>((TOR_CIRCUITS_KEEPALIVE*2)/3) : 1);
 
         /**
          * Handles a single request to this proxy (accept() and starts HandleClient)
