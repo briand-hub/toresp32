@@ -466,9 +466,15 @@ namespace Briand {
 
 			// Update statistics
 			BriandTorStatistics::STAT_CACHE_BUILD_TIME = BriandUtils::GetUnixTime() - buildStartTime;
+
+			// of course!
+			this->cacheValid = true;
 		}
 		else {
 			printf("\n*** System warning: Tor node cache rebuilding has FAILED.\n\n");
+
+			// of course!
+			this->cacheValid = false;
 		}
 	}
 
@@ -514,6 +520,9 @@ namespace Briand {
 				unsigned long int cacheAge = stoul(firstLine);
 				if ( (cacheAge + (TOR_NODES_CACHE_VAL_H*3600)) >= BriandUtils::GetUnixTime() ) {
 					valid = true;
+				}
+				else {
+					ESP_LOGW(LOGTAG, "[WARN] Cache file %s is outdated, must be rebuilt.\n", filename);
 				}
 				// if (lines < TOR_NODES_CACHE_SIZE) {
 				// 	valid = false;

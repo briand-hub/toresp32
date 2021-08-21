@@ -178,7 +178,7 @@
         #define STACK_StaCheck 1024
         #define STACK_MgrInst 5120
         #define STACK_TorProxy 2816
-        #define STACK_TorProxyReq 2560
+        #define STACK_TorProxyReq 4096
         #define STACK_StreamWR 3072
         #define STACK_StreamRD 3072
     #else
