@@ -194,7 +194,7 @@ namespace Briand
         }
 
         #if !SUPPRESSDEBUGLOG
-        ESP_LOGD(LOGTAG, "[DEBUG] HandleRequest exited.")
+        ESP_LOGD(LOGTAG, "[DEBUG] HandleRequest exited.\n");
         #endif
 
         // Wait a little, then exit
@@ -547,7 +547,7 @@ namespace Briand
         if (REQUEST_QUEUE-1 >= 0) REQUEST_QUEUE--;
 
         #if !SUPPRESSDEBUGLOG
-        ESP_LOGD(LOGTAG, "[DEBUG] HandleClient exited.")
+        ESP_LOGD(LOGTAG, "[DEBUG] HandleClient exited.\n");
         #endif
 
         // Wait a little, then exit

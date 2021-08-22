@@ -465,4 +465,20 @@ namespace Briand
 
 		return true;
 	}
+
+	const char* BriandUtils::BriandErrorStr(const BriandError& errorCode) {
+		switch (errorCode)
+		{
+			case BriandError::BRIAND_ERR_OK : return "OK";
+			case BriandError::BRIAND_ERR_NONE : return "NONE";
+			case BriandError::BRIAND_ERR_DIGEST_NOT_MATCHING : return "DIGEST_NOT_MATCHING";
+			case BriandError::BRIAND_ERR_INSUFFICIENT_PAYLOAD_BYTES : return "INSUFFICIENT_PAYLOAD_BYTES";
+			case BriandError::BRIAND_ERR_NOT_RELAY_CELL : return "NOT_RELAY_CELL";
+			case BriandError::BRIAND_ERR_RECOGNIZED_NOT_ZERO : return "RECOGNIZED_NOT_ZERO";
+			case BriandError::BRIAND_ERR_STREAMID_NOT_MATCHING_NOR_ZERO : return "STREAMID_NOT_MATCHING_NOR_ZERO";
+		
+			default: return std::to_string(errorCode).c_str();
+		}
+	}
+
 }

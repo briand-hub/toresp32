@@ -207,5 +207,13 @@ namespace Briand
 		 * @return true if string contains only numbers
 		*/
 		static bool IsNumber(const string& doubt);
+
+		/**
+		 * Converts an error code to string
+		 * @param errorCode Error code
+		 * @return string representing error
+		*/
+		static const char* BriandErrorStr(const BriandError& errorCode);
+		
 	};
 }

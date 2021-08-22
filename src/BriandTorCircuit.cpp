@@ -670,15 +670,17 @@ namespace Briand {
 			#endif
 
 			// Check if the cell is recognized
+			BriandError errCode;
 
-			if (tempCell->IsRelayCellRecognized(0x0000, this->guardNode->KEY_BackwardDigest_Db)) {
+			errCode = tempCell->IsRelayCellRecognized(0x0000, this->guardNode->KEY_BackwardDigest_Db);
+			if (errCode == BriandError::BRIAND_ERR_OK) {
 				// Have been recognized, if this is true here, an error occoured...
 				tempCell->BuildRelayCellFromPayload(this->guardNode->KEY_BackwardDigest_Db);
 				BriandTorCellRelayCommand unexpectedCmd = tempCell->GetRelayCommand();
 
 				#if !SUPPRESSDEBUGLOG
 				if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
-					printf("[DEBUG] RELAY recognized at Guard, something wrong, cell relay command is: %s. Payload: ", BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
+					printf("[DEBUG] RELAY recognized at Guard, something wrong (%s), cell relay command is: %s. Payload: ", BriandUtils::BriandErrorStr(errCode), BriandUtils::BriandTorRelayCellCommandToString(unexpectedCmd).c_str());
 					tempCell->PrintCellPayloadToSerial();
 				}
 				#endif
@@ -704,9 +706,10 @@ namespace Briand {
 
 			// Check if cell is recognized 
 
-			if (!tempCell->IsRelayCellRecognized(0x0000, this->middleNode->KEY_BackwardDigest_Db)) {
+			errCode = tempCell->IsRelayCellRecognized(0x0000, this->middleNode->KEY_BackwardDigest_Db);
+			if (errCode  != BriandError::BRIAND_ERR_OK) {
 				#if !SUPPRESSDEBUGLOG
-				ESP_LOGD(LOGTAG, "[DEBUG] Cell has not been recognized, failure.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Cell has not been recognized (%s), failure.\n", BriandUtils::BriandErrorStr(errCode));
 				#endif
 				this->TearDown();
 				this->Cleanup();
@@ -727,9 +730,10 @@ namespace Briand {
 
 			// Check if cell is recognized 
 
-			if (!tempCell->IsRelayCellRecognized(0x0000, this->guardNode->KEY_BackwardDigest_Db)) {
+			BriandError errCode = tempCell->IsRelayCellRecognized(0x0000, this->guardNode->KEY_BackwardDigest_Db);
+			if (errCode != BriandError::BRIAND_ERR_OK) {
 				#if !SUPPRESSDEBUGLOG
-				ESP_LOGD(LOGTAG, "[DEBUG] Cell has not been recognized, failure.\n");
+				ESP_LOGD(LOGTAG, "[DEBUG] Cell has not been recognized (%s), failure.\n", BriandUtils::BriandErrorStr(errCode));
 				#endif
 				this->TearDown();
 				this->Cleanup();
@@ -1142,11 +1146,13 @@ namespace Briand {
 		// If it is a RELAY cell, must be decrypted.
 		if (tempCell->GetCommand() == BriandTorCellCommand::RELAY) {
 			// Cell recognization 
+			BriandError errCode;
 
 			// Peel out the guard skin
 			tempCell->PeelOnionSkin(*this->guardNode.get());
+			errCode = tempCell->IsRelayCellRecognized(this->CURRENT_STREAM_ID, this->guardNode->KEY_BackwardDigest_Db);
 			
-			if (tempCell->IsRelayCellRecognized(this->CURRENT_STREAM_ID, this->guardNode->KEY_BackwardDigest_Db)) {
+			if (errCode == BriandError::BRIAND_ERR_OK) {
 				// If is recognized here, an error occoured.
 				tempCell->BuildRelayCellFromPayload(this->guardNode->KEY_BackwardDigest_Db);
 				BriandTorCellRelayCommand unexpectedCmd = tempCell->GetRelayCommand();
@@ -1165,8 +1171,9 @@ namespace Briand {
 
 			// Peel out the middle skin
 			tempCell->PeelOnionSkin(*this->middleNode.get());
+			errCode = tempCell->IsRelayCellRecognized(this->CURRENT_STREAM_ID, this->middleNode->KEY_BackwardDigest_Db);
 			
-			if (tempCell->IsRelayCellRecognized(this->CURRENT_STREAM_ID, this->middleNode->KEY_BackwardDigest_Db)) {
+			if (errCode == BriandError::BRIAND_ERR_OK) {
 				// If is recognized here, an error occoured.
 				tempCell->BuildRelayCellFromPayload(this->middleNode->KEY_BackwardDigest_Db);
 				BriandTorCellRelayCommand unexpectedCmd = tempCell->GetRelayCommand();
@@ -1185,13 +1192,16 @@ namespace Briand {
 
 			// Peel out the exit skin, now the cell MUST be recognized...
 			tempCell->PeelOnionSkin(*this->exitNode.get());
-
-			if (!tempCell->IsRelayCellRecognized(this->CURRENT_STREAM_ID, this->exitNode->KEY_BackwardDigest_Db)) {
+			errCode = tempCell->IsRelayCellRecognized(this->CURRENT_STREAM_ID, this->exitNode->KEY_BackwardDigest_Db);
+			
+			if (errCode != BriandError::BRIAND_ERR_OK) {
 				// If is NOT recognized here, an error occoured.
+				printf("[DEBUG][%08X] TorStreamReadData RELAY NOT recognized at Exit (%s). StreamID=%04X, raw payload at exit: ", this->CIRCID, BriandUtils::BriandErrorStr(errCode), this->CURRENT_STREAM_ID);
+				tempCell->PrintCellPayloadToSerial();
 
 				#if !SUPPRESSDEBUGLOG
 				if (esp_log_level_get(STREAMLOGTAG) == ESP_LOG_DEBUG) {
-					printf("[DEBUG][%08X] TorStreamReadData RELAY NOT recognized at Exit, something wrong. Raw payload: ", this->CIRCID);
+					printf("[DEBUG][%08X] TorStreamReadData RELAY NOT recognized at Exit (%s). StreamID=%04X, raw payload at exit: ", this->CIRCID, BriandUtils::BriandErrorStr(errCode), this->CURRENT_STREAM_ID);
 					tempCell->PrintCellPayloadToSerial();
 				}
 				#endif

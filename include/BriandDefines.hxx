@@ -25,7 +25,7 @@
     #define BRIANDDEFINES_H_        
 
     /* If set to 1, NO DEBUG log for components will be compiled. To have debug log on just set to 0 (#define SUPPRESSDEBUGLOG 0) */
-    #define SUPPRESSDEBUGLOG 1
+    #define SUPPRESSDEBUGLOG 0
 
     constexpr unsigned char BUILTIN_LED_MODE = 1;               // Built-in led mode: 0 = OFF, 1 = ON
     constexpr bool CHANGE_MAC_TO_RANDOM = true;				    // choose if you want to change the MAC address to a random one for improved security
@@ -191,6 +191,35 @@
         #define STACK_StreamWR 4096
         #define STACK_StreamRD 4096
     #endif
+
+    
+    // ERROR CODES
+
+    enum BriandError : short {
+        /* No error */
+        BRIAND_ERR_OK = 0,
+        BRIAND_ERR_NONE = 1,
+
+        /* Network errors: [-1; -999] */
+
+
+        /* Circuit errors [-1000; -1999] */
+
+
+        /* Cell generic errors [-2000; -2999] */
+
+        BRIAND_ERR_INSUFFICIENT_PAYLOAD_BYTES = -2000,
+        
+        /* Relay cell errors [-3000; -3999] */
+
+        BRIAND_ERR_NOT_RELAY_CELL = -3000,
+        BRIAND_ERR_RECOGNIZED_NOT_ZERO = -3001,
+        BRIAND_ERR_STREAMID_NOT_MATCHING_NOR_ZERO = -3002,
+        BRIAND_ERR_DIGEST_NOT_MATCHING = -3003
+        
+        /* */
+
+    };
 
 #endif /* BRIANDDEFINES_H_ */
 

@@ -2,10 +2,19 @@
 
 ## Next steps
 
+* Place BriandError management on strategic debugging functions
 * Consider switch to nonblocking cache file read
-* Consider error management short/int for method errors (mbedtls style)
 * Implement a vector of nodes.
 * Authenticate cell? => Prepare stub method to authenticate client
+
+## 2021-08-21
+
+* Possible bug in tor relay searcher: too much rebuild cache requests... SOLVED!
+* Possible bug in stream: after some cells exchanged, seems unrecognize all. Maybe due to the additional bytes download?
+* Separate circuit log from stream log to debug better
+* Socks5 Proxy better task management (simplified, using also make_shared to avoid invalid reads)
+* Started to use error codes
+
 
 ## 2021-08-19
 
@@ -23,10 +32,7 @@
 * Removed parameter *Component config -> FreeRTOS -> ENABLED Place FreeRTOS functions into Flash* I think causing cache failures and frequent download.
 * Better cache access with waiting search requests
 * Better stack sizes when log suppressed
-* Possible bug in tor relay searcher: too much rebuild cache requests... SOLVED!
-* Possible bug in stream: after some cells exchanged, seems unrecognize all. Maybe due to the additional bytes download?
-* Separate circuit log from stream log to debug better
-* Socks5 Proxy better task management (simplified, using also make_shared to avoid invalid reads)
+* Possible bug in tor relay searcher: too much rebuild cache requests... 
 
 ## 2021-08-18
 

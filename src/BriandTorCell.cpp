@@ -1085,7 +1085,7 @@ namespace Briand {
 		return true;
 	}
 
-	bool BriandTorCell::IsRelayCellRecognized(const unsigned short& streamID, const unique_ptr<mbedtls_md_context_t>& digestBackward) {
+	BriandError BriandTorCell::IsRelayCellRecognized(const unsigned short& streamID, const unique_ptr<mbedtls_md_context_t>& digestBackward) {
 		// Check if RELAY or RELAY_EARLY command
 		if (this->Command != BriandTorCellCommand::RELAY && this->Command != BriandTorCellCommand::RELAY_EARLY) {
 
@@ -1093,7 +1093,7 @@ namespace Briand {
 			ESP_LOGD(LOGTAG, "[DEBUG] Cell is not a RELAY cell! Command is %s\n", Briand::BriandUtils::BriandTorCellCommandToString(this->Command).c_str() );
 			#endif
 
-			return false;
+			return BriandError::BRIAND_ERR_NOT_RELAY_CELL;
 		}
 
 		// A RELAY cell PAYLOAD contains:
@@ -1115,7 +1115,7 @@ namespace Briand {
 			ESP_LOGD(LOGTAG, "[DEBUG] RELAY Cell has too poor bytes.\n");
 			#endif
 
-			return false;
+			return BriandError::BRIAND_ERR_INSUFFICIENT_PAYLOAD_BYTES;
 		}
 
 		// Get the recognized field
@@ -1131,7 +1131,7 @@ namespace Briand {
 			}
 			#endif
 
-			return false;
+			return BriandError::BRIAND_ERR_RECOGNIZED_NOT_ZERO;
 		}
 
 		// Get the streamID field
@@ -1148,7 +1148,7 @@ namespace Briand {
 			}
 			#endif
 
-			return false;
+			return BriandError::BRIAND_ERR_STREAMID_NOT_MATCHING_NOR_ZERO;
 		}
 
 		// Get the digest field
@@ -1200,14 +1200,14 @@ namespace Briand {
 			}
 			#endif
 
-			return false;
+			return BriandError::BRIAND_ERR_DIGEST_NOT_MATCHING;
 		}
 
 		#if !SUPPRESSDEBUGLOG
 		ESP_LOGD(LOGTAG, "[DEBUG] Relay cell passed verification!\n");
 		#endif
 
-		return true;
+		return BriandError::BRIAND_ERR_OK;
 	}
 
 }

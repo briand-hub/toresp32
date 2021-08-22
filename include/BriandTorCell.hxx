@@ -271,9 +271,9 @@ namespace Briand {
 		 * Check if the cell is recognized after peeling out onion skins. Method will check if Recognized=0 and the digest matches.
 		 * @param streamID The expected streamid
 		 * @param digestBackward The backward digest (will NOT be updated)
-		 * @return true if success, false instead.
+		 * @return BriandError::OK if success
 		*/
-		bool IsRelayCellRecognized(const unsigned short& streamID, const unique_ptr<mbedtls_md_context_t>& digestBackward);
+		BriandError IsRelayCellRecognized(const unsigned short& streamID, const unique_ptr<mbedtls_md_context_t>& digestBackward);
 	};
 
 	/*
