@@ -57,6 +57,13 @@ namespace Briand
                 this->torStreamClosed = false;
             }
 
+            /** Destructor just to check make_shared working as expected */
+            ~StreamWorkerParams() {
+                #if !SUPPRESSDEBUGLOG
+                ESP_LOGD(LOGTAG, "[DEBUG] StreamWorker has been destroyed.\n");
+                #endif
+            }
+
             bool GoodForWrite() {
                 return (!this->clientDisconnected && !this->writerFinished && circuit != NULL && clientSocket != -1);
             }

@@ -106,6 +106,7 @@ namespace Briand
         // Bind the socket to the specified address
         if (bind(this->proxySocket, reinterpret_cast<struct sockaddr*>(&serverAddr), sizeof(serverAddr)) != 0) {
             ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy error on binding.\n");
+            shutdown(this->proxySocket, SHUT_RDWR);
             close(this->proxySocket);
             this->proxySocket = -1;
             return;
@@ -118,6 +119,7 @@ namespace Briand
         // Listen for maximum REQUEST_QUEUE_LIMIT connections
         if (listen(this->proxySocket, REQUEST_QUEUE_LIMIT) != 0) {
             ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy error on binding.\n");
+            shutdown(this->proxySocket, SHUT_RDWR);
             close(this->proxySocket);
             this->proxySocket = -1;
             return;
@@ -141,6 +143,7 @@ namespace Briand
             if (data != nullptr && dataLen > 0) {
                 send(socket, data, dataLen, 0);
             }
+            shutdown(socket, SHUT_RDWR);
             close(socket);
         }
     }
@@ -150,7 +153,7 @@ namespace Briand
         while (1) {
             if (serverSocket == NULL || serverSocket == nullptr) {
                 ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy: null server socket! Closing task.\n");
-                vTaskDelete(NULL);
+                break;
             }
             else {
                 // Convert parameter
@@ -189,20 +192,22 @@ namespace Briand
             // Wait before next run
             vTaskDelay(500 / portTICK_PERIOD_MS);
         }
+
+        #if !SUPPRESSDEBUGLOG
+        ESP_LOGD(LOGTAG, "[DEBUG] HandleRequest exited.")
+        #endif
+
+        // Wait a little, then exit
+        vTaskDelay(500 / portTICK_PERIOD_MS);
+        vTaskDelete(NULL);
     }
 
     /* static */ void BriandTorSocks5Proxy::HandleClient(void* clientSocket) {
          // IDF task cannot return
         while (1) {
             if (clientSocket == NULL ||  reinterpret_cast<int>(clientSocket) < 0) {
-                // If clientSocket == -1 then this is the call for terminate this task.
-                if (clientSocket != NULL && reinterpret_cast<int>(clientSocket) == -1) {
-                    clientSocket = reinterpret_cast<void*>(-2);
-                    // Reset the request queue
-                    if (REQUEST_QUEUE-1 >= 0) REQUEST_QUEUE--;
-                    vTaskDelete(NULL);
-                }
-                vTaskDelay(500/portTICK_PERIOD_MS);
+                // Exit!
+                break;
             }
             else {
                 // Convert parameter
@@ -237,10 +242,7 @@ namespace Briand
                     ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy methods receiving error. Closing connection.\n");
                     // Close client socket
                     ErrorResponse(clientSock, nullptr, 0);
-                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
-                    clientSocket = reinterpret_cast<void*>(-1);
-                    // vTaskDelete will be called by next cycle.
-                    continue;
+                    break;
                 }
                 
                 if (len < 3) {
@@ -248,9 +250,7 @@ namespace Briand
                     // Close client socket
                     ErrorResponse(clientSock, nullptr, 0);
                     // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
-                    clientSocket = reinterpret_cast<void*>(-1);
-                    // vTaskDelete will be called by next cycle.
-                    continue;
+                    break;
                 }
 
                 if (recBuf[0] != 0x05 || recBuf[1] < 0x01) {
@@ -258,10 +258,7 @@ namespace Briand
                     // Write back unsupported version / unsupported method and close
                     unsigned char temp[2] = { 0x05, 0xFF };
                     ErrorResponse(clientSock, temp, 2);
-                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
-                    clientSocket = reinterpret_cast<void*>(-1);
-                    // vTaskDelete will be called by next cycle.
-                    continue;
+                    break;
                 }
 
                 // Find if there is a suitable method (0x00 => no authentication or 0x02 => authentication)
@@ -284,10 +281,7 @@ namespace Briand
                     // Write back unsupported version / unsupported method and close
                     unsigned char temp[2] = { 0x05, 0xFF };
                     ErrorResponse(clientSock, temp, 2);
-                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
-                    clientSocket = reinterpret_cast<void*>(-1);
-                    // vTaskDelete will be called by next cycle.
-                    continue;
+                    break;
                 }
 
                 #if !SUPPRESSDEBUGLOG
@@ -319,10 +313,7 @@ namespace Briand
                         ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy methods receiving error: less than 5 bytes. Closing connection.\n");
                         // Close client socket
                         ErrorResponse(clientSock, nullptr, 0);
-                        // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
-                        clientSocket = reinterpret_cast<void*>(-1);
-                        // vTaskDelete will be called by next cycle.
-                        continue;
+                        break;
                     }
 
                     if (recBuf[0] != 0x05) {
@@ -330,10 +321,7 @@ namespace Briand
                         // Write back unsupported version / unsupported method and close
                         unsigned char temp[2] = { 0x05, 0xFF };
                         ErrorResponse(clientSock, temp, 2);
-                        // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
-                        clientSocket = reinterpret_cast<void*>(-1);
-                        // vTaskDelete will be called by next cycle.
-                        continue;
+                        break;
                     }
 
                     string rUser = "";
@@ -355,10 +343,7 @@ namespace Briand
                         // Write back error
                         unsigned char temp[2] = { 0x05, 0xFF };
                         ErrorResponse(clientSock, temp, 2);
-                        // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
-                        clientSocket = reinterpret_cast<void*>(-1);
-                        // vTaskDelete will be called by next cycle.
-                        continue;
+                        break;
                     }
 
                     // Auth OK to client
@@ -392,10 +377,7 @@ namespace Briand
                     ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy connect request receiving error. Closing connection.\n");
                     // Close client socket
                     ErrorResponse(clientSock, nullptr, 0);
-                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
-                    clientSocket = reinterpret_cast<void*>(-1);
-                    // vTaskDelete will be called by next cycle.
-                    continue;
+                    break;
                 }
 
                 // Only CONNECT supported at the moment
@@ -404,10 +386,7 @@ namespace Briand
                     // Write back unsupported command and close
                     unsigned char temp[4] = { 0x05, 0x07, 0x00, 0x01 /* omitted */ };
                     ErrorResponse(clientSock, temp, 4);
-                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
-                    clientSocket = reinterpret_cast<void*>(-1);
-                    // vTaskDelete will be called by next cycle.
-                    continue;
+                    break;
                 }
 
                 // Only IPv4 or host supported at the moment
@@ -416,10 +395,7 @@ namespace Briand
                     // Write back unsupported address type and close
                     unsigned char temp[4] = { 0x05, 0x08, 0x00, 0x01 /* omitted */ };
                     ErrorResponse(clientSock, temp, 4);
-                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
-                    clientSocket = reinterpret_cast<void*>(-1);
-                    // vTaskDelete will be called by next cycle.
-                    continue;
+                    break;
                 }
 
                 #if !SUPPRESSDEBUGLOG
@@ -431,10 +407,7 @@ namespace Briand
                     // Write back network unreachable
                     unsigned char temp[4] = { 0x05, 0x03, 0x00, 0x01 /* omitted */ };
                     ErrorResponse(clientSock, temp, 4);
-                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
-                    clientSocket = reinterpret_cast<void*>(-1);
-                    // vTaskDelete will be called by next cycle.
-                    continue;
+                    break;
                 }
 
                 BriandTorCircuit* circuit = nullptr; 
@@ -453,10 +426,7 @@ namespace Briand
                     // Write back network unreachable
                     unsigned char temp[4] = { 0x05, 0x03, 0x00, 0x01 /* omitted */ };
                     ErrorResponse(clientSock, temp, 4);
-                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
-                    clientSocket = reinterpret_cast<void*>(-1);
-                    // vTaskDelete will be called by next cycle.
-                    continue;
+                    break;
                 }
 
                 #if !SUPPRESSDEBUGLOG
@@ -506,10 +476,7 @@ namespace Briand
                     // Write back unsupported address type and close
                     unsigned char temp[4] = { 0x05, 0x08, 0x00, 0x01 /* omitted */ };
                     ErrorResponse(clientSock, temp, 4);
-                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
-                    clientSocket = reinterpret_cast<void*>(-1);
-                    // vTaskDelete will be called by next cycle.
-                    continue;
+                    break;
                 }
 
                 // Connect to the destination (RELAY_BEGIN)
@@ -520,10 +487,7 @@ namespace Briand
                     // Write back unable to connect (refused) and close
                     unsigned char temp[4] = { 0x05, 0x05, 0x00, 0x01 /* omitted */ };
                     ErrorResponse(clientSock, temp, 4);
-                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
-                    clientSocket = reinterpret_cast<void*>(-1);
-                    // vTaskDelete will be called by next cycle.
-                    continue;
+                    break;
                 }
 
                 #if !SUPPRESSDEBUGLOG
@@ -541,8 +505,8 @@ namespace Briand
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy streaming data.\n");
                 #endif
 
-                // Prepare the needed parameter
-                auto parameter = make_unique<StreamWorkerParams>();
+                // Prepare the needed parameter (make_shared will save your life in async tasks!!)
+                auto parameter = make_shared<StreamWorkerParams>();
                 parameter->clientSocket = clientSock;
                 parameter->circuit = circuit;
 
@@ -571,20 +535,31 @@ namespace Briand
                     #if !SUPPRESSDEBUGLOG
                     ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy closing socket.\n");
                     #endif
+                    shutdown(clientSock, SHUT_RDWR);
                     close(clientSock);
                 }
 
-                // Set to -1 the clientSocket parameter so this task will be killed
-                clientSocket = reinterpret_cast<void*>(-1);
+                break;
             }
         }
+    
+        // Reset the request queue and exit
+        if (REQUEST_QUEUE-1 >= 0) REQUEST_QUEUE--;
+
+        #if !SUPPRESSDEBUGLOG
+        ESP_LOGD(LOGTAG, "[DEBUG] HandleClient exited.")
+        #endif
+
+        // Wait a little, then exit
+        vTaskDelay(500 / portTICK_PERIOD_MS);
+        vTaskDelete(NULL);
     }
 
     /* static */ void BriandTorSocks5Proxy::ProxyClient_Stream_Writer(void* swParams) {
         // IDF Task cannot return
         while (1) {
             // If parameter is null then finish
-            if (swParams == NULL) {
+            if (swParams == NULL || swParams == nullptr) {
                 #if !SUPPRESSDEBUGLOG
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Writer called with NULL parameter, exiting.\n");
                 #endif
@@ -594,7 +569,7 @@ namespace Briand
             // Extract parameter and verify
             StreamWorkerParams* params = reinterpret_cast<StreamWorkerParams*>(swParams);
 
-            if (params == NULL) {
+            if (params == NULL || params == nullptr) {
                 #if !SUPPRESSDEBUGLOG
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Writer parameter cast failed, exiting.\n");
                 #endif
@@ -620,6 +595,7 @@ namespace Briand
                 if (!params->readerFinished) {
                     params->readerFinished = true;
                 }
+                shutdown(params->clientSocket, SHUT_RDWR);
                 close(params->clientSocket);
                 params->clientSocket = -1;
             };
@@ -679,7 +655,7 @@ namespace Briand
         // IDF Task cannot return
         while (1) {
             // If parameter is null then finish
-            if (swParams == NULL) {
+            if (swParams == NULL || swParams == nullptr) {
                 #if !SUPPRESSDEBUGLOG
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader called with NULL parameter, exiting.\n");
                 #endif
@@ -689,7 +665,7 @@ namespace Briand
             // Extract parameter and verify
             StreamWorkerParams* params = reinterpret_cast<StreamWorkerParams*>(swParams);
 
-            if (params == NULL) {
+            if (params == NULL || params == nullptr) {
                 #if !SUPPRESSDEBUGLOG
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader parameter cast failed, exiting.\n");
                 #endif
@@ -715,6 +691,7 @@ namespace Briand
                     params->circuit->TorStreamEnd();
                     params->torStreamClosed = true;
                 }
+                shutdown(params->clientSocket, SHUT_RDWR);
                 close(params->clientSocket);
                 params->clientSocket = -1;
             };
@@ -740,6 +717,14 @@ namespace Briand
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader select() error, marking all as finished and disconnecting.\n");
                 #endif
                 CloseWithError();
+                break;
+            }
+            else if(params == NULL || params == nullptr) {
+                // In the meanwhile could have been destroyed...
+                #if !SUPPRESSDEBUGLOG
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader params NULL, marking as finished.\n");
+                #endif
+                params->readerFinished = true;
                 break;
             }
             else if (selectResult == 0) {

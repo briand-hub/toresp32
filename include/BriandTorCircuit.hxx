@@ -96,6 +96,7 @@ namespace Briand {
 		public:
 
 		static const char* LOGTAG;
+		static const char* STREAMLOGTAG;
 
 		/**
 		 * Flags to manage circuit status

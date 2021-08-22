@@ -513,7 +513,6 @@ namespace Briand {
 			// 	std::getline(file, temp, '\n');
 			// 	lines++;
 			// }
-			
 			file.close(); 
 
 			// #if !SUPPRESSDEBUGLOG

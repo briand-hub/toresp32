@@ -649,6 +649,7 @@ void executeCommand(string& cmd) {
 		printf("\t briandcell : the cell component.\n");
 		printf("\t briandcert : the certificate helper.\n");
 		printf("\t briandcircuit : the circuit component.\n");
+		printf("\t briandstream : the circuit streaming component.\n");
 		printf("\t briandcircmgr : the circuits manager component.\n");
 		printf("\t briandcrypto : the cryptographics helper.\n");
 		printf("\t briandrelay : the relay component.\n");
