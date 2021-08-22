@@ -3,18 +3,22 @@
 ## Next steps
 
 * Place BriandError management on strategic debugging functions
-* Consider switch to nonblocking cache file read
+* Consider to build on-demand circuits for specific requested ports:
+  * requires cache to save allowed ports
+  * requires GetExitNode method introducing unsigned short port parameter to find suitable exit with specific port if provided 
+  * requires parameter modification of BuildCircuit introducing unsigned short port parameter
+  * requires BuildCircuit method to check if port specified and choose a suitable exit node before all
+  * requires CircuitManager to check for suitable circuits and build one if none capable (destroying the oldest?)
 * Implement a vector of nodes.
 * Authenticate cell? => Prepare stub method to authenticate client
 
 ## 2021-08-21
 
 * Possible bug in tor relay searcher: too much rebuild cache requests... SOLVED!
-* Possible bug in stream: after some cells exchanged, seems unrecognize all. Maybe due to the additional bytes download?
 * Separate circuit log from stream log to debug better
 * Socks5 Proxy better task management (simplified, using also make_shared to avoid invalid reads)
 * Started to use error codes
-
+* Possible bug in stream: after some cells exchanged, seems unrecognize all. Maybe due to the additional bytes download? No.. found due to "old" stream cells still to be received by the node! How should treat? Roll the backward digest or not? 
 
 ## 2021-08-19
 

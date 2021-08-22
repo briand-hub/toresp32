@@ -54,6 +54,7 @@ namespace Briand {
 		unsigned int CIRCID;					// the CIRCID of this circuit
 		unsigned short LINKPROTOCOLVERSION; 	// the version of this circuit
 		unsigned short CURRENT_STREAM_ID; 		// the current StreamID (also used for N request used)
+		unsigned short LAST_ENDED_STREAM_ID;	// the last StreamID that was closed
 		short CURRENT_STREAM_WINDOW;			// the current stream window. Each 100 RELAY_DATA cell are exchanged a RELAY_SENDME is needed
 
 		unique_ptr<BriandIDFSocketTlsClient> sClient;	// Client used for communications

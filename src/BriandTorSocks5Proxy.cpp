@@ -528,6 +528,7 @@ namespace Briand
                     ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy closing Tor stream.\n");
                     #endif
                     circuit->TorStreamEnd();
+                    parameter->torStreamClosed = true;
                 }
 
                 // Check if socket has been closed
@@ -589,7 +590,10 @@ namespace Briand
             // This Lambda helps to make code easier.
             auto CloseWithError = [&]() {  
                 params->writerFinished = true;
-                params->circuit->TorStreamEnd();
+                if (!params->torStreamClosed) {
+                    params->circuit->TorStreamEnd();
+                    params->torStreamClosed = true;
+                } 
                 params->torStreamClosed = true;
                 params->clientDisconnected = true;
                 if (!params->readerFinished) {
@@ -634,8 +638,10 @@ namespace Briand
 
             // If the REALAY_END has been received, send ending and exit.
             if (params->writerFinished) {
-                params->circuit->TorStreamEnd();
-                params->torStreamClosed = true;
+                if (!params->torStreamClosed) {
+                    params->circuit->TorStreamEnd();
+                    params->torStreamClosed = true;
+                }
                 break;
             }
 
@@ -688,7 +694,10 @@ namespace Briand
                 params->clientDisconnected = true;
                 if (!params->writerFinished) {
                     params->writerFinished = true;
-                    params->circuit->TorStreamEnd();
+                    if (!params->torStreamClosed) {
+                        params->circuit->TorStreamEnd();
+                        params->torStreamClosed = true;
+                    } 
                     params->torStreamClosed = true;
                 }
                 shutdown(params->clientSocket, SHUT_RDWR);

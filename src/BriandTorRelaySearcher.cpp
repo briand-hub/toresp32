@@ -503,21 +503,20 @@ namespace Briand {
 		if (file.good()) {
 			// Check just the first line timestamp 
 			
-			// REMOVED:
 			// and how many lines are in the file
 			string firstLine("");
 			std::getline(file, firstLine, '\n');
-			// unsigned int lines = 0;
-			// string temp;
-			// while (!file.eof()) { 
-			// 	std::getline(file, temp, '\n');
-			// 	lines++;
-			// }
+			unsigned int lines = 0;
+			string temp;
+			while (!file.eof()) { 
+				std::getline(file, temp, '\n');
+				lines++;
+			}
 			file.close(); 
 
-			// #if !SUPPRESSDEBUGLOG
-			// ESP_LOGD(LOGTAG, "[DEBUG] %s cache file has %u rows.\n", filename, lines);
-			// #endif
+			#if !SUPPRESSDEBUGLOG
+			ESP_LOGD(LOGTAG, "[DEBUG] %s cache file has %u rows.\n", filename, lines);
+			#endif
 
 			if (firstLine.size() > 3) {
 				unsigned long int cacheAge = stoul(firstLine);
@@ -527,9 +526,9 @@ namespace Briand {
 				else {
 					ESP_LOGW(LOGTAG, "[WARN] Cache file %s is outdated, must be rebuilt.\n", filename);
 				}
-				// if (lines < TOR_NODES_CACHE_SIZE) {
-				// 	valid = false;
-				// }
+				if (lines < TOR_NODES_CACHE_SIZE) {
+					valid = false;
+				}
 			}	
 		}
 		else {

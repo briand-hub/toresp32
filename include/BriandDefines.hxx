@@ -197,8 +197,8 @@
 
     enum BriandError : short {
         /* No error */
-        BRIAND_ERR_OK = 0,
-        BRIAND_ERR_NONE = 1,
+        BRIAND_ERR_NONE = 0,
+        BRIAND_ERR_OK = 1,
 
         /* Network errors: [-1; -999] */
 
@@ -215,9 +215,14 @@
         BRIAND_ERR_NOT_RELAY_CELL = -3000,
         BRIAND_ERR_RECOGNIZED_NOT_ZERO = -3001,
         BRIAND_ERR_STREAMID_NOT_MATCHING_NOR_ZERO = -3002,
-        BRIAND_ERR_DIGEST_NOT_MATCHING = -3003
+        BRIAND_ERR_DIGEST_NOT_MATCHING = -3003,
         
-        /* */
+        /* Searcher/cache errors [-4000; -4999] */
+
+        BRIAND_ERR_GUARD_CACHE_INVALID = -4000,
+        BRIAND_ERR_MIDDLE_CACHE_INVALID = -4001,
+        BRIAND_ERR_EXIT_CACHE_INVALID = -4002,
+        BRIAND_ERR_CACHE_INVALID_LINE = -4003
 
     };
 
