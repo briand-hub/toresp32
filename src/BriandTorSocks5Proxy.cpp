@@ -138,7 +138,7 @@ namespace Briand
         pcfg.prio = 25;
         esp_pthread_set_cfg(&pcfg);
 
-        std::thread t(this->HandleRequest, this->proxySocket, this->proxyStarted);
+        std::thread t(this->HandleRequest, std::ref(this->proxySocket), std::ref(this->proxyStarted));
         t.detach();
 
         #if !SUPPRESSDEBUGLOG
@@ -193,7 +193,7 @@ namespace Briand
             pcfg.prio = 20;
             esp_pthread_set_cfg(&pcfg);
 
-            std::thread t(HandleClient, clientSock);
+            std::thread t(HandleClient, std::ref(clientSock));
             t.detach();
 
             // Wait before next run

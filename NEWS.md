@@ -2,7 +2,7 @@
 
 ## Next steps
 
-* Place BriandError management on strategic debugging functions
+* Place BriandError management on strategic points for debugging
 * Consider to build on-demand circuits for specific requested ports:
   * requires cache to save allowed ports
   * requires GetExitNode method introducing unsigned short port parameter to find suitable exit with specific port if provided 
@@ -11,6 +11,30 @@
   * requires CircuitManager to check for suitable circuits and build one if none capable (destroying the oldest?)
 * Implement a vector of nodes.
 * Authenticate cell? => Prepare stub method to authenticate client
+* Consider provide alternative for cache with Onionoo service (not default)
+* Consider to package as PlatformIO library
+
+##
+
+* Investigate on protocol errors: seems same exit node in multiple circuit causing some trouble. However protocol error always comes from middle :/ **MAYBE? SOLVED** error is thrown when Circuit Window is ~944 ~946 so when a SENDME at circuit-level is not sent! 
+
+Seems to be, persistent errors are (sample log):
+
+```
+W briandstream [ERR][BADB4A3C] TorStream error, received unexpected cell from middle node: RELAY_TRUNCATED
+W briandstream [WARN][BADB4A3C] TorStreamRead received RELAY_TRUNCATE / RELAY_TRUNCATED, reason = PROTOCOL. StreamID is 0002, Stream Window is 495, Circ Window is 945
+W briandstream [ERR][BADB4A3C] TorStream error, received unexpected cell from middle node: RELAY_TRUNCATED
+W briandstream [WARN][BADB4A3C] TorStreamRead received RELAY_TRUNCATE / RELAY_TRUNCATED, reason = PROTOCOL. StreamID is 0002, Stream Window is 495, Circ Window is 945
+W briandstream [ERR][CE2F3678] TorStream error, received unexpected cell from middle node: RELAY_TRUNCATED
+W briandstream [WARN][CE2F3678] TorStreamSingle received RELAY_TRUNCATE / RELAY_TRUNCATED, reason = PROTOCOL.
+W briandstream [WARN][CE2F3678] TorStreamStart error: cannot connect to required destination.
+W briandstream [ERR][94CE6B63] TorStream error, received unexpected cell from middle node: RELAY_TRUNCATED
+W briandstream [WARN][94CE6B63] TorStreamRead received RELAY_TRUNCATE / RELAY_TRUNCATED, reason = PROTOCOL. StreamID is 0002, Stream Window is 500, Circ Window is 1000
+W briandstream [ERR][86F4E31A] TorStream error, received unexpected cell from middle node: RELAY_TRUNCATED
+W briandstream [WARN][86F4E31A] TorStreamRead received RELAY_TRUNCATE / RELAY_TRUNCATED, reason = PROTOCOL. StreamID is 0004, Stream Window is 498, Circ Window is 998
+```
+
+May be due to un-real window resizing exactly at 450 (stream) / 900 (circuit). Should do a dedicated task or trigger before this limit...
 
 ## 2021-08-21
 

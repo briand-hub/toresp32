@@ -202,6 +202,8 @@ namespace Briand {
 				if (completed == nextToPrint) {
 					printf("\n*** System warning: Tor node cache is rebuilding, may take time. Progress: %.0f%%\n", completed*100);
 					nextToPrint = completed + 0.25;
+					// Let me breath
+					vTaskDelay(500/portTICK_PERIOD_MS);
 				}
 				
 				if (lostR == nullptr) {

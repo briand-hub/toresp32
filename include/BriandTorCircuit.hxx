@@ -95,6 +95,12 @@ namespace Briand {
 		*/
 		bool Extend2(bool exitNode);
 
+		/**
+		 * Method checks if a RELAY_SENDME (circuit-level or stream-level) is required. If so, sends.
+		 * @param latestReceivedDigest the latest digest received from RELAY_DATA (required for authenticated RELAY_SENDME)
+		*/
+		void TorStreamCheckSendMe(const shared_ptr<vector<unsigned char>> latestReceivedDigest);
+
 		public:
 
 		static const char* LOGTAG;
