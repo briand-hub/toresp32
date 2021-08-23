@@ -1135,7 +1135,7 @@ namespace Briand {
 			// If zero bytes have been read, peer disconnected! better to tear down...
 			if (tempData == nullptr || tempData->size() == 0) {
 				#if !SUPPRESSDEBUGLOG
-				ESP_LOGD(STREAMLOGTAG, "[DEBUG][%08X] TorStreamReadData tearing down circuit because probably disconnected or timed-out.\n", this->CIRCID, tempData->size());
+				ESP_LOGD(STREAMLOGTAG, "[DEBUG][%08X] TorStreamReadData tearing down circuit because probably disconnected or timed-out.\n", this->CIRCID);
 				#endif
 
 				this->TearDown();

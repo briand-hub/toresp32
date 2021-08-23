@@ -19,6 +19,7 @@
 * Socks5 Proxy better task management (simplified, using also make_shared to avoid invalid reads)
 * Started to use error codes
 * Possible bug in stream: after some cells exchanged, seems unrecognize all. Maybe due to the additional bytes download? No.. found due to "old" stream cells still to be received by the node! How should treat? Roll the backward digest or not? 
+* Testing std::async / future for Stream read/write because void* parameter of xTaskCreate is very limiting
 
 ## 2021-08-19
 

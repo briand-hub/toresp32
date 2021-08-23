@@ -511,11 +511,41 @@ namespace Briand
                 parameter->circuit = circuit;
 
                 // Start the reader task
-                xTaskCreate(ProxyClient_Stream_Reader, "StreamRD", STACK_StreamRD, reinterpret_cast<void*>(parameter.get()), 20, NULL);
+                // xTaskCreate(ProxyClient_Stream_Reader, "StreamRD", STACK_StreamRD, reinterpret_cast<void*>(parameter.get()), 20, NULL);
                 // Wait a little (1 second) because client should write us before we write him
-                vTaskDelay(1000 / portTICK_PERIOD_MS);
+                // vTaskDelay(1000 / portTICK_PERIOD_MS);
                 // Then start the writer task
-                xTaskCreate(ProxyClient_Stream_Writer, "StreamWR", STACK_StreamWR, reinterpret_cast<void*>(parameter.get()), 20, NULL);
+                // xTaskCreate(ProxyClient_Stream_Writer, "StreamWR", STACK_StreamWR, reinterpret_cast<void*>(parameter.get()), 20, NULL);
+
+                /* 
+                    As pthread stack size is configured in sdkconfig with default values, new values must be set 
+                    in order to avoid stack overflows.
+                */
+                
+                esp_pthread_cfg_t curCfg = esp_pthread_get_default_config();
+                size_t maxSize = ( STACK_StreamRD > STACK_StreamWR ? STACK_StreamRD : STACK_StreamWR );
+                if (curCfg.stack_size < maxSize) {
+                    curCfg.stack_size = maxSize;
+                    esp_err_t error = esp_pthread_set_cfg(&curCfg);
+                    if (error != ESP_OK) {
+                        ESP_LOGE(LOGTAG, "[ERR] HandleClient not able to set Stack Size for pthreads to %zu\n", maxSize);
+                    }
+
+                    #if !SUPPRESSDEBUGLOG
+                    ESP_LOGD(LOGTAG, "[DEBUG] HandleClient Stack Size for pthreads is now %zu\n", maxSize);
+                    #endif
+
+                    printf("*** HandleClient Stack Size for pthreads is now %zu\n", maxSize);
+                }
+
+
+                // New version with future std::async and on new pthread with std::launch::async
+                auto rFuture = std::async(std::launch::async, ProxyClient_AsyncStreamReader, parameter);
+                auto wFuture = std::async(std::launch::async, ProxyClient_AsyncStreamWriter, parameter);
+
+                // Start execution and wait
+                rFuture.get();
+                wFuture.get();
 
                 // Now wait that read/write finished.
                 while(!parameter->readerFinished || !parameter->writerFinished) {
@@ -800,6 +830,249 @@ namespace Briand
         // Kill this task but wait a little in order to free memory
         vTaskDelay(STREAM_WAIT_MS / portTICK_PERIOD_MS);
         vTaskDelete(NULL);
+    }
+
+    /* static */ void BriandTorSocks5Proxy::ProxyClient_AsyncStreamWriter(shared_ptr<StreamWorkerParams> swParams) {
+        // If parameter is null then return
+        if (swParams == nullptr) {
+            
+            #if !SUPPRESSDEBUGLOG
+            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamWriter called with NULL parameter, exiting.\n");
+            #endif
+            
+            return;
+        }
+
+        // Check if everything is good
+        if (!swParams->GoodForWrite()) {
+            
+            #if !SUPPRESSDEBUGLOG
+            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamWriter not good for streaming, exiting.\n");
+            #endif
+            
+            return;
+        }
+
+        // Do until there is something to do
+        while (swParams->GoodForWrite()) {
+
+            // Ok! Here we need to read from TOR and write back to client.
+
+            // This Lambda helps to make code easier.
+            auto CloseWithError = [&]() {  
+                swParams->writerFinished = true;
+                if (!swParams->torStreamClosed) {
+                    swParams->circuit->TorStreamEnd();
+                    swParams->torStreamClosed = true;
+                } 
+                swParams->torStreamClosed = true;
+                swParams->clientDisconnected = true;
+                if (!swParams->readerFinished) {
+                    swParams->readerFinished = true;
+                }
+                shutdown(swParams->clientSocket, SHUT_RDWR);
+                close(swParams->clientSocket);
+                swParams->clientSocket = -1;
+            };
+
+            auto buffer = make_unique<vector<unsigned char>>(); 
+            //buffer->reserve(514); // reserve some bytes
+
+            // Read from TOR and save the finish status (RELAY_END) on the parameters
+            bool torStreamOk = swParams->circuit->TorStreamRead(buffer, swParams->writerFinished, TOR_SOCKS5_PROXY_TIMEOUT_S);
+
+            if (!torStreamOk) {
+                #if !SUPPRESSDEBUGLOG
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamWriter error on Tor streaming, exiting.\n");
+                #endif
+                CloseWithError();
+                break;
+            }
+
+            // If we have something to write back to client, send it
+            if (buffer->size() > 0) {
+                ssize_t len = send(swParams->clientSocket, buffer->data(), buffer->size(), 0);
+                if (len < 0) {
+                    #if !SUPPRESSDEBUGLOG
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamWriter error on writing back to client, exiting.\n");
+                    #endif
+                    CloseWithError();
+                    break;
+                }
+                #if !SUPPRESSDEBUGLOG
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamWriter streamed %d bytes from TOR to client.\n", len);
+                #endif
+            }
+
+            // Reset now the buffer, this avoids exceptions when task is deleted
+            buffer.reset();
+
+            // If the REALAY_END has been received, send ending and exit.
+            if (swParams->writerFinished) {
+                if (!swParams->torStreamClosed) {
+                    swParams->circuit->TorStreamEnd();
+                    swParams->torStreamClosed = true;
+                }
+                break;
+            }
+
+            // Wait before next cycle
+            vTaskDelay(STREAM_WAIT_MS / portTICK_PERIOD_MS);
+        }
+
+        // Check if write end has been set
+        if (!swParams->writerFinished) {
+            swParams->writerFinished = true;
+        }
+
+        #if !SUPPRESSDEBUGLOG
+        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamWriter exited.\n");
+        #endif
+    }
+
+    /* static */ void BriandTorSocks5Proxy::ProxyClient_AsyncStreamReader(shared_ptr<StreamWorkerParams> swParams) {
+        // If parameter is null then return
+        if (swParams == nullptr) {
+            
+            #if !SUPPRESSDEBUGLOG
+            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamReader called with NULL parameter, exiting.\n");
+            #endif
+            
+            return;
+        } 
+
+
+        // Check if everything is good
+        if (!swParams->GoodForRead()) {
+            
+            #if !SUPPRESSDEBUGLOG
+            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamReader not good for streaming, exiting.\n");
+            #endif
+
+            return;
+        }
+
+        // Do until there is something to do
+        while (swParams->GoodForRead()) {
+            
+            // Ok! Here we need to read from client and write to TOR.
+            
+            // This Lambda helps to make code easier.
+            auto CloseWithError = [&]() {  
+                swParams->readerFinished = true;
+                swParams->clientDisconnected = true;
+                if (!swParams->writerFinished) {
+                    swParams->writerFinished = true;
+                    if (!swParams->torStreamClosed) {
+                        swParams->circuit->TorStreamEnd();
+                        swParams->torStreamClosed = true;
+                    } 
+                    swParams->torStreamClosed = true;
+                }
+                shutdown(swParams->clientSocket, SHUT_RDWR);
+                close(swParams->clientSocket);
+                swParams->clientSocket = -1;
+            };
+
+            // We read from client with a select() and check timeouts or disconnection.
+
+            // Set the default timeout 
+            struct timeval timeout;
+            bzero(&timeout, sizeof(timeout));
+            timeout.tv_sec = TOR_SOCKS5_PROXY_TIMEOUT_S;
+
+            fd_set filter;
+            FD_ZERO(&filter);
+            FD_SET(swParams->clientSocket, &filter);
+
+            #if !SUPPRESSDEBUGLOG
+            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamReader select()\n");
+            #endif
+
+            int selectResult = select(swParams->clientSocket + 1, &filter, NULL, NULL, &timeout);
+
+            if (selectResult < 0) {
+                
+                #if !SUPPRESSDEBUGLOG
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamReader select() error, marking all as finished and disconnecting.\n");
+                #endif
+               
+                CloseWithError();
+                break;
+            }
+            else if (selectResult == 0) {
+                
+                #if !SUPPRESSDEBUGLOG
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamReader select() timeout, marking as finished.\n");
+                #endif
+
+                swParams->readerFinished = true;
+                break;
+            }
+            else if (FD_ISSET(swParams->clientSocket, &filter)) {
+                // Client ready to be read
+                auto buffer = make_unique<unsigned char[]>(MAX_FREE_PAYLOAD);
+                ssize_t len = recv(swParams->clientSocket, buffer.get(), MAX_FREE_PAYLOAD, 0);
+
+                // If select() succeded but len is 0 then client is disconnected!
+                if (len == 0) {
+
+                    #if !SUPPRESSDEBUGLOG
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamReader client disconnected! Exiting.\n");
+                    #endif
+                    
+                    // Stop the reader but not the writer: could have something else to write!
+                    // If the client is *really* disonnected, then the send() on the writer will fail.
+                    swParams->readerFinished = true;
+                    break;
+                }
+                else if (len < 0) {
+                    
+                    #if !SUPPRESSDEBUGLOG
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamReader error on receiving from client! Exiting.\n");
+                    #endif
+
+                    CloseWithError();
+                    break;
+                }
+                else {
+                    bool torStreamOk = true;
+                    auto sendBuf = make_unique<vector<unsigned char>>();
+                    //sendBuf->reserve(514); // reserve some bytes
+                    sendBuf->insert(sendBuf->begin(), buffer.get(), buffer.get() + len);
+                    swParams->circuit->TorStreamSend(sendBuf, torStreamOk);
+                    // Reset now the buffers
+                    sendBuf.reset();
+                    buffer.reset();
+
+                    if (!torStreamOk) {
+                        
+                        #if !SUPPRESSDEBUGLOG
+                        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamReader TOR Stream error! Exiting.\n");
+                        #endif
+
+                        CloseWithError();
+                        break;
+                    }
+
+                    #if !SUPPRESSDEBUGLOG
+                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamReader streamed %d bytes from client to TOR.\n", len);
+                    #endif
+                }
+            }
+
+            // Wait before next cycle
+            vTaskDelay(STREAM_WAIT_MS / portTICK_PERIOD_MS);   
+        }
+
+        // Check if read end has been set
+        if (!swParams->readerFinished) {
+            swParams->readerFinished = true;
+        }
+
+        #if !SUPPRESSDEBUGLOG
+        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamReader exited.");
+        #endif
     }
 
     void BriandTorSocks5Proxy::StopProxyServer() {

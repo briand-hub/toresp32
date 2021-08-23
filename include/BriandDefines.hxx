@@ -25,11 +25,11 @@
     #define BRIANDDEFINES_H_        
 
     /* If set to 1, NO DEBUG log for components will be compiled. To have debug log on just set to 0 (#define SUPPRESSDEBUGLOG 0) */
-    #define SUPPRESSDEBUGLOG 1
+    #define SUPPRESSDEBUGLOG 0
 
     constexpr unsigned char BUILTIN_LED_MODE = 1;               // Built-in led mode: 0 = OFF, 1 = ON
     constexpr bool CHANGE_MAC_TO_RANDOM = true;				    // choose if you want to change the MAC address to a random one for improved security
-    constexpr unsigned short WIFI_CONNECTION_TIMEOUT = 30;      // timeout in seconds, expired with no wifi STA connection will reboot system
+    constexpr unsigned short WIFI_CONNECTION_TIMEOUT = 90;      // timeout in seconds, expired with no wifi STA connection will reboot system
     constexpr unsigned char WIFI_HOSTNAME_LEN = 8;			    // random hostname length for AP/STA
     constexpr unsigned char WIFI_AP_SSID_LEN = 16;			    // random ssid length for AP/STA
     constexpr unsigned char WIFI_AP_PASSWORD_LEN = 16;		    // random wifi password length for AP 
@@ -65,6 +65,7 @@
     #include <fstream>
     #include <iomanip>
     #include <algorithm>
+    #include <future>
 
     /* mbedtls and libsodium libraries */
     #include <sodium.h>
@@ -102,6 +103,7 @@
         #include <esp_sntp.h>
         #include <esp_timer.h>
         #include <esp_tls.h>
+        #include <esp_pthread.h>
         // HW Accelleration by ESP32 cryptographic hardware
         // #include <mbedtls/aes.h> gives linker error!
         #include <aes/esp_aes.h>

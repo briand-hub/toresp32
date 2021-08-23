@@ -65,11 +65,11 @@ namespace Briand
             }
 
             bool GoodForWrite() {
-                return (!this->clientDisconnected && !this->writerFinished && circuit != NULL && clientSocket != -1);
+                return (!this->clientDisconnected && !this->clientDisconnected && !this->writerFinished && circuit != NULL && clientSocket != -1);
             }
 
             bool GoodForRead() {
-                return (!this->clientDisconnected && !this->readerFinished && circuit != NULL && clientSocket != -1);
+                return (!this->clientDisconnected && !this->clientDisconnected && !this->readerFinished && circuit != NULL && clientSocket != -1);
             }
         };
 
@@ -133,6 +133,18 @@ namespace Briand
          * @param workerParams a reference to an existing instance of the StreamWorkerParams
         */
         static void ProxyClient_Stream_Writer(void* swParams);
+
+        /**
+         * std::async future Handles a single client receive -> write to tor (async)
+         * @param workerParams shared pointer to an existing instance of the StreamWorkerParams
+        */
+        static void ProxyClient_AsyncStreamReader(shared_ptr<StreamWorkerParams> swParams);
+
+        /**
+         * std::async future Handles a single tor receive -> write to client (async)
+         * @param workerParams shared pointer to an existing instance of the StreamWorkerParams
+        */
+        static void ProxyClient_AsyncStreamWriter(shared_ptr<StreamWorkerParams> swParams);
 
         /**
          * Method sends an error response and close client connection
