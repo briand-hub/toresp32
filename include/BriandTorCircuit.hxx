@@ -55,7 +55,8 @@ namespace Briand {
 		unsigned short LINKPROTOCOLVERSION; 	// the version of this circuit
 		unsigned short CURRENT_STREAM_ID; 		// the current StreamID (also used for N request used)
 		unsigned short LAST_ENDED_STREAM_ID;	// the last StreamID that was closed
-		short CURRENT_STREAM_WINDOW;			// the current stream window. Each 100 RELAY_DATA cell are exchanged a RELAY_SENDME is needed
+		short CURRENT_STREAM_WINDOW;			// the current (backward) stream window. Each 50 RELAY_DATA cells are exchanged a RELAY_SENDME is needed
+		short CURRENT_CIRC_WINDOW;				// the current (backward) circuit window. Each 100 RELAY_DATA cells are exchanged a RELAY_SENDME is needed
 
 		unique_ptr<BriandIDFSocketTlsClient> sClient;	// Client used for communications
 
@@ -143,9 +144,11 @@ namespace Briand {
 		 * Will not check RELAY_BEGIN sent, and will NOT set/unset BUSY flag.
 		 * @param command The RELAY command 
 		 * @param data The payload to stream
+		 * @param overrideSID optional, ignores the current streamid and use the specified one.
+		 * @param SID optional, the streamid to override.
 		 * @return true if sent with success, false if error.
 		*/
-		bool TorStreamWriteData(const BriandTorCellRelayCommand& command, const unique_ptr<vector<unsigned char>>& data);
+		bool TorStreamWriteData(const BriandTorCellRelayCommand& command, const unique_ptr<vector<unsigned char>>& data, const bool& overrideSID = false, const unsigned short& SID = 0);
 
 		/**
 		 * Method reads a single backward, ignores PADDING cells. 

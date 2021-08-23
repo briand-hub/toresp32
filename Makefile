@@ -21,11 +21,4 @@ CXXFLAGS = -g -pthread -lmbedtls -lmbedcrypto -lmbedx509 -lsodium -std=gnu++17
 
 #Target main
 main:
-	# cJSON library is needed, compile from path using Makefile then use .o files generated
-	# No more needed
-	# make --directory $(CJSON_PATH)
-
-	# Compile project
-	# $(CXX) $(CXXFLAGS) -o $(OUTNAME) $(SRCPATH)/*.cpp $(BRIAND_LIB_PATH)/src/*.cpp $(CJSON_PATH)/*.o  -I$(INCLUDEPATH) -I$(CJSON_PATH) -I$(BRIAND_LIB_PATH)/include 
-	# New command without cJSON lib
 	$(CXX) $(CXXFLAGS) -o $(OUTNAME) $(SRCPATH)/*.cpp $(BRIAND_LIB_PATH)/src/*.cpp -I$(INCLUDEPATH) -I$(BRIAND_LIB_PATH)/include 
