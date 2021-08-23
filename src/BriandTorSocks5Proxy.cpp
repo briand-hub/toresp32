@@ -36,7 +36,6 @@ namespace Briand
         this->torCircuits = nullptr;
         this->proxyPort = TOR_SOCKS5_PROXY_PORT; // default port
         this->proxyStarted = false;
-        bzero(&this->proxyTaskHandle, sizeof(this->proxyTaskHandle));
 
         // Create a random username and password
         constexpr unsigned char CRED_SIZE = 8;
@@ -129,9 +128,18 @@ namespace Briand
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy listening.\n");
         #endif
 
-        xTaskCreate(this->HandleRequest, "TorProxy", STACK_TorProxy, reinterpret_cast<void*>(this->proxySocket), 25, &this->proxyTaskHandle);
+        // SWITCHED TO pthreads xTaskCreate(this->HandleRequest, "TorProxy", STACK_TorProxy, reinterpret_cast<void*>(this->proxySocket), 25, &this->proxyTaskHandle);
 
         this->proxyStarted = true;
+
+        auto pcfg = esp_pthread_get_default_config();
+        pcfg.thread_name = "TorProxy";
+        pcfg.stack_size = STACK_TorProxy;
+        pcfg.prio = 25;
+        esp_pthread_set_cfg(&pcfg);
+
+        std::thread t(this->HandleRequest, this->proxySocket, this->proxyStarted);
+        t.detach();
 
         #if !SUPPRESSDEBUGLOG
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy started.\n");
@@ -148,46 +156,45 @@ namespace Briand
         }
     }
 
-    /* static */ void BriandTorSocks5Proxy::HandleRequest(void* serverSocket) {
-        // IDF task cannot return
-        while (1) {
-            if (serverSocket == NULL || serverSocket == nullptr) {
-                ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy: null server socket! Closing task.\n");
-                break;
+    /* static */ void BriandTorSocks5Proxy::HandleRequest(const int& serverSock, const bool& proxyStarted) {
+        while(proxyStarted) {
+            #if !SUPPRESSDEBUGLOG
+            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: accepting connections.\n");
+            #endif
+
+            // Wait a connection
+            struct sockaddr_in clientAddr;
+            socklen_t clientAddrLen = sizeof(clientAddr);
+            int clientSock = accept(serverSock, (struct sockaddr*)&clientAddr, &clientAddrLen);
+
+            if (clientSock < 0) {
+                ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy cannot accept connection.\n");
+                continue;
             }
-            else {
-                // Convert parameter
-                int serverSock = (int)serverSocket;
 
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: accepting connections.\n");
-                #endif
+            #if !SUPPRESSDEBUGLOG
+            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy accepted incoming connection from %s\n", BriandUtils::IPv4ToString(clientAddr.sin_addr).c_str());
+            #endif
 
-                // Wait a connection
-                struct sockaddr_in clientAddr;
-                socklen_t clientAddrLen = sizeof(clientAddr);
-                int clientSock = accept(serverSock, (struct sockaddr*)&clientAddr, &clientAddrLen);
-
-                if (clientSock < 0) {
-                    ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy cannot accept connection.\n");
-                    continue;
-                }
-
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy accepted incoming connection from %s\n", BriandUtils::IPv4ToString(clientAddr.sin_addr).c_str());
-                #endif
-
-                // Check if this request would be in allowed limits, if not, wait.
-                // Limit is defined as REQUEST_QUEUE_LIMIT
-                while (REQUEST_QUEUE >= REQUEST_QUEUE_LIMIT) {
-                    vTaskDelay(500 / portTICK_PERIOD_MS);
-                }
-
-                REQUEST_QUEUE++;
-
-                // Start task to handle this client
-                xTaskCreate(HandleClient, "TorProxyReq", STACK_TorProxyReq, reinterpret_cast<void*>(clientSock), 24, NULL);
+            // Check if this request would be in allowed limits, if not, wait.
+            // Limit is defined as REQUEST_QUEUE_LIMIT
+            while (REQUEST_QUEUE >= REQUEST_QUEUE_LIMIT) {
+                vTaskDelay(500 / portTICK_PERIOD_MS);
             }
+
+            REQUEST_QUEUE++;
+
+            // Start task to handle this client
+            // SWITCHED TO pthreads xTaskCreate(HandleClient, "TorProxyReq", STACK_TorProxyReq, reinterpret_cast<void*>(clientSock), 24, NULL);
+            
+            auto pcfg = esp_pthread_get_default_config();
+            pcfg.thread_name = "TorProxyReq";
+            pcfg.stack_size = STACK_TorProxyReq;
+            pcfg.prio = 20;
+            esp_pthread_set_cfg(&pcfg);
+
+            std::thread t(HandleClient, clientSock);
+            t.detach();
 
             // Wait before next run
             vTaskDelay(500 / portTICK_PERIOD_MS);
@@ -196,382 +203,366 @@ namespace Briand
         #if !SUPPRESSDEBUGLOG
         ESP_LOGD(LOGTAG, "[DEBUG] HandleRequest exited.\n");
         #endif
-
-        // Wait a little, then exit
-        vTaskDelay(500 / portTICK_PERIOD_MS);
-        vTaskDelete(NULL);
     }
 
-    /* static */ void BriandTorSocks5Proxy::HandleClient(void* clientSocket) {
-         // IDF task cannot return
-        while (1) {
-            if (clientSocket == NULL ||  reinterpret_cast<int>(clientSocket) < 0) {
-                // Exit!
+    /* static */ void BriandTorSocks5Proxy::HandleClient(const int& clientSock) {
+
+        while (clientSock > 0) {
+            //
+            // Very good example: https://www.programmersought.com/article/85795017726/
+            // 
+
+            #if !SUPPRESSDEBUGLOG
+            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy HandleClient with clientSock = %d\n", clientSock);
+            #endif
+
+            auto recBuf = make_unique<unsigned char[]>(258);
+
+            ssize_t len;
+
+            // Check the first request, should be like 
+            // ver |len | methods
+            // 0x05|0xNN| NN times methods (max 255)
+
+            len = recv(clientSock, recBuf.get(), 257, 0);
+
+            #if !SUPPRESSDEBUGLOG
+            if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
+                printf("[DEBUG] SOCKS5 Proxy (methods) received %d bytes: ", len);
+                BriandUtils::PrintOldStyleByteBuffer(recBuf.get(), len);
+            }
+            #endif
+
+            if (len <= 0) {
+                ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy methods receiving error. Closing connection.\n");
+                // Close client socket
+                ErrorResponse(clientSock, nullptr, 0);
                 break;
             }
+            
+            if (len < 3) {
+                ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy methods receiving error: less than 3 bytes. Closing connection.\n");
+                // Close client socket
+                ErrorResponse(clientSock, nullptr, 0);
+                // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
+                break;
+            }
+
+            if (recBuf[0] != 0x05 || recBuf[1] < 0x01) {
+                ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: no auth method or wrong socks version. Closing connection.\n");
+                // Write back unsupported version / unsupported method and close
+                unsigned char temp[2] = { 0x05, 0xFF };
+                ErrorResponse(clientSock, temp, 2);
+                break;
+            }
+
+            // Find if there is a suitable method (0x00 => no authentication or 0x02 => authentication)
+            bool methodOk = false;
+            bool useAuthentication = false;
+            for (unsigned int i = 2; i<len && i < recBuf[1]+2 ; i++) {
+                if (recBuf[i] == 0x00) {
+                    methodOk = true;
+                    break;
+                }
+                else if (recBuf[i] == 0x02) {
+                    methodOk = true;
+                    useAuthentication = true;
+                    break;
+                }
+            }
+
+            if (!methodOk) {
+                ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: no open auth method. Closing connection.\n");
+                // Write back unsupported version / unsupported method and close
+                unsigned char temp[2] = { 0x05, 0xFF };
+                ErrorResponse(clientSock, temp, 2);
+                break;
+            }
+
+            #if !SUPPRESSDEBUGLOG
+            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client handshake ok.\n");
+            #endif
+
+            // Send OK Response to client
+            if (!useAuthentication) {
+                unsigned char temp[2] = { 0x05, 0x00 };
+                send(clientSock, temp, 2, 0);
+            }
             else {
-                // Convert parameter
-                int clientSock = reinterpret_cast<int>(clientSocket);
+                unsigned char temp[2] = { 0x05, 0x02 };
+                send(clientSock, temp, 2, 0);
+            }
 
-                //
-                // Very good example: https://www.programmersought.com/article/85795017726/
-                // 
-
+            // Authentication
+            if (useAuthentication) {
                 #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy HandleClient with clientSock = %d\n", clientSock);
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client waiting for auth request.\n");
                 #endif
+                // The client sends an auth request contaning
+                // [version:0x05] [ulen (1byte)] [uname (1-255 bytes)] [plen (1byte)] [passwd (1-255 bytes)]
+                // MAX buffer of 513/514 bytes
+                recBuf = make_unique<unsigned char[]>(514);
+                len = recv(clientSock, recBuf.get(), 513, 0);
 
-                auto recBuf = make_unique<unsigned char[]>(258);
-
-                ssize_t len;
-
-                // Check the first request, should be like 
-                // ver |len | methods
-                // 0x05|0xNN| NN times methods (max 255)
-
-                len = recv(clientSock, recBuf.get(), 257, 0);
-
-                #if !SUPPRESSDEBUGLOG
-                if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
-                    printf("[DEBUG] SOCKS5 Proxy (methods) received %d bytes: ", len);
-                    BriandUtils::PrintOldStyleByteBuffer(recBuf.get(), len);
-                }
-                #endif
-
-                if (len <= 0) {
-                    ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy methods receiving error. Closing connection.\n");
+                if (len < 5) {
+                    ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy methods receiving error: less than 5 bytes. Closing connection.\n");
                     // Close client socket
                     ErrorResponse(clientSock, nullptr, 0);
                     break;
                 }
-                
-                if (len < 3) {
-                    ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy methods receiving error: less than 3 bytes. Closing connection.\n");
-                    // Close client socket
-                    ErrorResponse(clientSock, nullptr, 0);
-                    // Set the PARAMETER clientSocket to -1 so any other cycle will fail.
-                    break;
-                }
 
-                if (recBuf[0] != 0x05 || recBuf[1] < 0x01) {
-                    ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: no auth method or wrong socks version. Closing connection.\n");
+                if (recBuf[0] != 0x05) {
+                    ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: wrong socks version on authentication. Closing connection.\n");
                     // Write back unsupported version / unsupported method and close
                     unsigned char temp[2] = { 0x05, 0xFF };
                     ErrorResponse(clientSock, temp, 2);
                     break;
                 }
 
-                // Find if there is a suitable method (0x00 => no authentication or 0x02 => authentication)
-                bool methodOk = false;
-                bool useAuthentication = false;
-                for (unsigned int i = 2; i<len && i < recBuf[1]+2 ; i++) {
-                    if (recBuf[i] == 0x00) {
-                        methodOk = true;
-                        break;
-                    }
-                    else if (recBuf[i] == 0x02) {
-                        methodOk = true;
-                        useAuthentication = true;
-                        break;
-                    }
+                string rUser = "";
+                string rPass = "";
+                unsigned short index = 2;
+                while (index < recBuf[1]+2 && index < len) {
+                    rUser.push_back(recBuf[index]);
+                    index++;
+                }
+                unsigned short pStops = recBuf[index] + index + 1;
+                index++;
+                while (index < pStops && index < len) {
+                    rPass.push_back(recBuf[index]);
+                    index++;
                 }
 
-                if (!methodOk) {
-                    ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: no open auth method. Closing connection.\n");
-                    // Write back unsupported version / unsupported method and close
+                if (BriandTorSocks5Proxy::proxyUser.compare(rUser) != 0 || BriandTorSocks5Proxy::proxyPassword.compare(rPass) != 0) {
+                    ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: wrong credentials. Closing connection.\n");
+                    // Write back error
                     unsigned char temp[2] = { 0x05, 0xFF };
                     ErrorResponse(clientSock, temp, 2);
                     break;
                 }
 
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client handshake ok.\n");
-                #endif
-
-                // Send OK Response to client
-                if (!useAuthentication) {
+                // Auth OK to client
+                {
                     unsigned char temp[2] = { 0x05, 0x00 };
                     send(clientSock, temp, 2, 0);
                 }
-                else {
-                    unsigned char temp[2] = { 0x05, 0x02 };
-                    send(clientSock, temp, 2, 0);
-                }
-
-                // Authentication
-                if (useAuthentication) {
-                    #if !SUPPRESSDEBUGLOG
-                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client waiting for auth request.\n");
-                    #endif
-                    // The client sends an auth request contaning
-                    // [version:0x05] [ulen (1byte)] [uname (1-255 bytes)] [plen (1byte)] [passwd (1-255 bytes)]
-                    // MAX buffer of 513/514 bytes
-                    recBuf = make_unique<unsigned char[]>(514);
-                    len = recv(clientSock, recBuf.get(), 513, 0);
-
-                    if (len < 5) {
-                        ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy methods receiving error: less than 5 bytes. Closing connection.\n");
-                        // Close client socket
-                        ErrorResponse(clientSock, nullptr, 0);
-                        break;
-                    }
-
-                    if (recBuf[0] != 0x05) {
-                        ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: wrong socks version on authentication. Closing connection.\n");
-                        // Write back unsupported version / unsupported method and close
-                        unsigned char temp[2] = { 0x05, 0xFF };
-                        ErrorResponse(clientSock, temp, 2);
-                        break;
-                    }
-
-                    string rUser = "";
-                    string rPass = "";
-                    unsigned short index = 2;
-                    while (index < recBuf[1]+2 && index < len) {
-                        rUser.push_back(recBuf[index]);
-                        index++;
-                    }
-                    unsigned short pStops = recBuf[index] + index + 1;
-                    index++;
-                    while (index < pStops && index < len) {
-                        rPass.push_back(recBuf[index]);
-                        index++;
-                    }
-
-                    if (BriandTorSocks5Proxy::proxyUser.compare(rUser) != 0 || BriandTorSocks5Proxy::proxyPassword.compare(rPass) != 0) {
-                        ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: wrong credentials. Closing connection.\n");
-                        // Write back error
-                        unsigned char temp[2] = { 0x05, 0xFF };
-                        ErrorResponse(clientSock, temp, 2);
-                        break;
-                    }
-
-                    // Auth OK to client
-                    {
-                        unsigned char temp[2] = { 0x05, 0x00 };
-                        send(clientSock, temp, 2, 0);
-                    }
-
-                    #if !SUPPRESSDEBUGLOG
-                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client authenticated.\n");
-                    #endif
-                }
 
                 #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client waiting for request.\n");
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client authenticated.\n");
                 #endif
+            }
 
-                // At this point client sends a request to connect
+            #if !SUPPRESSDEBUGLOG
+            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy client waiting for request.\n");
+            #endif
 
-                recBuf = make_unique<unsigned char[]>(512);  // hey, now you support host too, more size please!
-                len = recv(clientSock, recBuf.get(), 512, 0);
+            // At this point client sends a request to connect
 
-                #if !SUPPRESSDEBUGLOG
-                if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
-                    printf("[DEBUG] SOCKS5 Proxy connect request received %d bytes: ", len);
-                    BriandUtils::PrintOldStyleByteBuffer(recBuf.get(), len);
-                }
-                #endif
+            recBuf = make_unique<unsigned char[]>(512);  // hey, now you support host too, more size please!
+            len = recv(clientSock, recBuf.get(), 512, 0);
 
-                if (len < 10) {
-                    ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy connect request receiving error. Closing connection.\n");
-                    // Close client socket
-                    ErrorResponse(clientSock, nullptr, 0);
-                    break;
-                }
+            #if !SUPPRESSDEBUGLOG
+            if (esp_log_level_get(LOGTAG) == ESP_LOG_DEBUG) {
+                printf("[DEBUG] SOCKS5 Proxy connect request received %d bytes: ", len);
+                BriandUtils::PrintOldStyleByteBuffer(recBuf.get(), len);
+            }
+            #endif
 
-                // Only CONNECT supported at the moment
-                if (recBuf[1] != 0x01) {
-                    ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: command %02X unsupported. Closing connection.\n", recBuf[1]);
-                    // Write back unsupported command and close
-                    unsigned char temp[4] = { 0x05, 0x07, 0x00, 0x01 /* omitted */ };
-                    ErrorResponse(clientSock, temp, 4);
-                    break;
-                }
-
-                // Only IPv4 or host supported at the moment
-                if (recBuf[3] == 0x04) {
-                    ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: unsupported atyp, must be IPv4 (0x01) or hostname (0x03). Closing connection.\n");
-                    // Write back unsupported address type and close
-                    unsigned char temp[4] = { 0x05, 0x08, 0x00, 0x01 /* omitted */ };
-                    ErrorResponse(clientSock, temp, 4);
-                    break;
-                }
-
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy finding suitable circuit.\n");
-                #endif
-
-                if (BriandTorSocks5Proxy::torCircuits == nullptr) {
-                    ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: circuits manager not ready. Closing connection.\n");
-                    // Write back network unreachable
-                    unsigned char temp[4] = { 0x05, 0x03, 0x00, 0x01 /* omitted */ };
-                    ErrorResponse(clientSock, temp, 4);
-                    break;
-                }
-
-                BriandTorCircuit* circuit = nullptr; 
-
-                // Keep waiting until one circuit becomes ready, with a timeout.
-                unsigned long int stopTimeout = NET_CONNECT_TIMEOUT_S + BriandUtils::GetUnixTime();
-                while (BriandUtils::GetUnixTime() < stopTimeout) {
-                    circuit = BriandTorSocks5Proxy::torCircuits->GetCircuit();
-                    if (circuit != nullptr) break;
-                    vTaskDelay(200/portTICK_PERIOD_MS);
-                }
-
-                // If still no circuit found after timeout, error.
-                if (circuit == nullptr) {
-                    ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: no suitable circuit found in time. Closing connection.\n");
-                    // Write back network unreachable
-                    unsigned char temp[4] = { 0x05, 0x03, 0x00, 0x01 /* omitted */ };
-                    ErrorResponse(clientSock, temp, 4);
-                    break;
-                }
-
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "SOCKS5 Proxy using circuit with CircID=0x%08X.\n", circuit->GetCircID());
-                #endif
-
-                // Extract informations about host and port to connect to
-                string connectTo = "";
-                unsigned short connectPort = 0;
-                
-                if (recBuf[3] == 0x01) {
-                    in_addr ip;
-                    bzero(&ip, sizeof(ip));
-                    // Assuming recBuf contains ip in human order
-                    ip.s_addr += recBuf[4] << 0;
-                    ip.s_addr += recBuf[5] << 8;
-                    ip.s_addr += recBuf[6] << 16;
-                    ip.s_addr += recBuf[7] << 24;
-
-                    connectTo = BriandUtils::IPv4ToString(ip);
-
-                    // Port
-                    connectPort += recBuf[8] << 8;
-                    connectPort += recBuf[9] << 0;
-
-                    #if !SUPPRESSDEBUGLOG
-                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy connecting to IP address <%s> on port <%hu>.\n", connectTo.c_str(), connectPort);
-                    #endif
-                }
-                else if (recBuf[3] == 0x03) {
-                    // First byte has length
-                    unsigned char hostlen = recBuf[4];
-                    unsigned short i = 5;
-                    for (i=5; i<5+hostlen; i++)
-                        connectTo.push_back(static_cast<char>(recBuf[i]));
-                    
-                    // Port
-                    connectPort += recBuf[i] << 8;
-                    connectPort += recBuf[i+1] << 0;
-
-                    #if !SUPPRESSDEBUGLOG
-                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy connecting to hostname <%s> on port <%hu>.\n", connectTo.c_str(), connectPort);
-                    #endif
-                }
-                else {
-                    ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: unsupported address type. Closing connection.\n");
-                    // Write back unsupported address type and close
-                    unsigned char temp[4] = { 0x05, 0x08, 0x00, 0x01 /* omitted */ };
-                    ErrorResponse(clientSock, temp, 4);
-                    break;
-                }
-
-                // Connect to the destination (RELAY_BEGIN)
-
-                bool openedStream = circuit->TorStreamStart(connectTo, connectPort);
-
-                if (!openedStream) {
-                    // Write back unable to connect (refused) and close
-                    unsigned char temp[4] = { 0x05, 0x05, 0x00, 0x01 /* omitted */ };
-                    ErrorResponse(clientSock, temp, 4);
-                    break;
-                }
-
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy connected.\n");
-                #endif
-
-                // Send OK Response to client
-                {
-                    // version fixed to 0x05, 0x00 = OK, 0x00 (reserved), 0x01 Ipv4, 4 bytes to zero (ip), 2 bytes to zero (port)
-                    unsigned char temp[10] = { 0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-                    send(clientSock, temp, 10, 0);
-                }
-
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy streaming data.\n");
-                #endif
-
-                // Prepare the needed parameter (make_shared will save your life in async tasks!!)
-                auto parameter = make_shared<StreamWorkerParams>();
-                parameter->clientSocket = clientSock;
-                parameter->circuit = circuit;
-
-                // Start the reader task
-                // xTaskCreate(ProxyClient_Stream_Reader, "StreamRD", STACK_StreamRD, reinterpret_cast<void*>(parameter.get()), 20, NULL);
-                // Wait a little (1 second) because client should write us before we write him
-                // vTaskDelay(1000 / portTICK_PERIOD_MS);
-                // Then start the writer task
-                // xTaskCreate(ProxyClient_Stream_Writer, "StreamWR", STACK_StreamWR, reinterpret_cast<void*>(parameter.get()), 20, NULL);
-
-                /* 
-                    As pthread stack size is configured in sdkconfig with default values, new values must be set 
-                    in order to avoid stack overflows.
-                */
-                
-                esp_pthread_cfg_t curCfg = esp_pthread_get_default_config();
-                size_t maxSize = ( STACK_StreamRD > STACK_StreamWR ? STACK_StreamRD : STACK_StreamWR );
-                if (curCfg.stack_size < maxSize) {
-                    curCfg.stack_size = maxSize;
-                    esp_err_t error = esp_pthread_set_cfg(&curCfg);
-                    if (error != ESP_OK) {
-                        ESP_LOGE(LOGTAG, "[ERR] HandleClient not able to set Stack Size for pthreads to %zu\n", maxSize);
-                    }
-
-                    #if !SUPPRESSDEBUGLOG
-                    ESP_LOGD(LOGTAG, "[DEBUG] HandleClient Stack Size for pthreads is now %zu\n", maxSize);
-                    #endif
-
-                    printf("*** HandleClient Stack Size for pthreads is now %zu\n", maxSize);
-                }
-
-
-                // New version with future std::async and on new pthread with std::launch::async
-                auto rFuture = std::async(std::launch::async, ProxyClient_AsyncStreamReader, parameter);
-                auto wFuture = std::async(std::launch::async, ProxyClient_AsyncStreamWriter, parameter);
-
-                // Start execution and wait
-                rFuture.get();
-                wFuture.get();
-
-                // Now wait that read/write finished.
-                while(!parameter->readerFinished || !parameter->writerFinished) {
-                    vTaskDelay(500 / portTICK_PERIOD_MS);
-                }
-
-                // Check if the Tor circuit has been closed for stream
-                if (!parameter->torStreamClosed) {
-                    #if !SUPPRESSDEBUGLOG
-                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy closing Tor stream.\n");
-                    #endif
-                    circuit->TorStreamEnd();
-                    parameter->torStreamClosed = true;
-                }
-
-                // Check if socket has been closed
-                if (parameter->clientSocket > 0) {
-                    #if !SUPPRESSDEBUGLOG
-                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy closing socket.\n");
-                    #endif
-                    shutdown(clientSock, SHUT_RDWR);
-                    close(clientSock);
-                }
-
+            if (len < 10) {
+                ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy connect request receiving error. Closing connection.\n");
+                // Close client socket
+                ErrorResponse(clientSock, nullptr, 0);
                 break;
             }
+
+            // Only CONNECT supported at the moment
+            if (recBuf[1] != 0x01) {
+                ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: command %02X unsupported. Closing connection.\n", recBuf[1]);
+                // Write back unsupported command and close
+                unsigned char temp[4] = { 0x05, 0x07, 0x00, 0x01 /* omitted */ };
+                ErrorResponse(clientSock, temp, 4);
+                break;
+            }
+
+            // Only IPv4 or host supported at the moment
+            if (recBuf[3] == 0x04) {
+                ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: unsupported atyp, must be IPv4 (0x01) or hostname (0x03). Closing connection.\n");
+                // Write back unsupported address type and close
+                unsigned char temp[4] = { 0x05, 0x08, 0x00, 0x01 /* omitted */ };
+                ErrorResponse(clientSock, temp, 4);
+                break;
+            }
+
+            #if !SUPPRESSDEBUGLOG
+            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy finding suitable circuit.\n");
+            #endif
+
+            if (BriandTorSocks5Proxy::torCircuits == nullptr) {
+                ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: circuits manager not ready. Closing connection.\n");
+                // Write back network unreachable
+                unsigned char temp[4] = { 0x05, 0x03, 0x00, 0x01 /* omitted */ };
+                ErrorResponse(clientSock, temp, 4);
+                break;
+            }
+
+            BriandTorCircuit* circuit = nullptr; 
+
+            // Keep waiting until one circuit becomes ready, with a timeout.
+            unsigned long int stopTimeout = NET_CONNECT_TIMEOUT_S + BriandUtils::GetUnixTime();
+            while (BriandUtils::GetUnixTime() < stopTimeout) {
+                circuit = BriandTorSocks5Proxy::torCircuits->GetCircuit();
+                if (circuit != nullptr) break;
+                vTaskDelay(200/portTICK_PERIOD_MS);
+            }
+
+            // If still no circuit found after timeout, error.
+            if (circuit == nullptr) {
+                ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: no suitable circuit found in time. Closing connection.\n");
+                // Write back network unreachable
+                unsigned char temp[4] = { 0x05, 0x03, 0x00, 0x01 /* omitted */ };
+                ErrorResponse(clientSock, temp, 4);
+                break;
+            }
+
+            #if !SUPPRESSDEBUGLOG
+            ESP_LOGD(LOGTAG, "SOCKS5 Proxy using circuit with CircID=0x%08X.\n", circuit->GetCircID());
+            #endif
+
+            // Extract informations about host and port to connect to
+            string connectTo = "";
+            unsigned short connectPort = 0;
+            
+            if (recBuf[3] == 0x01) {
+                in_addr ip;
+                bzero(&ip, sizeof(ip));
+                // Assuming recBuf contains ip in human order
+                ip.s_addr += recBuf[4] << 0;
+                ip.s_addr += recBuf[5] << 8;
+                ip.s_addr += recBuf[6] << 16;
+                ip.s_addr += recBuf[7] << 24;
+
+                connectTo = BriandUtils::IPv4ToString(ip);
+
+                // Port
+                connectPort += recBuf[8] << 8;
+                connectPort += recBuf[9] << 0;
+
+                #if !SUPPRESSDEBUGLOG
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy connecting to IP address <%s> on port <%hu>.\n", connectTo.c_str(), connectPort);
+                #endif
+            }
+            else if (recBuf[3] == 0x03) {
+                // First byte has length
+                unsigned char hostlen = recBuf[4];
+                unsigned short i = 5;
+                for (i=5; i<5+hostlen; i++)
+                    connectTo.push_back(static_cast<char>(recBuf[i]));
+                
+                // Port
+                connectPort += recBuf[i] << 8;
+                connectPort += recBuf[i+1] << 0;
+
+                #if !SUPPRESSDEBUGLOG
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy connecting to hostname <%s> on port <%hu>.\n", connectTo.c_str(), connectPort);
+                #endif
+            }
+            else {
+                ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy error: unsupported address type. Closing connection.\n");
+                // Write back unsupported address type and close
+                unsigned char temp[4] = { 0x05, 0x08, 0x00, 0x01 /* omitted */ };
+                ErrorResponse(clientSock, temp, 4);
+                break;
+            }
+
+            // Connect to the destination (RELAY_BEGIN)
+
+            bool openedStream = circuit->TorStreamStart(connectTo, connectPort);
+
+            if (!openedStream) {
+                // Write back unable to connect (refused) and close
+                unsigned char temp[4] = { 0x05, 0x05, 0x00, 0x01 /* omitted */ };
+                ErrorResponse(clientSock, temp, 4);
+                break;
+            }
+
+            #if !SUPPRESSDEBUGLOG
+            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy connected.\n");
+            #endif
+
+            // Send OK Response to client
+            {
+                // version fixed to 0x05, 0x00 = OK, 0x00 (reserved), 0x01 Ipv4, 4 bytes to zero (ip), 2 bytes to zero (port)
+                unsigned char temp[10] = { 0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+                send(clientSock, temp, 10, 0);
+            }
+
+            #if !SUPPRESSDEBUGLOG
+            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy streaming data.\n");
+            #endif
+
+            // Prepare the needed parameter (make_shared will save your life in async tasks!!)
+            auto parameter = make_shared<StreamWorkerParams>();
+            parameter->clientSocket = clientSock;
+            parameter->circuit = circuit;
+
+            // Start the reader task
+            // xTaskCreate(ProxyClient_Stream_Reader, "StreamRD", STACK_StreamRD, reinterpret_cast<void*>(parameter.get()), 20, NULL);
+            // Wait a little (1 second) because client should write us before we write him
+            // vTaskDelay(1000 / portTICK_PERIOD_MS);
+            // Then start the writer task
+            // xTaskCreate(ProxyClient_Stream_Writer, "StreamWR", STACK_StreamWR, reinterpret_cast<void*>(parameter.get()), 20, NULL);
+
+
+            // New version with future std::async and on new pthread with std::launch::async
+
+            /* 
+                As pthread stack size is configured in sdkconfig with default values, new values must be set 
+                in order to avoid stack overflows.
+            */
+
+            auto pcfg = esp_pthread_get_default_config();
+            pcfg.thread_name = "StreamRD";
+            pcfg.stack_size = STACK_StreamRD;
+            pcfg.prio = 20;
+            esp_pthread_set_cfg(&pcfg);
+
+            auto rFuture = std::async(std::launch::async, ProxyClient_AsyncStreamReader, parameter);
+
+            pcfg.thread_name = "StreamWR";
+            pcfg.stack_size = STACK_StreamWR;
+            pcfg.prio = 20;
+            esp_pthread_set_cfg(&pcfg);
+
+            auto wFuture = std::async(std::launch::async, ProxyClient_AsyncStreamWriter, parameter);
+
+            // Start execution, do not use .get() as this could led to a BrokenPromise exception!
+            //rFuture.get();
+            //wFuture.get();
+
+            // Now wait that read/write finished.
+            while(!parameter->readerFinished || !parameter->writerFinished) {
+                vTaskDelay(500 / portTICK_PERIOD_MS);
+            }
+
+            // Check if the Tor circuit has been closed for stream
+            if (!parameter->torStreamClosed) {
+                #if !SUPPRESSDEBUGLOG
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy closing Tor stream.\n");
+                #endif
+                circuit->TorStreamEnd();
+                parameter->torStreamClosed = true;
+            }
+
+            // Check if socket has been closed
+            if (parameter->clientSocket > 0) {
+                #if !SUPPRESSDEBUGLOG
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy closing socket.\n");
+                #endif
+                shutdown(clientSock, SHUT_RDWR);
+                close(clientSock);
+            }
+
+            break;
         }
     
         // Reset the request queue and exit
@@ -580,13 +571,9 @@ namespace Briand
         #if !SUPPRESSDEBUGLOG
         ESP_LOGD(LOGTAG, "[DEBUG] HandleClient exited.\n");
         #endif
-
-        // Wait a little, then exit
-        vTaskDelay(500 / portTICK_PERIOD_MS);
-        vTaskDelete(NULL);
     }
 
-    /* static */ void BriandTorSocks5Proxy::ProxyClient_Stream_Writer(void* swParams) {
+    /* DELETED void BriandTorSocks5Proxy::ProxyClient_Stream_Writer(void* swParams) {
         // IDF Task cannot return
         while (1) {
             // If parameter is null then finish
@@ -686,8 +673,9 @@ namespace Briand
         vTaskDelay(STREAM_WAIT_MS / portTICK_PERIOD_MS);
         vTaskDelete(NULL);
     }
+    */
 
-    /* static */ void BriandTorSocks5Proxy::ProxyClient_Stream_Reader(void* swParams) {
+    /* DELETED void BriandTorSocks5Proxy::ProxyClient_Stream_Reader(void* swParams) {
         // IDF Task cannot return
         while (1) {
             // If parameter is null then finish
@@ -825,12 +813,13 @@ namespace Briand
         }
 
         #if !SUPPRESSDEBUGLOG
-        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader exited.");
+        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader exited.\n");
         #endif
         // Kill this task but wait a little in order to free memory
         vTaskDelay(STREAM_WAIT_MS / portTICK_PERIOD_MS);
         vTaskDelete(NULL);
     }
+    */
 
     /* static */ void BriandTorSocks5Proxy::ProxyClient_AsyncStreamWriter(shared_ptr<StreamWorkerParams> swParams) {
         // If parameter is null then return
@@ -1071,7 +1060,7 @@ namespace Briand
         }
 
         #if !SUPPRESSDEBUGLOG
-        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamReader exited.");
+        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamReader exited.\n");
         #endif
     }
 
@@ -1081,13 +1070,15 @@ namespace Briand
             #if !SUPPRESSDEBUGLOG
             ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy killing task.\n");    
             #endif
-            vTaskDelete(this->proxyTaskHandle);
+
+            this->proxyStarted = false;
+
             #if !SUPPRESSDEBUGLOG
             ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy closing socket.\n");    
             #endif
+
             shutdown(this->proxySocket, SHUT_RDWR);
-            close(this->proxySocket);
-            this->proxyStarted = false;
+            close(this->proxySocket);   
         }
         
         #if !SUPPRESSDEBUGLOG

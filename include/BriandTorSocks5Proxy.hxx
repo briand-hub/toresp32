@@ -80,7 +80,7 @@ namespace Briand
         unsigned short proxyPort;
 
         /** IDF vTask handle */
-        TaskHandle_t proxyTaskHandle;
+        /* DELETED SWITCHED TO pthreads TaskHandle_t proxyTaskHandle;*/
 
         /** Proxy status */
         bool proxyStarted;
@@ -112,27 +112,28 @@ namespace Briand
 
         /**
          * Handles a single request to this proxy (accept() and starts HandleClient)
-         * @param serverSocket the server socket FD (int)
+         * @param serverSock the server socket FD (int)
+         * @param proxyStatus this object's proxyStatus reference, to kill thread if proxy is stopped
         */
-        static void HandleRequest(void* serverSocket);
+        static void HandleRequest(const int& serverSock, const bool& proxyStarted);
 
         /**
          * Handles a single client (async)
-         * @param clientSocket the connected client socket FD (int)
+         * @param clientSock the connected client socket FD (int)
         */
-        static void HandleClient(void* clientSocket);
+        static void HandleClient(const int& clientSock);
 
         /**
          * Handles a single client receive -> write to tor (async)
          * @param workerParams a reference to an existing instance of the StreamWorkerParams
         */
-        static void ProxyClient_Stream_Reader(void* swParams);
+        /* DELETED static void ProxyClient_Stream_Reader(void* swParams); */
 
         /**
          * Handles a single tor receive -> write to client (async)
          * @param workerParams a reference to an existing instance of the StreamWorkerParams
         */
-        static void ProxyClient_Stream_Writer(void* swParams);
+        /* DELETED static void ProxyClient_Stream_Writer(void* swParams); */
 
         /**
          * std::async future Handles a single client receive -> write to tor (async)

@@ -69,12 +69,12 @@ void printLocalTime();
 void printLogo();
 void startSerialRead(string*);
 void executeCommand(string&);
-void heapStats(void*);
-void checkStaHealth(void*);
+void heapStats();
+void checkStaHealth();
 
 // Early declarations for setup/application
 void TorEsp32Setup();
-void TorEsp32Main(void*);
+void TorEsp32Main(void* taskParam);
 
 // MAIN METHOD
 void app_main() {
@@ -82,10 +82,26 @@ void app_main() {
 	TorEsp32Setup();
 
 	// Start Heap monitor
-	xTaskCreate(heapStats, "HeapStats", STACK_HeapStats, NULL, 1000, NULL);
+	// SWTICHED TO pthreads xTaskCreate(heapStats, "HeapStats", STACK_HeapStats, NULL, 1000, NULL);
+
+	auto pcfg = esp_pthread_get_default_config();
+	pcfg.thread_name = "HeapStats";
+	pcfg.stack_size = STACK_HeapStats;
+	pcfg.prio = 1000;
+	esp_pthread_set_cfg(&pcfg);
+	std::thread t1(heapStats);
+	t1.detach();
 
 	// Start application loop
-	xTaskCreate(TorEsp32Main, "TorEsp32", STACK_TorEsp32, NULL, 15, NULL);
+	// This MUST remain a IDF task, otherwise serial input will not work well!!
+	xTaskCreate(TorEsp32Main, "TorEsp32", STACK_TorEsp32, NULL, 5, NULL);
+
+	// pcfg.thread_name = "TorEsp32";
+	// pcfg.stack_size = STACK_TorEsp32;
+	// pcfg.prio = 5;
+	// esp_pthread_set_cfg(&pcfg);
+	// std::thread t2(TorEsp32Main);
+	// t2.detach();
 }
 
 void TorEsp32Setup() {
@@ -246,7 +262,7 @@ void TorEsp32Setup() {
     nextStep = 1; // setup success
 }
 
-void TorEsp32Main(void* taskArg) {
+void TorEsp32Main(void* taskParam) {
 	// An xTask cannot return!
 	while (1) {
 		// If during serial input reading, wait while the command is entered and confirmed.
@@ -374,7 +390,15 @@ void TorEsp32Main(void* taskArg) {
 			printf("[INFO] LAN IP Address: %s\n", WiFi->GetStaIP().c_str());
 
 			// Start WiFi Check
-			xTaskCreate(checkStaHealth, "StaCheck", STACK_StaCheck, NULL, 1000, NULL);
+			// SWITCHED TO pthreads xTaskCreate(checkStaHealth, "StaCheck", STACK_StaCheck, NULL, 1000, NULL);
+
+			auto pcfg = esp_pthread_get_default_config();
+			pcfg.thread_name = "StaCheck";
+			pcfg.stack_size = STACK_StaCheck;
+			pcfg.prio = 500;
+			esp_pthread_set_cfg(&pcfg);
+			std::thread t(checkStaHealth);
+			t.detach();
 
 			nextStep = 7;
 		}
@@ -939,7 +963,7 @@ void executeCommand(string& cmd) {
     COMMAND->clear();
 }
 
-void heapStats(void* param) {
+void heapStats() {
 	// IDF Task cannot return
 	while (1) {
 		unsigned long currentHeap = Briand::BriandESPDevice::GetFreeHeap();
@@ -949,7 +973,7 @@ void heapStats(void* param) {
 	}
 }
 
-void checkStaHealth(void* param) {
+void checkStaHealth() {
 	// IDF Task cannot return
 	while (1) {
 		

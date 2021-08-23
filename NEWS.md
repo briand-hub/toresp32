@@ -20,6 +20,150 @@
 * Started to use error codes
 * Possible bug in stream: after some cells exchanged, seems unrecognize all. Maybe due to the additional bytes download? No.. found due to "old" stream cells still to be received by the node! How should treat? Roll the backward digest or not? 
 * Testing std::async / future for Stream read/write because void* parameter of xTaskCreate is very limiting
+* A test on ESP32 shows interesting results: **pthreads stack requirement is less than FreeRTOS ones**. With the same function contents an std::async thread (std::lauch async) shows 1168 min.free thread stack, a std::thread show 1592 min.free stack, xTaskCreate shows 668. Thinking to switch all to pthreads (and so avoid the annoying void* parameter). Other test shows that returning pthreads have no problems and are killed by FreeRTOS automatically. Sample code used:
+
+```C++
+#include <iostream>
+#include <memory>
+#include <future>
+#include <thread>
+#include <cstring>
+
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <esp_system.h>
+#include <nvs_flash.h>
+#include <esp_pthread.h>
+
+using namespace std;
+
+extern "C" { 
+    void app_main();
+}
+
+class BigObj { 
+    public:  
+    static const size_t size = 1024;
+    unsigned char buffer[size];
+};
+
+void func(void* z) {
+    while (1) {
+        BigObj a;
+        auto b = make_unique<BigObj>();
+        bzero(a.buffer, a.size);
+        for (int i =0; i<a.size; i++) a.buffer[i] = 0xAA;
+        for (int i =0; i<b->size; i++) b->buffer[i] = 0xAA;
+        vTaskDelay(500 / portTICK_PERIOD_MS);
+    }
+}
+
+void rfunc1(void* z) {
+    for(int j=0; j<15; j++) {
+        BigObj a;
+        auto b = make_unique<BigObj>();
+        bzero(a.buffer, a.size);
+        for (int i =0; i<a.size; i++) a.buffer[i] = 0xAA;
+        for (int i =0; i<b->size; i++) b->buffer[i] = 0xAA;
+        printf("*** I AM THREAD 1\n");
+        vTaskDelay(500 / portTICK_PERIOD_MS);
+    }
+}
+
+void rfunc2(void* z) {
+    for(int j=0; j<15; j++) {
+        BigObj a;
+        auto b = make_unique<BigObj>();
+        bzero(a.buffer, a.size);
+        for (int i =0; i<a.size; i++) a.buffer[i] = 0xAA;
+        for (int i =0; i<b->size; i++) b->buffer[i] = 0xAA;
+        printf("*** I AM THREAD 2\n");
+        vTaskDelay(500 / portTICK_PERIOD_MS);
+    }
+}
+
+void callThreads() {
+    xTaskCreate(func, "T_MANUAL1", 2048, NULL, 5, NULL);
+    
+    esp_pthread_cfg_t cfg; 
+    cfg = esp_pthread_get_default_config();
+
+    cfg.thread_name = "PT_STD1";
+    esp_pthread_set_cfg(&cfg);
+    std::thread t1(func, (void*)NULL);
+    t1.detach();
+    
+    cfg.thread_name = "PT_STD2";
+    esp_pthread_set_cfg(&cfg);
+    std::thread t2(rfunc2, (void*)NULL);
+    t2.detach();
+
+    cfg.thread_name = "PT_ASYNC";
+    esp_pthread_set_cfg(&cfg);
+    auto ft = std::async(std::launch::async, rfunc1, (void*)NULL);
+}
+
+void app_main() {
+
+    printf("[INFO] Initializing NVS...");
+	auto ret = nvs_flash_init();
+	if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+		ESP_ERROR_CHECK(nvs_flash_erase());
+		ret = nvs_flash_init();
+	}
+	ESP_ERROR_CHECK(ret);
+	printf("done.\n");
+
+    // De-buffered serial communication
+	printf("[INFO] Unbuffering stdout...");
+	setvbuf(stdout, NULL, _IONBF, 0);
+	printf("done.\n");
+	printf("[INFO] Unbuffering stdin...");
+	setvbuf(stdin, NULL, _IONBF, 0);
+	printf("done.\n");
+
+    callThreads();
+
+    while(1) {
+        TaskStatus_t arr[15];
+        uint32_t tr;
+
+        auto ss = uxTaskGetSystemState(arr, 15, &tr);
+        printf("Task\t\tMIN STACK\n");
+        for (size_t i=0; i<ss; i++) {
+            if (arr[i].pcTaskName[0] == 'T' || arr[i].pcTaskName[0] == 'P')
+            printf("%s\t%hu\n", arr[i].pcTaskName, arr[i].usStackHighWaterMark);
+        }
+
+        printf("\n");
+
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+    }
+
+
+    printf("app_main() finished\n");
+
+}
+```
+
+Output:
+
+```
+[Sequence]
+*** I AM THREAD 1
+*** I AM THREAD 2
+*** I AM THREAD 1
+Task            MIN STACK
+PT_STD1 1536
+T_MANUAL1       652
+PT_STD2 1364
+
+Task            MIN STACK
+PT_STD1 1536
+T_MANUAL1       652
+```
+
+* After testing pthreads and checked stack sizes, removed *-fpermissive* option in makefile (included for Linux beacause of void* casting for xTask).
 
 ## 2021-08-19
 

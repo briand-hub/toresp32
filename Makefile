@@ -17,7 +17,7 @@ OUTNAME = main_linux_exe
 # Compiler g++
 CXX = g++
 # Flags required
-CXXFLAGS = -g -fpermissive -pthread -lmbedtls -lmbedcrypto -lmbedx509 -lsodium -std=gnu++17
+CXXFLAGS = -g -pthread -lmbedtls -lmbedcrypto -lmbedx509 -lsodium -std=gnu++17
 
 #Target main
 main:
