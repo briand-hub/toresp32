@@ -57,6 +57,7 @@ namespace Briand {
 		unsigned short LAST_ENDED_STREAM_ID;	// the last StreamID that was closed
 		short CURRENT_STREAM_WINDOW;			// the current (backward) stream window. Each 50 RELAY_DATA cells are exchanged a RELAY_SENDME is needed
 		short CURRENT_CIRC_WINDOW;				// the current (backward) circuit window. Each 100 RELAY_DATA cells are exchanged a RELAY_SENDME is needed
+		shared_ptr<vector<unsigned char>> LD;	// the latest stream *sent* RELAY_DATA cell digest (used by RELAY_SENDME)
 
 		unique_ptr<BriandIDFSocketTlsClient> sClient;	// Client used for communications
 
@@ -97,9 +98,8 @@ namespace Briand {
 
 		/**
 		 * Method checks if a RELAY_SENDME (circuit-level or stream-level) is required. If so, sends.
-		 * @param latestReceivedDigest the latest digest received from RELAY_DATA (required for authenticated RELAY_SENDME)
 		*/
-		void TorStreamCheckSendMe(const shared_ptr<vector<unsigned char>> latestReceivedDigest);
+		void TorStreamCheckSendMe();
 
 		public:
 

@@ -2,6 +2,8 @@
 
 ## Next steps
 
+* Consider change circuit build policy to exclude current exit nodes used
+* Edit wiki for new queue limit setting
 * Place BriandError management on strategic points for debugging
 * Consider to build on-demand circuits for specific requested ports:
   * requires cache to save allowed ports
@@ -16,7 +18,8 @@
 
 ##
 
-* Investigate on protocol errors: seems same exit node in multiple circuit causing some trouble. However protocol error always comes from middle :/ **MAYBE? SOLVED** error is thrown when Circuit Window is ~944 ~946 so when a SENDME at circuit-level is not sent! 
+* New configurable queue limit settings.
+* Investigate on protocol errors: seems same exit node in multiple circuit causing some trouble. However protocol error always comes from middle :/ **SOLVED** in RELAY_SENDME the last sent (by *my* side digest is required).
 
 Seems to be, persistent errors are (sample log):
 

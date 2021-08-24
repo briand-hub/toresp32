@@ -26,6 +26,7 @@ namespace Briand
 {
     const char* BriandTorSocks5Proxy::LOGTAG = "briandproxy";
 
+    bool BriandTorSocks5Proxy::proxyStarted = false;
     BriandTorCircuitsManager* BriandTorSocks5Proxy::torCircuits = nullptr;
     string BriandTorSocks5Proxy::proxyUser = "";
     string BriandTorSocks5Proxy::proxyPassword = "";
@@ -102,11 +103,24 @@ namespace Briand
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy socket created.\n");
         #endif
 
+        // Set the SO_REUSEADDR in order to avoid binding erros
+        int flag = 1;
+        if(setsockopt(this->proxySocket, SOL_SOCKET, SO_REUSEADDR, &flag, sizeof(flag)) != 0) {
+            ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy socket options error.\n");
+        }
+        else {
+            #if !SUPPRESSDEBUGLOG
+            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy socket options OK.\n");
+            #endif
+        }
+
         // Bind the socket to the specified address
         if (bind(this->proxySocket, reinterpret_cast<struct sockaddr*>(&serverAddr), sizeof(serverAddr)) != 0) {
             ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy error on binding.\n");
-            shutdown(this->proxySocket, SHUT_RDWR);
-            close(this->proxySocket);
+            if (this->proxySocket > 0) {
+                shutdown(this->proxySocket, SHUT_RDWR);
+                close(this->proxySocket);
+            } 
             this->proxySocket = -1;
             return;
         }
@@ -118,8 +132,10 @@ namespace Briand
         // Listen for maximum REQUEST_QUEUE_LIMIT connections
         if (listen(this->proxySocket, REQUEST_QUEUE_LIMIT) != 0) {
             ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy error on binding.\n");
-            shutdown(this->proxySocket, SHUT_RDWR);
-            close(this->proxySocket);
+            if (this->proxySocket > 0) {
+                shutdown(this->proxySocket, SHUT_RDWR);
+                close(this->proxySocket);
+            } 
             this->proxySocket = -1;
             return;
         }
@@ -138,7 +154,7 @@ namespace Briand
         pcfg.prio = 25;
         esp_pthread_set_cfg(&pcfg);
 
-        std::thread t(this->HandleRequest, std::ref(this->proxySocket), std::ref(this->proxyStarted));
+        std::thread t(this->HandleRequest, this->proxySocket, std::ref(this->proxyStarted));
         t.detach();
 
         #if !SUPPRESSDEBUGLOG
@@ -151,12 +167,14 @@ namespace Briand
             if (data != nullptr && dataLen > 0) {
                 send(socket, data, dataLen, 0);
             }
-            shutdown(socket, SHUT_RDWR);
-            close(socket);
+            if (socket > 0) {
+                shutdown(socket, SHUT_RDWR);
+                close(socket);
+            } 
         }
     }
 
-    /* static */ void BriandTorSocks5Proxy::HandleRequest(const int& serverSock, const bool& proxyStarted) {
+    /* static */ void BriandTorSocks5Proxy::HandleRequest(const int serverSock, const bool& proxyStarted) {
         while(proxyStarted) {
             #if !SUPPRESSDEBUGLOG
             ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: accepting connections.\n");
@@ -193,7 +211,7 @@ namespace Briand
             pcfg.prio = 20;
             esp_pthread_set_cfg(&pcfg);
 
-            std::thread t(HandleClient, std::ref(clientSock));
+            std::thread t(HandleClient, clientSock);
             t.detach();
 
             // Wait before next run
@@ -205,7 +223,7 @@ namespace Briand
         #endif
     }
 
-    /* static */ void BriandTorSocks5Proxy::HandleClient(const int& clientSock) {
+    /* static */ void BriandTorSocks5Proxy::HandleClient(const int clientSock) {
 
         while (clientSock > 0) {
             //
@@ -409,10 +427,19 @@ namespace Briand
 
             // Keep waiting until one circuit becomes ready, with a timeout.
             unsigned long int stopTimeout = NET_CONNECT_TIMEOUT_S + BriandUtils::GetUnixTime();
-            while (BriandUtils::GetUnixTime() < stopTimeout) {
+            while (BriandTorSocks5Proxy::proxyStarted && BriandUtils::GetUnixTime() < stopTimeout) {
                 circuit = BriandTorSocks5Proxy::torCircuits->GetCircuit();
                 if (circuit != nullptr) break;
                 vTaskDelay(200/portTICK_PERIOD_MS);
+            }
+
+            // If in the meanwhile proxy stopped, close.
+            if (!BriandTorSocks5Proxy::proxyStarted) {
+                ESP_LOGW(LOGTAG, "[WARN] SOCKS5 Proxy closing/dropping client connection because proxy stopped.\n");
+                // Write back network unreachable
+                unsigned char temp[4] = { 0x05, 0x03, 0x00, 0x01 /* omitted */ };
+                ErrorResponse(clientSock, temp, 4);
+                break;
             }
 
             // If still no circuit found after timeout, error.
@@ -555,11 +582,15 @@ namespace Briand
 
             // Check if socket has been closed
             if (parameter->clientSocket > 0) {
+                
                 #if !SUPPRESSDEBUGLOG
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy closing socket.\n");
                 #endif
-                shutdown(clientSock, SHUT_RDWR);
-                close(clientSock);
+                
+                if (clientSock > 0) {
+                    shutdown(clientSock, SHUT_RDWR);
+                    close(clientSock);
+                }
             }
 
             break;
@@ -572,254 +603,6 @@ namespace Briand
         ESP_LOGD(LOGTAG, "[DEBUG] HandleClient exited.\n");
         #endif
     }
-
-    /* DELETED void BriandTorSocks5Proxy::ProxyClient_Stream_Writer(void* swParams) {
-        // IDF Task cannot return
-        while (1) {
-            // If parameter is null then finish
-            if (swParams == NULL || swParams == nullptr) {
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Writer called with NULL parameter, exiting.\n");
-                #endif
-                break;
-            } 
-
-            // Extract parameter and verify
-            StreamWorkerParams* params = reinterpret_cast<StreamWorkerParams*>(swParams);
-
-            if (params == NULL || params == nullptr) {
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Writer parameter cast failed, exiting.\n");
-                #endif
-                break;
-            }
-
-            // Check if everything is good
-            if (!params->GoodForWrite()) {
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Writer not good for streaming, exiting.\n");
-                #endif
-                break;
-            }
-            
-            // Ok! Here we need to read from TOR and write back to client.
-
-            // This Lambda helps to make code easier.
-            auto CloseWithError = [&]() {  
-                params->writerFinished = true;
-                if (!params->torStreamClosed) {
-                    params->circuit->TorStreamEnd();
-                    params->torStreamClosed = true;
-                } 
-                params->torStreamClosed = true;
-                params->clientDisconnected = true;
-                if (!params->readerFinished) {
-                    params->readerFinished = true;
-                }
-                shutdown(params->clientSocket, SHUT_RDWR);
-                close(params->clientSocket);
-                params->clientSocket = -1;
-            };
-
-            auto buffer = make_unique<vector<unsigned char>>(); 
-            //buffer->reserve(514); // reserve some bytes
-
-            // Read from TOR and save the finish status (RELAY_END) on the parameters
-            bool torStreamOk = params->circuit->TorStreamRead(buffer, params->writerFinished, TOR_SOCKS5_PROXY_TIMEOUT_S);
-
-            if (!torStreamOk) {
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Writer error on Tor streaming, exiting.\n");
-                #endif
-                CloseWithError();
-                break;
-            }
-
-            // If we have something to write back to client, send it
-            if (buffer->size() > 0) {
-                ssize_t len = send(params->clientSocket, buffer->data(), buffer->size(), 0);
-                if (len < 0) {
-                    #if !SUPPRESSDEBUGLOG
-                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Writer error on writing back to client, exiting.\n");
-                    #endif
-                    CloseWithError();
-                    break;
-                }
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Writer streamed %d bytes from TOR to client.\n", len);
-                #endif
-            }
-
-            // Reset now the buffer, this avoids exceptions when task is deleted
-            buffer.reset();
-
-            // If the REALAY_END has been received, send ending and exit.
-            if (params->writerFinished) {
-                if (!params->torStreamClosed) {
-                    params->circuit->TorStreamEnd();
-                    params->torStreamClosed = true;
-                }
-                break;
-            }
-
-            // Wait before next cycle
-            vTaskDelay(STREAM_WAIT_MS / portTICK_PERIOD_MS);
-        }
-
-        #if !SUPPRESSDEBUGLOG
-        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Writer exited.\n");
-        #endif
-        // Kill this task but wait a little in order to free memory
-        vTaskDelay(STREAM_WAIT_MS / portTICK_PERIOD_MS);
-        vTaskDelete(NULL);
-    }
-    */
-
-    /* DELETED void BriandTorSocks5Proxy::ProxyClient_Stream_Reader(void* swParams) {
-        // IDF Task cannot return
-        while (1) {
-            // If parameter is null then finish
-            if (swParams == NULL || swParams == nullptr) {
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader called with NULL parameter, exiting.\n");
-                #endif
-                break;
-            } 
-
-            // Extract parameter and verify
-            StreamWorkerParams* params = reinterpret_cast<StreamWorkerParams*>(swParams);
-
-            if (params == NULL || params == nullptr) {
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader parameter cast failed, exiting.\n");
-                #endif
-                break;
-            }
-
-            // Check if everything is good
-            if (!params->GoodForRead()) {
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader not good for streaming, exiting.\n");
-                #endif
-                break;
-            }
-            
-            // Ok! Here we need to read from client and write to TOR.
-            
-            // This Lambda helps to make code easier.
-            auto CloseWithError = [&]() {  
-                params->readerFinished = true;
-                params->clientDisconnected = true;
-                if (!params->writerFinished) {
-                    params->writerFinished = true;
-                    if (!params->torStreamClosed) {
-                        params->circuit->TorStreamEnd();
-                        params->torStreamClosed = true;
-                    } 
-                    params->torStreamClosed = true;
-                }
-                shutdown(params->clientSocket, SHUT_RDWR);
-                close(params->clientSocket);
-                params->clientSocket = -1;
-            };
-
-            // We read from client with a select() and check timeouts or disconnection.
-
-            // Set the default timeout 
-            struct timeval timeout;
-            bzero(&timeout, sizeof(timeout));
-            timeout.tv_sec = TOR_SOCKS5_PROXY_TIMEOUT_S;
-
-            fd_set filter;
-            FD_ZERO(&filter);
-            FD_SET(params->clientSocket, &filter);
-
-            #if !SUPPRESSDEBUGLOG
-            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader select()\n");
-            #endif
-            int selectResult = select(params->clientSocket + 1, &filter, NULL, NULL, &timeout);
-
-            if (selectResult < 0) {
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader select() error, marking all as finished and disconnecting.\n");
-                #endif
-                CloseWithError();
-                break;
-            }
-            else if(params == NULL || params == nullptr) {
-                // In the meanwhile could have been destroyed...
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader params NULL, marking as finished.\n");
-                #endif
-                params->readerFinished = true;
-                break;
-            }
-            else if (selectResult == 0) {
-                #if !SUPPRESSDEBUGLOG
-                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader select() timeout, marking as finished.\n");
-                #endif
-                params->readerFinished = true;
-                break;
-            }
-            else if (FD_ISSET(params->clientSocket, &filter)) {
-                // Client ready to be read
-                auto buffer = make_unique<unsigned char[]>(MAX_FREE_PAYLOAD);
-                ssize_t len = recv(params->clientSocket, buffer.get(), MAX_FREE_PAYLOAD, 0);
-
-                // If select() succeded but len is 0 then client is disconnected!
-                if (len == 0) {
-                    #if !SUPPRESSDEBUGLOG
-                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader client disconnected! Exiting.\n");
-                    #endif
-                    // CloseWithError();
-                    // Stop the reader but not the writer: could have something else to write!
-                    // If the client is *really* disonnected, then the send() on the writer will fail.
-                    params->readerFinished = true;
-                    break;
-                }
-                else if (len < 0) {
-                    #if !SUPPRESSDEBUGLOG
-                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader error on receiving from client! Exiting.\n");
-                    #endif
-                    CloseWithError();
-                    break;
-                }
-                else {
-                    bool torStreamOk = true;
-                    auto sendBuf = make_unique<vector<unsigned char>>();
-                    //sendBuf->reserve(514); // reserve some bytes
-                    sendBuf->insert(sendBuf->begin(), buffer.get(), buffer.get() + len);
-                    params->circuit->TorStreamSend(sendBuf, torStreamOk);
-                    // Reset now the buffers
-                    sendBuf.reset();
-                    buffer.reset();
-
-                    if (!torStreamOk) {
-                        #if !SUPPRESSDEBUGLOG
-                        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader TOR Stream error! Exiting.\n");
-                        #endif
-                        CloseWithError();
-                        break;
-                    }
-
-                    #if !SUPPRESSDEBUGLOG
-                    ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader streamed %d bytes from client to TOR.\n", len);
-                    #endif
-                }
-            }
-
-            // Wait before next cycle
-            vTaskDelay(STREAM_WAIT_MS / portTICK_PERIOD_MS);   
-        }
-
-        #if !SUPPRESSDEBUGLOG
-        ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_Stream_Reader exited.\n");
-        #endif
-        // Kill this task but wait a little in order to free memory
-        vTaskDelay(STREAM_WAIT_MS / portTICK_PERIOD_MS);
-        vTaskDelete(NULL);
-    }
-    */
 
     /* static */ void BriandTorSocks5Proxy::ProxyClient_AsyncStreamWriter(shared_ptr<StreamWorkerParams> swParams) {
         // If parameter is null then return
@@ -859,8 +642,10 @@ namespace Briand
                 if (!swParams->readerFinished) {
                     swParams->readerFinished = true;
                 }
-                shutdown(swParams->clientSocket, SHUT_RDWR);
-                close(swParams->clientSocket);
+                if (swParams->clientSocket > 0) {
+                    shutdown(swParams->clientSocket, SHUT_RDWR);
+                    close(swParams->clientSocket);
+                } 
                 swParams->clientSocket = -1;
             };
 
@@ -958,8 +743,10 @@ namespace Briand
                     } 
                     swParams->torStreamClosed = true;
                 }
-                shutdown(swParams->clientSocket, SHUT_RDWR);
-                close(swParams->clientSocket);
+                if (swParams->clientSocket > 0) {
+                    shutdown(swParams->clientSocket, SHUT_RDWR);
+                    close(swParams->clientSocket);
+                } 
                 swParams->clientSocket = -1;
             };
 
@@ -1077,8 +864,10 @@ namespace Briand
             ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy closing socket.\n");    
             #endif
 
-            shutdown(this->proxySocket, SHUT_RDWR);
-            close(this->proxySocket);   
+            if (this->proxySocket > 0) {
+                shutdown(this->proxySocket, SHUT_RDWR);
+                close(this->proxySocket);
+            } 
         }
         
         #if !SUPPRESSDEBUGLOG

@@ -843,7 +843,6 @@ namespace Briand {
 		// GUARD
 		if (!this->FindAndPopulateRelay(0)) { 
 			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
-			BriandTorStatistics::STAT_NUM_CACHE_GUARD_MISS++;
 			return false;  
 		}
 
@@ -855,7 +854,6 @@ namespace Briand {
 		// MIDDLE
 		if (!this->FindAndPopulateRelay(1)) { 
 			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
-			BriandTorStatistics::STAT_NUM_CACHE_MIDDLE_MISS++;
 			return false;  
 		} 
 
@@ -867,7 +865,6 @@ namespace Briand {
 		// EXIT
 		if (!this->FindAndPopulateRelay(2)) { 
 			this->StatusUnsetFlag(CircuitStatusFlag::BUSY);
-			BriandTorStatistics::STAT_NUM_CACHE_EXIT_MISS++;
 			return false;  
 		} 
 
@@ -1040,7 +1037,10 @@ namespace Briand {
 		return true;
 	}
 
-	void BriandTorCircuit::TorStreamCheckSendMe(const shared_ptr<vector<unsigned char>> latestReceivedDigest) {
+	void BriandTorCircuit::TorStreamCheckSendMe() {
+
+
+
 		// Check if a new RELAY_SENDME (Stream-level) is required
 		if (this->CURRENT_STREAM_WINDOW <= 450) {
 
@@ -1076,16 +1076,16 @@ namespace Briand {
 			//sendMePayload->reserve(BriandTorCell::PAYLOAD_LEN); // reserve some bytes
 			sendMePayload->push_back(0x01); // version 1 authenticated cell
 
-			if (latestReceivedDigest == nullptr) {
-				ESP_LOGE(STREAMLOGTAG, "[ERR][%08X] ERROR! A RELAY_DATA is received but FullDigest field is not populated for the RELAY_SENDME cell.\n", this->CIRCID);
+			if (this->LD == nullptr) {
+				ESP_LOGE(STREAMLOGTAG, "[ERR][%08X] ERROR! FullDigest field is not populated for the RELAY_SENDME cell.\n", this->CIRCID);
 				return;
 			}
 
 			// Append the size
-			sendMePayload->push_back(static_cast<unsigned char>(latestReceivedDigest->size()));
+			sendMePayload->push_back(static_cast<unsigned char>(this->LD->size()));
 
 			// Append the received cell digest (that is the last RELAY_DATA received cell)
-			sendMePayload->insert(sendMePayload->end(), latestReceivedDigest->begin(), latestReceivedDigest->end());
+			sendMePayload->insert(sendMePayload->end(), this->LD->begin(), this->LD->end());
 
 			// This is a Stream-sendme cell, so StreamID remains
 
@@ -1099,9 +1099,12 @@ namespace Briand {
 				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(STREAMLOGTAG, "[DEBUG][%08X] RELAY_SENDME sent.\n", this->CIRCID);
 				#endif
+
+				printf("*** [%08X] RELAY SENDME StreamID=%04X\n", this->CIRCID, this->CURRENT_STREAM_ID);
 			}
 		}
 		
+		// Check if a new RELAY_SENDME (Circuit-level) is required
 		if (this->CURRENT_CIRC_WINDOW <= 900) {
 			// Re-increment by 100 the circuit window (now, because async threads could do all at same time!)
 			this->CURRENT_CIRC_WINDOW += 100;
@@ -1125,16 +1128,16 @@ namespace Briand {
 			//sendMePayload->reserve(BriandTorCell::PAYLOAD_LEN); // reserve some bytes
 			sendMePayload->push_back(0x01); // version 1 authenticated cell
 
-			if (latestReceivedDigest == nullptr) {
-				ESP_LOGE(STREAMLOGTAG, "[ERR][%08X] ERROR! A RELAY_DATA is received but FullDigest field is not populated for the RELAY_SENDME (circuit-level) cell.\n", this->CIRCID);
+			if (this->LD == nullptr) {
+				ESP_LOGE(STREAMLOGTAG, "[ERR][%08X] ERROR! FullDigest field is not populated for the RELAY_SENDME (circuit-level) cell.\n", this->CIRCID);
 				return;
 			}
 
 			// Append the size
-			sendMePayload->push_back(static_cast<unsigned char>(latestReceivedDigest->size()));
+			sendMePayload->push_back(static_cast<unsigned char>(this->LD->size()));
 
 			// Append the received cell digest (that is the last RELAY_DATA received cell)
-			sendMePayload->insert(sendMePayload->end(), latestReceivedDigest->begin(), latestReceivedDigest->end());
+			sendMePayload->insert(sendMePayload->end(), this->LD->begin(), this->LD->end());
 
 			// Send the cell : This is a Circuit-Sendme cell, so StreamID must be zero
 			if (!this->TorStreamWriteData(BriandTorCellRelayCommand::RELAY_SENDME, sendMePayload, true, 0x0000)) {
@@ -1146,8 +1149,11 @@ namespace Briand {
 				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(STREAMLOGTAG, "[DEBUG][%08X] RELAY_SENDME (circuit-level) sent.\n", this->CIRCID);
 				#endif
+
+				printf("*** [%08X] CIRCUIT RELAY SENDME StreamID=%04X\n", this->CIRCID, this->CURRENT_STREAM_ID);
 			}
 		}
+	
 	}
 
 	bool BriandTorCircuit::TorStreamWriteData(const BriandTorCellRelayCommand& command, const unique_ptr<vector<unsigned char>>& data, const bool& overrideSID /*= false*/, const unsigned short& SID /*= 0*/) {
@@ -1177,6 +1183,10 @@ namespace Briand {
 		}
 
 		tempCell->PrepareAsRelayCell(command, ( overrideSID ? SID : this->CURRENT_STREAM_ID ), this->exitNode->KEY_ForwardDigest_Df);
+
+		// SAVE THE DIGEST FOR THE RELAY_SENDME
+		this->LD = make_shared<vector<unsigned char>>();
+		this->LD->insert(this->LD->begin(), tempCell->GetRelayCellDigest()->begin(), tempCell->GetRelayCellDigest()->end());			
 
 		// Encrypt with exit key
 		tempCell->ApplyOnionSkin(*this->exitNode);
@@ -1363,8 +1373,7 @@ namespace Briand {
 					this->CURRENT_CIRC_WINDOW--;
 
 					// Check if RELAY_SENDME required
-					auto sharedDigest = make_shared<vector<unsigned char>>(*tempCell->GetRelayCellDigest().get());
-					this->TorStreamCheckSendMe(sharedDigest);
+					this->TorStreamCheckSendMe();
 
 					printf("*** [%08X] TorStreamReadData CYCLE CONTINUE FOR ME StreamID=%04X\n", this->CIRCID, this->CURRENT_STREAM_ID);
 
@@ -1404,8 +1413,7 @@ namespace Briand {
 					this->CURRENT_CIRC_WINDOW--;
 
 					// Check if RELAY_SENDME required
-					auto sharedDigest = make_shared<vector<unsigned char>>(*tempCell->GetRelayCellDigest().get());
-					this->TorStreamCheckSendMe(sharedDigest);
+					this->TorStreamCheckSendMe();
 
 				}
 			}
@@ -1941,6 +1949,9 @@ namespace Briand {
 		// Update: send only if streamid is set (>0) to avoid errors
 		
 		if (this->CURRENT_STREAM_ID > this->LAST_ENDED_STREAM_ID) {
+			// Reset STREAM WINDOW
+			this->CURRENT_STREAM_WINDOW = 500;
+
 			// Send a single cell with reason REASON_MISC (see tor specs 6.3)
 			// Tors SHOULD NOT send any reason except REASON_MISC for a stream that they have originated.
 
@@ -1955,6 +1966,8 @@ namespace Briand {
 			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG][%08X] RELAY_END sent for StreamID %04X.\n", this->CIRCID, this->CURRENT_STREAM_ID);
 			#endif
+		
+			printf("*** [%08X] RELAY END StreamID=%04X\n", this->CIRCID, this->CURRENT_STREAM_ID);
 		}
 
 		// Update: wait that the end node receive it. (1 second max)

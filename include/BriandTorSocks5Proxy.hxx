@@ -83,7 +83,7 @@ namespace Briand
         /* DELETED SWITCHED TO pthreads TaskHandle_t proxyTaskHandle;*/
 
         /** Proxy status */
-        bool proxyStarted;
+        static bool proxyStarted;
 
         /** Proxy user */
         static string proxyUser;
@@ -108,32 +108,20 @@ namespace Briand
         static unsigned char REQUEST_QUEUE;
 
         /** Number of MAX requests, limits the call to HandleClient(), fixed to TOR_CIRCUITS_KEEPALIVE */
-        static const unsigned char REQUEST_QUEUE_LIMIT = (static_cast<unsigned char>((TOR_CIRCUITS_KEEPALIVE*2)/3) > 0 ? static_cast<unsigned char>((TOR_CIRCUITS_KEEPALIVE*2)/3) : 1);
+        static const unsigned char REQUEST_QUEUE_LIMIT = (static_cast<unsigned char>( (TOR_SOCKS5_PROXY_MAX_CONN/100.0)*TOR_CIRCUITS_KEEPALIVE ) > 0 ? static_cast<unsigned char>( (TOR_SOCKS5_PROXY_MAX_CONN/100.0)*TOR_CIRCUITS_KEEPALIVE ) : 1);
 
         /**
          * Handles a single request to this proxy (accept() and starts HandleClient)
          * @param serverSock the server socket FD (int)
          * @param proxyStatus this object's proxyStatus reference, to kill thread if proxy is stopped
         */
-        static void HandleRequest(const int& serverSock, const bool& proxyStarted);
+        static void HandleRequest(const int serverSock, const bool& proxyStarted);
 
         /**
          * Handles a single client (async)
          * @param clientSock the connected client socket FD (int)
         */
-        static void HandleClient(const int& clientSock);
-
-        /**
-         * Handles a single client receive -> write to tor (async)
-         * @param workerParams a reference to an existing instance of the StreamWorkerParams
-        */
-        /* DELETED static void ProxyClient_Stream_Reader(void* swParams); */
-
-        /**
-         * Handles a single tor receive -> write to client (async)
-         * @param workerParams a reference to an existing instance of the StreamWorkerParams
-        */
-        /* DELETED static void ProxyClient_Stream_Writer(void* swParams); */
+        static void HandleClient(const int clientSock);
 
         /**
          * std::async future Handles a single client receive -> write to tor (async)

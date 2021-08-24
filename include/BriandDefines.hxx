@@ -39,11 +39,13 @@
     constexpr unsigned char NET_CONNECT_TIMEOUT_S = 60;		    // Elapsed this number of seconds, any connection is intended to be timed out!
     constexpr unsigned char NET_IO_TIMEOUT_S = 30;		        // Timeout (seconds) for socket read/write operations (0 for unlimited)
     constexpr const char* NTP_SERVER = "pool.ntp.org";    	    // NTP server to use
-    constexpr unsigned short TOR_CIRCUITS_KEEPALIVE = 8;	    // No. of Tor circuits to be kept always open and ready (avoid more than 6 on ESP (non WRover) Platform!)
+    constexpr bool TOR_CIRCUITS_RANDOM_SKIP = false;            // Skip random bytes of consensus to increase randomness of cache (however could not be a good choice for speed)
+    constexpr unsigned short TOR_CIRCUITS_KEEPALIVE = 8;	    // No. of Tor circuits to be kept always open and ready (avoid more than 8 on ESP Platform without spiram!)
     constexpr unsigned short TOR_CIRCUITS_MAX_TIME_S = 900;	    // Elapsed this time (seconds) the Tor circuit will be closed automatically.
     constexpr unsigned short TOR_CIRCUITS_MAX_REQUESTS = 60;    // After N requests the Tor circuit will be closed and changed.
-    constexpr unsigned char TOR_NODES_CACHE_SIZE = 100;		    // No. of Tor nodes, for each type (guard/exit/middle) to keep saved. (higher parameter leds to higher cache download!)
+    constexpr unsigned char TOR_NODES_CACHE_SIZE = 20;		    // No. of Tor nodes, for each type (guard/exit/middle) to keep saved. (higher parameter leds to higher cache download!)
     constexpr unsigned char TOR_NODES_CACHE_VAL_H = 24;		    // Hours since the chache of nodes is considered OLD and must be downloaded again
+    constexpr unsigned char TOR_SOCKS5_PROXY_MAX_CONN = 67;     // % of maximum accepted connection accepted by proxy (Max = (TOR_SOCKS5_PROXY_MAX_CONN/100.0)*TOR_CIRCUITS_KEEPALIVE) (avoid more than 67% on ESP Platform without spiram!)
     constexpr unsigned short TOR_SOCKS5_PROXY_PORT = 80;        // Default port of the Socks5 Proxy
     constexpr unsigned short TOR_SOCKS5_PROXY_TIMEOUT_S = 30;   // Timeout in seconds the Socks5 Proxy select/read/write calls
     

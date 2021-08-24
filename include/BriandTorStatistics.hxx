@@ -49,8 +49,12 @@ namespace Briand {
 		static unsigned int STAT_CACHE_BUILD_TIME;
 		/** No. of dropped node due to same-family ips */
 		static unsigned int STAT_NUM_CACHE_SAME_IP_DROP;
+		/** No. of dropped exit node due to minimum port settings */
+		static unsigned int STAT_NUM_CACHE_EXIT_PORT_DROP;
 		/** Statistics field for guard node connection error */
 		static unsigned int STAT_NUM_GUARD_CONN_ERR;
+		/** Statistics field for number of descriptor fetch errors */
+		static unsigned int STAT_NUM_DESCRIPTOR_FETCH_ERR;
 		/** Statistics field for no. of failed CREATE2 */
 		static unsigned int STAT_NUM_CREATE2_FAIL;
 		/** Statistics field for no. of failed EXTEND2 */

@@ -30,10 +30,12 @@ namespace Briand {
 	unsigned int BriandTorStatistics::STAT_NUM_CACHE_MIDDLE_MISS = 0;
 	unsigned int BriandTorStatistics::STAT_NUM_CACHE_EXIT_MISS = 0;
 	unsigned int BriandTorStatistics::STAT_NUM_GUARD_CONN_ERR = 0;
+	unsigned int BriandTorStatistics::STAT_NUM_DESCRIPTOR_FETCH_ERR = 0;
 	unsigned int BriandTorStatistics::STAT_NUM_CREATE2_FAIL = 0;
 	unsigned int BriandTorStatistics::STAT_NUM_EXTEND2_FAIL = 0;
 	unsigned int BriandTorStatistics::STAT_BUILD_TIME_MAX = 0;
 	unsigned int BriandTorStatistics::STAT_NUM_CACHE_SAME_IP_DROP = 0;
+	unsigned int BriandTorStatistics::STAT_NUM_CACHE_EXIT_PORT_DROP = 0;
 	unsigned int BriandTorStatistics::STAT_TOR_SEND_TIME_AVG = 0;
 	unsigned int BriandTorStatistics::STAT_TOR_SEND_N = 0;
 	unsigned int BriandTorStatistics::STAT_TOR_RECV_TIME_AVG = 0;
@@ -89,7 +91,9 @@ namespace Briand {
 		printf("No. of cache middle fail: %u\n", BriandTorStatistics::STAT_NUM_CACHE_MIDDLE_MISS);
 		printf("No. of cache exit fail: %u\n", BriandTorStatistics::STAT_NUM_CACHE_EXIT_MISS);
 		printf("No. of cache fail for same family ip: %u\n", BriandTorStatistics::STAT_NUM_CACHE_SAME_IP_DROP);
+		printf("No. of cache fail for port settings requirements: %u\n", BriandTorStatistics::STAT_NUM_CACHE_EXIT_PORT_DROP);
 		printf("No. of failed connections to guard: %u\n", BriandTorStatistics::STAT_NUM_GUARD_CONN_ERR);
+		printf("No. of failed descriptor fetch: %u\n", BriandTorStatistics::STAT_NUM_DESCRIPTOR_FETCH_ERR);
 		printf("No. of failed create2: %u\n", BriandTorStatistics::STAT_NUM_CREATE2_FAIL);
 		printf("No. of failed extend2: %u\n", BriandTorStatistics::STAT_NUM_EXTEND2_FAIL);
 		printf("Max time to build a circuit (ms): %u\n", BriandTorStatistics::STAT_BUILD_TIME_MAX);

@@ -24,6 +24,7 @@
 #include "BriandNet.hxx"
 #include "BriandTorCertificates.hxx"
 #include "BriandTorCryptoUtils.hxx"
+#include "BriandTorStatistics.hxx"
 
 using namespace std;
 
@@ -396,6 +397,8 @@ namespace Briand {
 			while (this->descriptorNtorOnionKey->length() % 4 != 0)
 				this->descriptorNtorOnionKey->push_back('=');
 		}
+
+		if (!success) BriandTorStatistics::STAT_NUM_DESCRIPTOR_FETCH_ERR++;
 
 		return success;
 	}

@@ -43,7 +43,8 @@ namespace Briand {
 
 		// Always skip some nodees
 		// When consensus is set, limit random skip lines to 3000.
-		this->skipRandomResults = esp_random() % 3001;
+		// However could be not a good choice because of fast connections, so parametrized
+		this->skipRandomResults = TOR_CIRCUITS_RANDOM_SKIP ? esp_random() % 3001 : 0;
 
 		// Random picking for the array (see method GetGuard etc.)
 		this->randomPick = BriandUtils::GetRandomByte() % TOR_NODES_CACHE_SIZE;
@@ -403,6 +404,11 @@ namespace Briand {
 							exitCheck = true;
 						}
 
+						// Update statistics
+						if (!exitCheck) {
+							BriandTorStatistics::STAT_NUM_CACHE_EXIT_PORT_DROP++;
+						}
+
 						// Check if this node is suitable as EXIT, GUARD or MIDDLE
 						// If the exitCheck is false then exit node is not suitable or an "r " line has been found, so error, do not insert anything!
 						if (exitCheck && fExitNodes < TOR_NODES_CACHE_SIZE && (rFlags & TOR_FLAGS_EXIT_MUST_HAVE) == TOR_FLAGS_EXIT_MUST_HAVE) {
@@ -650,6 +656,7 @@ namespace Briand {
 			if (!file.good()) {
 				file.close();
 				ESP_LOGE(LOGTAG, "[WARN] Search failed due to %hu failed tentatives to open file %s.\n", fopenTentatives, this->NODES_FILE_GUARD);
+				BriandTorStatistics::STAT_NUM_CACHE_GUARD_MISS++;
 				return nullptr;
 			}
 
@@ -690,7 +697,8 @@ namespace Briand {
 			if (line.size() < 32) {
 				ESP_LOGW(LOGTAG, "[WARN] Cache file is not valid (guard) line #%hu / #%hu has size %zu: <%s>.\n", this->randomPick, fileLines, line.size(), line.c_str());
 				std::remove(NODES_FILE_MIDDLE);
-				return relay;
+				BriandTorStatistics::STAT_NUM_CACHE_GUARD_MISS++;
+				return nullptr;
 			}
 
 			// At this point (should always arrive there!) create the relay object
@@ -712,6 +720,8 @@ namespace Briand {
 		else {
 			ESP_LOGW(LOGTAG, "[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
 		}
+
+		if (relay == nullptr) BriandTorStatistics::STAT_NUM_CACHE_GUARD_MISS++;
 
 		return relay;
 	}
@@ -749,6 +759,7 @@ namespace Briand {
 				if (!file.good()) {
 					file.close();
 					ESP_LOGE(LOGTAG, "[WARN] Search failed due to %hu failed tentatives to open file %s.\n", fopenTentatives, this->NODES_FILE_MIDDLE);
+					BriandTorStatistics::STAT_NUM_CACHE_MIDDLE_MISS++;
 					return nullptr;
 				}
 
@@ -789,7 +800,8 @@ namespace Briand {
 				if (line.size() < 32) {
 					ESP_LOGW(LOGTAG, "[WARN] Cache file is not valid (middle) line #%hu / #%hu has size %zu: <%s>.\n", this->randomPick, fileLines, line.size(), line.c_str());
 					std::remove(NODES_FILE_MIDDLE);
-					return relay;
+					BriandTorStatistics::STAT_NUM_CACHE_MIDDLE_MISS++;
+					return nullptr;
 				}
 
 				// At this point (should always arrive there!) create the relay object
@@ -818,6 +830,8 @@ namespace Briand {
 		else {
 			ESP_LOGW(LOGTAG, "[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
 		}
+
+		if (relay == nullptr) BriandTorStatistics::STAT_NUM_CACHE_MIDDLE_MISS++;
 
 		return relay;
 	}
@@ -855,6 +869,7 @@ namespace Briand {
 				if (!file.good()) {
 					file.close();
 					ESP_LOGE(LOGTAG, "[WARN] Search failed due to %hu failed tentatives to open file %s.\n", fopenTentatives, this->NODES_FILE_EXIT);
+					BriandTorStatistics::STAT_NUM_CACHE_EXIT_MISS++;
 					return nullptr;
 				}
 
@@ -900,7 +915,8 @@ namespace Briand {
 				if (line.size() < 32) {
 					ESP_LOGW(LOGTAG, "[WARN] Cache file is not valid (exit) line #%hu / #%hu has size %zu: <%s>.\n", this->randomPick, fileLines, line.size(), line.c_str());
 					std::remove(NODES_FILE_EXIT);
-					return relay;
+					BriandTorStatistics::STAT_NUM_CACHE_EXIT_MISS++;
+					return nullptr;
 				}
 
 				// At this point (should always arrive there!) create the relay object
@@ -933,6 +949,8 @@ namespace Briand {
 		else {
 			ESP_LOGW(LOGTAG, "[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
 		}
+
+		if (relay == nullptr) BriandTorStatistics::STAT_NUM_CACHE_EXIT_MISS++;;
 
 		return relay;
 	}
