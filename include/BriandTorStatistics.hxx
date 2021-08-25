@@ -59,13 +59,19 @@ namespace Briand {
 		static unsigned int STAT_NUM_CREATE2_FAIL;
 		/** Statistics field for no. of failed EXTEND2 */
 		static unsigned int STAT_NUM_EXTEND2_FAIL;
-		/** Max time to build a circuit, milliseconds */
-		static unsigned int STAT_BUILD_TIME_MAX;
-		/** Max time to send a stream cell through Tor, milliseconds */
+		/** No. of fetched descriptors */
+		static unsigned int STAT_DESCRIPTORS_N;
+		/** Avg time to fetch a node descriptor */
+		static unsigned int STAT_DESCRIPTORS_TIME_AVG;
+		/** No. of built circuits */
+		static unsigned int STAT_BUILT_N;
+		/** Avg time to build a circuit, milliseconds */
+		static unsigned int STAT_BUILD_TIME_AVG;
+		/** Avg time to send a stream cell through Tor, milliseconds */
 		static unsigned int STAT_TOR_SEND_TIME_AVG;
 		/** No. of stream cells sent */
 		static unsigned int STAT_TOR_SEND_N;
-		/** Max time to receive a stream cell from Tor, milliseconds */
+		/** Avg time to receive a stream cell from Tor, milliseconds */
 		static unsigned int STAT_TOR_RECV_TIME_AVG;
 		/** No. of stream cells sent */
 		static unsigned int STAT_TOR_RECV_N;

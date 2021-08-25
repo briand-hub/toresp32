@@ -154,6 +154,11 @@ namespace Briand {
 
 	void BriandTorCircuit::Cleanup() {
 
+		// If circuit is busy in something else, wait. Otherwise concurrent thread operations may destroy objects when used
+		while(this->StatusGetFlag(CircuitStatusFlag::BUSY)) {
+			vTaskDelay(200/portTICK_PERIOD_MS);
+		}
+
 		this->StatusSetFlag(CircuitStatusFlag::BUSY);
 
 		if (this->relaySearcher != nullptr) this->relaySearcher.reset();
@@ -1030,9 +1035,9 @@ namespace Briand {
 
 		// Statistics
 		// esp_timer_get_time() returns microseconds!
-		if (BriandTorStatistics::STAT_BUILD_TIME_MAX < (esp_timer_get_time() - buildStartTime)/1000) {
-			BriandTorStatistics::STAT_BUILD_TIME_MAX = (esp_timer_get_time() - buildStartTime)/1000;
-		}
+		BriandTorStatistics::STAT_BUILD_TIME_AVG = (BriandTorStatistics::STAT_BUILD_TIME_AVG*BriandTorStatistics::STAT_BUILT_N) + ((esp_timer_get_time() - buildStartTime)/1000) ;
+		BriandTorStatistics::STAT_BUILT_N++;
+		BriandTorStatistics::STAT_BUILD_TIME_AVG /= BriandTorStatistics::STAT_BUILT_N;
 		
 		return true;
 	}
@@ -1099,8 +1104,6 @@ namespace Briand {
 				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(STREAMLOGTAG, "[DEBUG][%08X] RELAY_SENDME sent.\n", this->CIRCID);
 				#endif
-
-				printf("*** [%08X] RELAY SENDME StreamID=%04X\n", this->CIRCID, this->CURRENT_STREAM_ID);
 			}
 		}
 		
@@ -1149,8 +1152,6 @@ namespace Briand {
 				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(STREAMLOGTAG, "[DEBUG][%08X] RELAY_SENDME (circuit-level) sent.\n", this->CIRCID);
 				#endif
-
-				printf("*** [%08X] CIRCUIT RELAY SENDME StreamID=%04X\n", this->CIRCID, this->CURRENT_STREAM_ID);
 			}
 		}
 	
@@ -1351,8 +1352,6 @@ namespace Briand {
 					if (errCodeOld == BriandError::BRIAND_ERR_OK) {
 						wasPreviousStream = true;
 
-						printf("*** [%08X] TorStreamReadData Cell belongs to a previous stream with id %04X (current is %04X)\n", this->CIRCID, i, this->CURRENT_STREAM_ID);
-
 						#if !SUPPRESSDEBUGLOG
 						ESP_LOGD(STREAMLOGTAG, "[%08X] TorStreamReadData Cell belongs to a previous stream with id %04X (current: %04X). Restarting to read.\n", this->CIRCID, i, this->CURRENT_STREAM_ID);
 						#endif
@@ -1375,15 +1374,12 @@ namespace Briand {
 					// Check if RELAY_SENDME required
 					this->TorStreamCheckSendMe();
 
-					printf("*** [%08X] TorStreamReadData CYCLE CONTINUE FOR ME StreamID=%04X\n", this->CIRCID, this->CURRENT_STREAM_ID);
-
 					continue;
 				}
 
 				if (!wasPreviousStream && errCode != BriandError::BRIAND_ERR_OK) {
 					// If is NOT recognized here, an error occoured.
 					
-					printf("*** [%08X] TorStreamReadData RELAY NOT recognized at Exit (%s). StreamID=%04X, raw payload at exit: ", this->CIRCID, BriandUtils::BriandErrorStr(errCode), this->CURRENT_STREAM_ID);
 					tempCell->PrintCellPayloadToSerial();
 
 					#if !SUPPRESSDEBUGLOG
@@ -1506,7 +1502,7 @@ namespace Briand {
 					#endif
 
 					//
-					// TODO : Something to do?
+					// Something to do? I think no... I am not OR but OP
 					//
 
 					continue;
@@ -1966,8 +1962,6 @@ namespace Briand {
 			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG][%08X] RELAY_END sent for StreamID %04X.\n", this->CIRCID, this->CURRENT_STREAM_ID);
 			#endif
-		
-			printf("*** [%08X] RELAY END StreamID=%04X\n", this->CIRCID, this->CURRENT_STREAM_ID);
 		}
 
 		// Update: wait that the end node receive it. (1 second max)
@@ -1998,6 +1992,12 @@ namespace Briand {
 
 	void BriandTorCircuit::TearDown(BriandTorDestroyReason reason /*  = BriandTorDestroyReason::NONE */) {
 		this->StatusSetFlag(CircuitStatusFlag::CLOSING);
+
+		// If circuit is busy in something else, wait. Otherwise concurrent thread operations may destroy objects when used
+		while(this->StatusGetFlag(CircuitStatusFlag::BUSY)) {
+			vTaskDelay(200/portTICK_PERIOD_MS);
+		}
+
 		this->StatusSetFlag(CircuitStatusFlag::BUSY);
 
 		BriandTorStatistics::SaveStatistic(reason);

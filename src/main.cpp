@@ -123,6 +123,7 @@ void TorEsp32Setup() {
 	printf("[INFO] Setting ESP default log level to error...\n");
 	esp_log_level_set("*", ESP_LOG_ERROR);
 	BRIAND_SET_LOG("*", ESP_LOG_ERROR);
+	BRIAND_SET_LOG("briandcircuit", ESP_LOG_DEBUG);
 
 	// Initialize the NVS
 	printf("[INFO] Initializing NVS...");

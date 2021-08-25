@@ -2,6 +2,7 @@
 
 ## Next steps
 
+* Consider using recursive_mutex for circuit instead of BUSY flag.
 * Consider change circuit build policy to exclude current exit nodes used
 * Edit wiki for new queue limit setting
 * Place BriandError management on strategic points for debugging
@@ -19,7 +20,7 @@
 ##
 
 * New configurable queue limit settings.
-* Investigate on protocol errors: seems same exit node in multiple circuit causing some trouble. However protocol error always comes from middle :/ **SOLVED** in RELAY_SENDME the last sent (by *my* side digest is required).
+* Investigate on protocol errors: seems same exit node in multiple circuit causing some trouble. However protocol error always comes from middle :/ 
 
 Seems to be, persistent errors are (sample log):
 
@@ -37,7 +38,11 @@ W briandstream [ERR][86F4E31A] TorStream error, received unexpected cell from mi
 W briandstream [WARN][86F4E31A] TorStreamRead received RELAY_TRUNCATE / RELAY_TRUNCATED, reason = PROTOCOL. StreamID is 0004, Stream Window is 498, Circ Window is 998
 ```
 
-May be due to un-real window resizing exactly at 450 (stream) / 900 (circuit). Should do a dedicated task or trigger before this limit...
+May be due to un-real window resizing exactly at 450 (stream) / 900 (circuit). Should do a dedicated task or trigger before this limit... no
+
+**SOLVED** in RELAY_SENDME the last sent (by *my* side digest is required).
+
+* Mbedtls on linux platform with similar settings like ESP. However sometimes very slow on read operations. Should investigate.
 
 ## 2021-08-21
 

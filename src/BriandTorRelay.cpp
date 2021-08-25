@@ -311,6 +311,9 @@ namespace Briand {
 	}
 
 	bool BriandTorRelay::FetchDescriptorsFromAuthority() {
+		// Statistics
+		auto fetchStartTime = esp_timer_get_time();
+
 		// Start from the last used dir, do not create infinite loop
 		bool success = false;
 		unsigned short startingDir = TOR_DIR_LAST_USED;
@@ -397,6 +400,12 @@ namespace Briand {
 			while (this->descriptorNtorOnionKey->length() % 4 != 0)
 				this->descriptorNtorOnionKey->push_back('=');
 		}
+
+		// Statistics
+		// esp_timer_get_time() returns microseconds!
+		BriandTorStatistics::STAT_DESCRIPTORS_TIME_AVG = (BriandTorStatistics::STAT_DESCRIPTORS_TIME_AVG*BriandTorStatistics::STAT_DESCRIPTORS_N) + ((esp_timer_get_time() - fetchStartTime)/1000) ;
+		BriandTorStatistics::STAT_DESCRIPTORS_N++;
+		BriandTorStatistics::STAT_DESCRIPTORS_TIME_AVG /= BriandTorStatistics::STAT_DESCRIPTORS_N;
 
 		if (!success) BriandTorStatistics::STAT_NUM_DESCRIPTOR_FETCH_ERR++;
 

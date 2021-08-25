@@ -25,7 +25,7 @@
     #define BRIANDDEFINES_H_        
 
     /* If set to 1, NO DEBUG log for components will be compiled. To have debug log on just set to 0 (#define SUPPRESSDEBUGLOG 0) */
-    #define SUPPRESSDEBUGLOG 1
+    #define SUPPRESSDEBUGLOG 0
 
     constexpr unsigned char BUILTIN_LED_MODE = 1;               // Built-in led mode: 0 = OFF, 1 = ON
     constexpr bool CHANGE_MAC_TO_RANDOM = true;				    // choose if you want to change the MAC address to a random one for improved security
@@ -42,7 +42,7 @@
     constexpr bool TOR_CIRCUITS_RANDOM_SKIP = false;            // Skip random bytes of consensus to increase randomness of cache (however could not be a good choice for speed)
     constexpr unsigned short TOR_CIRCUITS_KEEPALIVE = 8;	    // No. of Tor circuits to be kept always open and ready (avoid more than 8 on ESP Platform without spiram!)
     constexpr unsigned short TOR_CIRCUITS_MAX_TIME_S = 900;	    // Elapsed this time (seconds) the Tor circuit will be closed automatically.
-    constexpr unsigned short TOR_CIRCUITS_MAX_REQUESTS = 60;    // After N requests the Tor circuit will be closed and changed.
+    constexpr unsigned short TOR_CIRCUITS_MAX_REQUESTS = 1000;  // After N requests the Tor circuit will be closed and changed.
     constexpr unsigned char TOR_NODES_CACHE_SIZE = 20;		    // No. of Tor nodes, for each type (guard/exit/middle) to keep saved. (higher parameter leds to higher cache download!)
     constexpr unsigned char TOR_NODES_CACHE_VAL_H = 24;		    // Hours since the chache of nodes is considered OLD and must be downloaded again
     constexpr unsigned char TOR_SOCKS5_PROXY_MAX_CONN = 67;     // % of maximum accepted connection accepted by proxy (Max = (TOR_SOCKS5_PROXY_MAX_CONN/100.0)*TOR_CIRCUITS_KEEPALIVE) (avoid more than 67% on ESP Platform without spiram!)
@@ -159,6 +159,18 @@
         // #include <mbedtls/aes.h> gives linker error on ESP_PLATFORM!
         #include <mbedtls/aes.h>
 
+        /* On linux platform make mbedtls settings similar to ESP ones */
+        #include <mbedtls/config.h>
+        
+        #ifdef MBEDTLS_SSL_IN_CONTENT_LEN
+        #undef MBEDTLS_SSL_IN_CONTENT_LEN
+        #endif
+        #define MBEDTLS_SSL_IN_CONTENT_LEN 4096
+        
+        #ifdef MBEDTLS_SSL_OUT_CONTENT_LEN
+        #undef MBEDTLS_SSL_OUT_CONTENT_LEN
+        #endif
+        #define MBEDTLS_SSL_OUT_CONTENT_LEN 2048
 
         /* Re-define project-specific IDF functions */
         void BRIAND_SET_LOG(const char*, esp_log_level_t);
