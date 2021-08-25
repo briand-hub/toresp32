@@ -79,7 +79,13 @@ namespace Briand
 
     /*static*/ void BriandTorCircuitsManager::CircuitsTaskSingle(void* noparam) {
         // PTHREAD IMPLEMENTATION
-        while(!BriandTorCircuitsManager::isStopped && !BriandTorRelaySearcher::CACHE_REBUILDING) {
+        while(!BriandTorCircuitsManager::isStopped) {
+
+            // If rebulding cache do not run.
+            if (BriandTorRelaySearcher::CACHE_REBUILDING) {
+                vTaskDelay(2000 / portTICK_PERIOD_MS);
+                continue;
+            }
 
             #if !SUPPRESSDEBUGLOG
             ESP_LOGD(LOGTAG, "[DEBUG] CircuitsManager main task invoked, checking for instances to be created.\n");
