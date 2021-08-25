@@ -32,8 +32,8 @@ namespace Briand {
 		protected:
 
         #if defined(ESP_PLATFORM)
-        /** Task re-execution time, obtained by tests, in milliseconds. (ESP, min.30 seconds) */
-        static const unsigned short TASK_WAIT_BEFORE_NEXT = 30*1000;
+        /** Task re-execution time, obtained by tests, in milliseconds. (ESP, min.15 seconds) */
+        static const unsigned short TASK_WAIT_BEFORE_NEXT = 15*1000;
         #else
         /** Task re-execution time, obtained by tests, in milliseconds. (Linux could be less, 5 seconds) */
         static const unsigned short TASK_WAIT_BEFORE_NEXT = 5*1000;
@@ -43,7 +43,7 @@ namespace Briand {
         static bool isStopped;
 
         /** The circuit pool */
-        static unique_ptr<unique_ptr<BriandTorCircuit>[]> CIRCUITS;
+        static unique_ptr<unique_ptr<BriandTorThreadSafeCircuit>[]> CIRCUITS;
 
         /** Last used circuit */
         unsigned short CIRCUIT_LAST_USED;
@@ -101,7 +101,7 @@ namespace Briand {
          * This method returns a valid circuit to perform requests
          * @return Raw pointer to the circuit (BE CAREFUL!!), nullptr if no circuits available
         */
-        BriandTorCircuit* GetCircuit();
+        BriandTorThreadSafeCircuit* GetCircuit();
 
         /**
          * Method returns true if is started

@@ -68,6 +68,8 @@
     #include <iomanip>
     #include <algorithm>
     #include <future>
+    #include <mutex>
+    #include <queue>
 
     /* mbedtls and libsodium libraries */
     #include <sodium.h>

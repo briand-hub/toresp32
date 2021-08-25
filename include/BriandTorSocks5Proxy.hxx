@@ -37,7 +37,7 @@ namespace Briand
             /** The connected client socket */
             int clientSocket;
             /** Reference to the circuit chosen */
-            BriandTorCircuit* circuit;
+            BriandTorThreadSafeCircuit* circuit;
             /** If true, there is nothing more to read from client */
             bool readerFinished;
             /** If true, there is nothing more to write to client */
@@ -65,11 +65,11 @@ namespace Briand
             }
 
             bool GoodForWrite() {
-                return (!this->clientDisconnected && !this->clientDisconnected && !this->writerFinished && circuit != NULL && clientSocket != -1);
+                return (!this->clientDisconnected && !this->clientDisconnected && !this->writerFinished && circuit != NULL && circuit->CircuitInstance != NULL && clientSocket != -1);
             }
 
             bool GoodForRead() {
-                return (!this->clientDisconnected && !this->clientDisconnected && !this->readerFinished && circuit != NULL && clientSocket != -1);
+                return (!this->clientDisconnected && !this->clientDisconnected && !this->readerFinished && circuit != NULL && circuit->CircuitInstance != NULL && clientSocket != -1);
             }
         };
 
@@ -78,9 +78,6 @@ namespace Briand
 
         /** Port of running proxy */
         unsigned short proxyPort;
-
-        /** IDF vTask handle */
-        /* DELETED SWITCHED TO pthreads TaskHandle_t proxyTaskHandle;*/
 
         /** Proxy status */
         static bool proxyStarted;
@@ -104,18 +101,26 @@ namespace Briand
         /** Delay in mseconds for stream read/write operations */
         static const unsigned short STREAM_WAIT_MS = 200;
 
-        /** Number of requests, limits the call to HandleClient() */
-        static unsigned char REQUEST_QUEUE;
+        /** Queue of pending clients to serve (contains client sockfd) */
+        static queue<int> REQUEST_QUEUE;
 
-        /** Number of MAX requests, limits the call to HandleClient(), fixed to TOR_CIRCUITS_KEEPALIVE */
+        /** Number of active serving clients */
+        static unsigned char CURRENT_ACTIVE_CLIENTS;
+
+        /** Number of MAX requests, limits the call to HandleClient(), fixed to a % of TOR_CIRCUITS_KEEPALIVE */
         static const unsigned char REQUEST_QUEUE_LIMIT = (static_cast<unsigned char>( (TOR_SOCKS5_PROXY_MAX_CONN/100.0)*TOR_CIRCUITS_KEEPALIVE ) > 0 ? static_cast<unsigned char>( (TOR_SOCKS5_PROXY_MAX_CONN/100.0)*TOR_CIRCUITS_KEEPALIVE ) : 1);
 
         /**
-         * Handles a single request to this proxy (accept() and starts HandleClient)
+         * Handles a single request to this proxy (accept() and queues the request)
          * @param serverSock the server socket FD (int)
-         * @param proxyStatus this object's proxyStatus reference, to kill thread if proxy is stopped
         */
-        static void HandleRequest(const int serverSock, const bool& proxyStarted);
+        static void QueueClientRequest(const int serverSock);
+
+        /**
+         * Manages the request queue, if acceptable calls HandleClient() to serve next client
+         * @param serverSock the server socket FD (int)
+        */
+        static void DeQueueClientRequest(const int serverSock);
 
         /**
          * Handles a single client (async)

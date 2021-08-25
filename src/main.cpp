@@ -82,7 +82,6 @@ void app_main() {
 	TorEsp32Setup();
 
 	// Start Heap monitor
-	// SWTICHED TO pthreads xTaskCreate(heapStats, "HeapStats", STACK_HeapStats, NULL, 1000, NULL);
 
 	auto pcfg = esp_pthread_get_default_config();
 	pcfg.thread_name = "HeapStats";
@@ -123,7 +122,6 @@ void TorEsp32Setup() {
 	printf("[INFO] Setting ESP default log level to error...\n");
 	esp_log_level_set("*", ESP_LOG_ERROR);
 	BRIAND_SET_LOG("*", ESP_LOG_ERROR);
-	BRIAND_SET_LOG("briandcircuit", ESP_LOG_DEBUG);
 
 	// Initialize the NVS
 	printf("[INFO] Initializing NVS...");
@@ -391,7 +389,6 @@ void TorEsp32Main(void* taskParam) {
 			printf("[INFO] LAN IP Address: %s\n", WiFi->GetStaIP().c_str());
 
 			// Start WiFi Check
-			// SWITCHED TO pthreads xTaskCreate(checkStaHealth, "StaCheck", STACK_StaCheck, NULL, 1000, NULL);
 
 			auto pcfg = esp_pthread_get_default_config();
 			pcfg.thread_name = "StaCheck";
@@ -854,10 +851,10 @@ void executeCommand(string& cmd) {
 			}
 			else {
 				printf("CIRCUIT OBJ ------------------------------------------------------------------------------\n");
-				circ->PrintObjectSizeInfo();
+				circ->CircuitInstance->PrintObjectSizeInfo();
 				printf("------------------------------------------------------------------------------------------\n\n");
 				printf("INTERNAL NODE OBJ (guard) ----------------------------------------------------------------\n");
-				circ->guardNode->PrintObjectSizeInfo();
+				circ->CircuitInstance->guardNode->PrintObjectSizeInfo();
 				printf("------------------------------------------------------------------------------------------\n");
 			}
 		}
@@ -948,8 +945,10 @@ void executeCommand(string& cmd) {
 			printf("No suitable circuit found.\n");
 		}
 		else {
-			printf("Using circuit #%hu\n", circuit->internalID);
-			printf("IPv4 address: %s\n", Briand::BriandUtils::IPv4ToString(circuit->TorResolve(cmd)).c_str());
+			printf("Using circuit #%hu\n", circuit->CircuitInstance->internalID);
+			// Lock the circuit
+			unique_lock<mutex> lock(circuit->CircuitMutex);
+			printf("IPv4 address: %s\n", Briand::BriandUtils::IPv4ToString(circuit->CircuitInstance->TorResolve(cmd)).c_str());
 		}
 	}
 	else if (cmd.compare("torstats") == 0) {

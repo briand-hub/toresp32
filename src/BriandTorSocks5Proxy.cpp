@@ -30,7 +30,8 @@ namespace Briand
     BriandTorCircuitsManager* BriandTorSocks5Proxy::torCircuits = nullptr;
     string BriandTorSocks5Proxy::proxyUser = "";
     string BriandTorSocks5Proxy::proxyPassword = "";
-    unsigned char BriandTorSocks5Proxy::REQUEST_QUEUE = 0;
+    queue<int> BriandTorSocks5Proxy::REQUEST_QUEUE;
+    unsigned char BriandTorSocks5Proxy::CURRENT_ACTIVE_CLIENTS = 0;
 
     BriandTorSocks5Proxy::BriandTorSocks5Proxy() {
         this->proxySocket = -1;
@@ -129,8 +130,8 @@ namespace Briand
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy socket binding done.\n");
         #endif
 
-        // Listen for maximum REQUEST_QUEUE_LIMIT connections
-        if (listen(this->proxySocket, REQUEST_QUEUE_LIMIT) != 0) {
+        // Listen for maximum Tor TOR_CIRCUITS_KEEPALIVE connections
+        if (listen(this->proxySocket, TOR_CIRCUITS_KEEPALIVE) != 0) {
             ESP_LOGE(LOGTAG, "[ERR] SOCKS5 Proxy error on binding.\n");
             if (this->proxySocket > 0) {
                 shutdown(this->proxySocket, SHUT_RDWR);
@@ -144,8 +145,6 @@ namespace Briand
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy listening.\n");
         #endif
 
-        // SWITCHED TO pthreads xTaskCreate(this->HandleRequest, "TorProxy", STACK_TorProxy, reinterpret_cast<void*>(this->proxySocket), 25, &this->proxyTaskHandle);
-
         this->proxyStarted = true;
 
         auto pcfg = esp_pthread_get_default_config();
@@ -154,8 +153,13 @@ namespace Briand
         pcfg.prio = 25;
         esp_pthread_set_cfg(&pcfg);
 
-        std::thread t(this->HandleRequest, this->proxySocket, std::ref(this->proxyStarted));
-        t.detach();
+        // Start the en-queuer
+        std::thread tQueue(this->QueueClientRequest, this->proxySocket);
+        tQueue.detach();
+
+        // Start the de-queuer
+        std::thread tDeQueue(this->DeQueueClientRequest, this->proxySocket);
+        tDeQueue.detach();
 
         #if !SUPPRESSDEBUGLOG
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy started.\n");
@@ -174,8 +178,8 @@ namespace Briand
         }
     }
 
-    /* static */ void BriandTorSocks5Proxy::HandleRequest(const int serverSock, const bool& proxyStarted) {
-        while(proxyStarted) {
+    /* static */ void BriandTorSocks5Proxy::QueueClientRequest(const int serverSock) {
+        while(BriandTorSocks5Proxy::proxyStarted) {
             #if !SUPPRESSDEBUGLOG
             ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: accepting connections.\n");
             #endif
@@ -190,29 +194,11 @@ namespace Briand
                 continue;
             }
 
+            BriandTorSocks5Proxy::REQUEST_QUEUE.push(clientSock);
+
             #if !SUPPRESSDEBUGLOG
-            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy accepted incoming connection from %s\n", BriandUtils::IPv4ToString(clientAddr.sin_addr).c_str());
+            ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy queued incoming connection from %s\n", BriandUtils::IPv4ToString(clientAddr.sin_addr).c_str());
             #endif
-
-            // Check if this request would be in allowed limits, if not, wait.
-            // Limit is defined as REQUEST_QUEUE_LIMIT
-            while (REQUEST_QUEUE >= REQUEST_QUEUE_LIMIT) {
-                vTaskDelay(500 / portTICK_PERIOD_MS);
-            }
-
-            REQUEST_QUEUE++;
-
-            // Start task to handle this client
-            // SWITCHED TO pthreads xTaskCreate(HandleClient, "TorProxyReq", STACK_TorProxyReq, reinterpret_cast<void*>(clientSock), 24, NULL);
-            
-            auto pcfg = esp_pthread_get_default_config();
-            pcfg.thread_name = "TorProxyReq";
-            pcfg.stack_size = STACK_TorProxyReq;
-            pcfg.prio = 20;
-            esp_pthread_set_cfg(&pcfg);
-
-            std::thread t(HandleClient, clientSock);
-            t.detach();
 
             // Wait before next run
             vTaskDelay(500 / portTICK_PERIOD_MS);
@@ -223,9 +209,40 @@ namespace Briand
         #endif
     }
 
+    /* static */ void BriandTorSocks5Proxy::DeQueueClientRequest(const int serverSock) {
+         while(BriandTorSocks5Proxy::proxyStarted) {
+            // Check if something could be dequeued
+            if (BriandTorSocks5Proxy::REQUEST_QUEUE.size() > 0 && CURRENT_ACTIVE_CLIENTS < REQUEST_QUEUE_LIMIT) {
+                int clientSock = REQUEST_QUEUE.front();
+                REQUEST_QUEUE.pop();
+                BriandTorSocks5Proxy::CURRENT_ACTIVE_CLIENTS++;
+
+                #if !SUPPRESSDEBUGLOG
+                ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: serving client sockfd %d. Active clients=%hu, Queue size: %zu\n", clientSock, BriandTorSocks5Proxy::CURRENT_ACTIVE_CLIENTS, BriandTorSocks5Proxy::REQUEST_QUEUE.size());
+                #endif
+
+                 auto pcfg = esp_pthread_get_default_config();
+                pcfg.thread_name = "TorProxyReq";
+                pcfg.stack_size = STACK_TorProxyReq;
+                pcfg.prio = 20;
+                esp_pthread_set_cfg(&pcfg);
+
+                std::thread t(HandleClient, clientSock);
+                t.detach();
+            }
+
+            // Wait before next run
+            vTaskDelay(500 / portTICK_PERIOD_MS);
+        }
+
+        #if !SUPPRESSDEBUGLOG
+        ESP_LOGD(LOGTAG, "[DEBUG] DeQueueClientRequest exited.\n");
+        #endif
+    }
+
     /* static */ void BriandTorSocks5Proxy::HandleClient(const int clientSock) {
 
-        while (clientSock > 0) {
+        while (BriandTorSocks5Proxy::proxyStarted && clientSock > 0) {
             //
             // Very good example: https://www.programmersought.com/article/85795017726/
             // 
@@ -423,7 +440,7 @@ namespace Briand
                 break;
             }
 
-            BriandTorCircuit* circuit = nullptr; 
+            BriandTorThreadSafeCircuit* circuit = nullptr; 
 
             // Keep waiting until one circuit becomes ready, with a timeout.
             unsigned long int stopTimeout = NET_CONNECT_TIMEOUT_S + BriandUtils::GetUnixTime();
@@ -452,7 +469,7 @@ namespace Briand
             }
 
             #if !SUPPRESSDEBUGLOG
-            ESP_LOGD(LOGTAG, "SOCKS5 Proxy using circuit with CircID=0x%08X.\n", circuit->GetCircID());
+            ESP_LOGD(LOGTAG, "SOCKS5 Proxy using circuit with CircID=0x%08X.\n", circuit->CircuitInstance->GetCircID());
             #endif
 
             // Extract informations about host and port to connect to
@@ -503,7 +520,16 @@ namespace Briand
 
             // Connect to the destination (RELAY_BEGIN)
 
-            bool openedStream = circuit->TorStreamStart(connectTo, connectPort);
+            bool openedStream = false;
+            {
+                /* thread safe zone */
+
+                // Lock the circuit
+                unique_lock<mutex> lock(circuit->CircuitMutex);
+                // Check circuit still OK 
+                if (circuit->CircuitInstance != nullptr) openedStream = circuit->CircuitInstance->TorStreamStart(connectTo, connectPort);
+                
+            }
 
             if (!openedStream) {
                 // Write back unable to connect (refused) and close
@@ -548,6 +574,7 @@ namespace Briand
             */
 
             auto pcfg = esp_pthread_get_default_config();
+
             pcfg.thread_name = "StreamRD";
             pcfg.stack_size = STACK_StreamRD;
             pcfg.prio = 20;
@@ -573,10 +600,15 @@ namespace Briand
 
             // Check if the Tor circuit has been closed for stream
             if (!parameter->torStreamClosed) {
+                
                 #if !SUPPRESSDEBUGLOG
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy closing Tor stream.\n");
                 #endif
-                circuit->TorStreamEnd();
+                
+                // Lock the circuit
+                unique_lock<mutex> lock(circuit->CircuitMutex);
+                // Check circuit still OK 
+                if (circuit->CircuitInstance != nullptr) circuit->CircuitInstance->TorStreamEnd();
                 parameter->torStreamClosed = true;
             }
 
@@ -597,7 +629,7 @@ namespace Briand
         }
     
         // Reset the request queue and exit
-        if (REQUEST_QUEUE-1 >= 0) REQUEST_QUEUE--;
+        if (BriandTorSocks5Proxy::CURRENT_ACTIVE_CLIENTS-1 >= 0) BriandTorSocks5Proxy::CURRENT_ACTIVE_CLIENTS--;
 
         #if !SUPPRESSDEBUGLOG
         ESP_LOGD(LOGTAG, "[DEBUG] HandleClient exited.\n");
@@ -634,7 +666,10 @@ namespace Briand
             auto CloseWithError = [&]() {  
                 swParams->writerFinished = true;
                 if (!swParams->torStreamClosed) {
-                    swParams->circuit->TorStreamEnd();
+                    // Lock circuit
+                    unique_lock<mutex> lock(swParams->circuit->CircuitMutex);
+                    // Check circuit still OK 
+                    if (swParams->circuit->CircuitInstance != nullptr) swParams->circuit->CircuitInstance->TorStreamEnd();
                     swParams->torStreamClosed = true;
                 } 
                 swParams->torStreamClosed = true;
@@ -653,7 +688,17 @@ namespace Briand
             //buffer->reserve(514); // reserve some bytes
 
             // Read from TOR and save the finish status (RELAY_END) on the parameters
-            bool torStreamOk = swParams->circuit->TorStreamRead(buffer, swParams->writerFinished, TOR_SOCKS5_PROXY_TIMEOUT_S);
+            bool torStreamOk = true;
+            bool torStreamCellIgnorable = false;
+            
+            { 
+                /* thread-safe region */
+                
+                // Lock circuit
+                unique_lock<mutex> lock(swParams->circuit->CircuitMutex);
+                torStreamOk = swParams->circuit->CircuitInstance->TorStreamRead(buffer, swParams->writerFinished, torStreamCellIgnorable, TOR_SOCKS5_PROXY_TIMEOUT_S);
+            }
+            
 
             if (!torStreamOk) {
                 #if !SUPPRESSDEBUGLOG
@@ -663,8 +708,8 @@ namespace Briand
                 break;
             }
 
-            // If we have something to write back to client, send it
-            if (buffer->size() > 0) {
+            // If we have something to write back to client, send it, verify also content is not ignorable
+            if (!torStreamCellIgnorable && buffer->size() > 0) {
                 ssize_t len = send(swParams->clientSocket, buffer->data(), buffer->size(), 0);
                 if (len < 0) {
                     #if !SUPPRESSDEBUGLOG
@@ -678,13 +723,16 @@ namespace Briand
                 #endif
             }
 
-            // Reset now the buffer, this avoids exceptions when task is deleted
+            // Reset now the buffer
             buffer.reset();
 
             // If the REALAY_END has been received, send ending and exit.
             if (swParams->writerFinished) {
                 if (!swParams->torStreamClosed) {
-                    swParams->circuit->TorStreamEnd();
+                    // Lock circuit
+                    unique_lock<mutex> lock(swParams->circuit->CircuitMutex);
+                    // Check circuit still OK 
+                    if (swParams->circuit->CircuitInstance != nullptr) swParams->circuit->CircuitInstance->TorStreamEnd();
                     swParams->torStreamClosed = true;
                 }
                 break;
@@ -738,7 +786,10 @@ namespace Briand
                 if (!swParams->writerFinished) {
                     swParams->writerFinished = true;
                     if (!swParams->torStreamClosed) {
-                        swParams->circuit->TorStreamEnd();
+                        // Lock circuit
+                        unique_lock<mutex> lock(swParams->circuit->CircuitMutex);
+                        // Check circuit still OK 
+                        if (swParams->circuit->CircuitInstance != nullptr) swParams->circuit->CircuitInstance->TorStreamEnd();
                         swParams->torStreamClosed = true;
                     } 
                     swParams->torStreamClosed = true;
@@ -816,7 +867,15 @@ namespace Briand
                     auto sendBuf = make_unique<vector<unsigned char>>();
                     //sendBuf->reserve(514); // reserve some bytes
                     sendBuf->insert(sendBuf->begin(), buffer.get(), buffer.get() + len);
-                    swParams->circuit->TorStreamSend(sendBuf, torStreamOk);
+
+                    {
+                        /* thread-safe region */
+                        
+                        // Lock circuit
+                        unique_lock<mutex> lock(swParams->circuit->CircuitMutex);
+                        swParams->circuit->CircuitInstance->TorStreamSend(sendBuf, torStreamOk);
+                    }
+                    
                     // Reset now the buffers
                     sendBuf.reset();
                     buffer.reset();
@@ -852,7 +911,7 @@ namespace Briand
     }
 
     void BriandTorSocks5Proxy::StopProxyServer() {
-        // If socket is ready then close and delete associated IDF Task
+        // If socket is ready then close
         if (this->proxyStarted) {
             #if !SUPPRESSDEBUGLOG
             ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy killing task.\n");    
@@ -864,10 +923,20 @@ namespace Briand
             ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy closing socket.\n");    
             #endif
 
+            // Check for any waiting client in the queue
+            while (REQUEST_QUEUE.size() > 0) {
+                int clientSockFd = REQUEST_QUEUE.front();
+                shutdown(clientSockFd, SHUT_RDWR);
+                close(clientSockFd);
+                REQUEST_QUEUE.pop();
+            }
+
             if (this->proxySocket > 0) {
                 shutdown(this->proxySocket, SHUT_RDWR);
                 close(this->proxySocket);
             } 
+
+            BriandTorSocks5Proxy::CURRENT_ACTIVE_CLIENTS = 0;
         }
         
         #if !SUPPRESSDEBUGLOG
@@ -1041,7 +1110,8 @@ namespace Briand
             printf("PROXY USERNAME: %s\n", this->proxyUser.c_str());
             printf("PROXY PASSWORD: %s\n", this->proxyPassword.c_str());
             printf("MAX CONNECTIONS: %hu\n", this->REQUEST_QUEUE_LIMIT);
-            printf("ACTIVE CONNECTIONS: %hu\n", this->REQUEST_QUEUE);
+            printf("ACTIVE CONNECTIONS: %hu\n", this->CURRENT_ACTIVE_CLIENTS);
+            printf("QUEUED CONNECTIONS: %hu\n", this->REQUEST_QUEUE.size());
         }
         else {
             printf("PROXY STATUS: not started.\n");

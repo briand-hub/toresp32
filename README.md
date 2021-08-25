@@ -8,7 +8,7 @@ For details check always [NEWS FILE](NEWS.md)
 * Working to **version 1.1.0**, new features [See full changelog](): 
 	* consensus for cache (no more microdescriptors)
 	* exit policy check with default ports
-	* faster proxy with async and parallel read/write, custom port enabled.
+	* faster proxy with async and parallel read/write (thread safe), custom port enabled.
 	* 8 ready circuits
 	* better performances
 	* less memory used

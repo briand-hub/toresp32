@@ -111,18 +111,19 @@ namespace Briand {
 		*/
 		enum CircuitStatusFlag : unsigned short {
 			NONE = 			0b0000000000000000, /** No status at all, just instanced */
-			BUSY = 			0b0000000000000001,	/** Busy circuit, doing something */
-			BUILDING = 		0b0000000000000010, /** Doing build */
-			BUILT = 		0b0000000000000100, /** Built */
-			STREAM_READY = 	0b0000000000001000, /** Ready to stream */
-			STREAMING = 	0b0000000000010000, /** Busy in streaming (after relay_begin, before relay_end) */
-			CLOSING = 		0b0000000000100000, /** Is going to be closed */
-			CLOSED = 		0b0000000001000000, /** Has been closed */
+			/** BUSY FLAG REMOVED, NOW USING MutexWrapper for thread safety */
+			/** BUSY = 			0b0000000000000001,	Busy circuit, doing something */
+			BUILDING = 		0b0000000000000001, /** Doing build */
+			BUILT = 		0b0000000000000010, /** Built */
+			STREAM_READY = 	0b0000000000000100, /** Ready to stream */
+			STREAMING = 	0b0000000000001000, /** Busy in streaming (after relay_begin, before relay_end) */
+			CLOSING = 		0b0000000000010000, /** Is going to be closed */
+			CLOSED = 		0b0000000000100000, /** Has been closed */
 			/* ...other flags here... */
 			CLEAN = 		0b0100000000000000, /** Clean, never used for any stream cell */
 			DIRT = 			0b1000000000000000, /** Dirt, INSTANCE has been used at least once */
 		};
-		
+
 		/** An internal additional ID, use as you wish (used by CircuitsManager class) */
 		unsigned short internalID;
 
@@ -198,13 +199,14 @@ namespace Briand {
 		void TorStreamSend(const unique_ptr<vector<unsigned char>>& data, bool& sent);
 
 		/**
-		 * Method reads a single RELAY_DATA cell back and ADDS to the buffer
+		 * Method reads a single cell back and ADDS to the buffer. Ignorable cells are returned but with canIgnore=true
 		 * @param buffer The buffer where data is ADDED. Max 498 bytes per session.
 		 * @param finished The value will be set to true if RELAY_END from node is encountered.
-		 * @param timeout_s The timeout (in seconds to get a valid cell response)
+		 * @param canIgnore The value will be set to true if the result of read is ignorable (ex. a PADDING cell)
+		 * @param timeout_s The timeout (in seconds to get a cell response)
 		 * @return true if success, false on error (ex. TRUNCATE/DESTROY).
 		*/
-		bool TorStreamRead(unique_ptr<vector<unsigned char>>& buffer, bool& finished, const unsigned short& timeout_s = 60);
+		bool TorStreamRead(unique_ptr<vector<unsigned char>>& buffer, bool& finished, bool& canIgnore, const unsigned short& timeout_s = 60);
 
 		/**
 		 * Method finishes the current data stream (write)
@@ -282,12 +284,6 @@ namespace Briand {
 		bool StatusGetFlag(const CircuitStatusFlag& flag);
 
 		/**
-		 * Returns true if the instance is doing something
-		 * @return true if busy, false otherwise
-		*/
-		bool IsInstanceBusy();
-
-		/**
 		 * Method return a string with all status flags separeted by comma (DIRT,BUSY,BUILDING)
 		 * @return string with status
 		*/
@@ -299,4 +295,12 @@ namespace Briand {
 		virtual size_t GetObjectSize();
 		
 	};
+
+	/** Support class for thread-safe circuit handling. Is a wrapper. */
+	class BriandTorThreadSafeCircuit {
+		public:
+		std::mutex CircuitMutex;
+		unique_ptr<BriandTorCircuit> CircuitInstance;
+	};
+
 }

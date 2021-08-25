@@ -2,9 +2,8 @@
 
 ## Next steps
 
-* Consider using recursive_mutex for circuit instead of BUSY flag.
-* Consider change circuit build policy to exclude current exit nodes used
-* Edit wiki for new queue limit setting
+* Consider change circuit build policy to exclude in-use exit nodes
+* Edit wiki for new queue limit setting and thread safe methods
 * Place BriandError management on strategic points for debugging
 * Consider to build on-demand circuits for specific requested ports:
   * requires cache to save allowed ports
@@ -43,6 +42,9 @@ May be due to un-real window resizing exactly at 450 (stream) / 900 (circuit). S
 **SOLVED** in RELAY_SENDME the last sent (by *my* side digest is required).
 
 * Mbedtls on linux platform with similar settings like ESP. However sometimes very slow on read operations. Should investigate.
+* Using unique_lock<std::mutex> for thread-safety. Should solve all invalid-read-size errors shown in valgrind (now too many concurrent pthreads!). Threads that may share circuit object are: CircuitsManager, Proxy Async Reader, Proxy Async Writer. 
+* TorStreamRead() method needs to be changed, otherwise could read only padding and lock the circuit without any data to write back! Added an "ignorableRead" parameter in order to unlock the circuit and let the other threads do any work. (Otherwise infite lock beacause infinite loop when only paddings are available!) **Working well!**
+* Added a proxy client request queue in order to not close the socket proxy-side so the connection will be hold (ex. firefox loading images connection close = no image)
 
 ## 2021-08-21
 
