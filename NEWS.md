@@ -2,6 +2,8 @@
 
 ## Next steps
 
+* Check HandleClient() because sometimes pthread reamins valid and pthread not killed (another torproxystop solves, seen with taskinfo on ESP... maybe goes in time_wait?)
+* Check MgrInst seems killed on ESP??
 * Consider change circuit build policy to exclude in-use exit nodes
 * Edit wiki for new queue limit setting and thread safe methods
 * Place BriandError management on strategic points for debugging

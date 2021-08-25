@@ -148,7 +148,8 @@ namespace Briand
         this->proxyStarted = true;
 
         auto pcfg = esp_pthread_get_default_config();
-        pcfg.thread_name = "TorProxy";
+        
+        pcfg.thread_name = "TorProxyEnQ";
         pcfg.stack_size = STACK_TorProxy;
         pcfg.prio = 25;
         esp_pthread_set_cfg(&pcfg);
@@ -156,6 +157,11 @@ namespace Briand
         // Start the en-queuer
         std::thread tQueue(this->QueueClientRequest, this->proxySocket);
         tQueue.detach();
+
+        pcfg.thread_name = "TorProxyDeQ";
+        pcfg.stack_size = STACK_TorProxy;
+        pcfg.prio = 25;
+        esp_pthread_set_cfg(&pcfg);
 
         // Start the de-queuer
         std::thread tDeQueue(this->DeQueueClientRequest, this->proxySocket);
@@ -557,14 +563,6 @@ namespace Briand
             auto parameter = make_shared<StreamWorkerParams>();
             parameter->clientSocket = clientSock;
             parameter->circuit = circuit;
-
-            // Start the reader task
-            // xTaskCreate(ProxyClient_Stream_Reader, "StreamRD", STACK_StreamRD, reinterpret_cast<void*>(parameter.get()), 20, NULL);
-            // Wait a little (1 second) because client should write us before we write him
-            // vTaskDelay(1000 / portTICK_PERIOD_MS);
-            // Then start the writer task
-            // xTaskCreate(ProxyClient_Stream_Writer, "StreamWR", STACK_StreamWR, reinterpret_cast<void*>(parameter.get()), 20, NULL);
-
 
             // New version with future std::async and on new pthread with std::launch::async
 
