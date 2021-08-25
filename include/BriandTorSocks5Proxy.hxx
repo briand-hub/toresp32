@@ -65,11 +65,27 @@ namespace Briand
             }
 
             bool GoodForWrite() {
-                return (!this->clientDisconnected && !this->clientDisconnected && !this->writerFinished && circuit != NULL && circuit->CircuitInstance != NULL && clientSocket != -1);
+                return (
+                    !this->clientDisconnected && 
+                    !this->torStreamClosed && 
+                    !this->writerFinished && 
+                    circuit != NULL && 
+                    circuit->CircuitInstance != NULL && 
+                    clientSocket != -1 &&
+                    BriandTorSocks5Proxy::proxyStarted
+                );
             }
 
             bool GoodForRead() {
-                return (!this->clientDisconnected && !this->clientDisconnected && !this->readerFinished && circuit != NULL && circuit->CircuitInstance != NULL && clientSocket != -1);
+                return (
+                    !this->clientDisconnected && 
+                    !this->torStreamClosed && 
+                    !this->readerFinished && 
+                    circuit != NULL && 
+                    circuit->CircuitInstance != NULL && 
+                    clientSocket != -1 &&
+                    BriandTorSocks5Proxy::proxyStarted
+                );
             }
         };
 
