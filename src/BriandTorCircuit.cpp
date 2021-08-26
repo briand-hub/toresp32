@@ -1334,7 +1334,7 @@ namespace Briand {
 					//
 
 					// tempCell->BuildRelayCellFromPayload(this->exitNode->KEY_BackwardDigest_Db);
-					// printf("*** [%08X] DIGEST NOT UPDATED!\n", this->CIRCID);
+					ESP_LOGW(STREAMLOGTAG, "[WARN][%08X] DIGEST NOT UPDATED!\n", this->CIRCID);
 
 					// Update current window
 					this->CURRENT_STREAM_WINDOW--;
