@@ -65,8 +65,6 @@ namespace Briand
         ESP_LOGD(LOGTAG, "Starting circuits.\n");
         #endif
 
-        this->isStopped = false;
-
         // Create a task to periodically check circuit instances situation
         auto pcfg = esp_pthread_get_default_config();
         pcfg.thread_name = "MgrInst";
@@ -74,7 +72,15 @@ namespace Briand
         pcfg.prio = 500;
         esp_pthread_set_cfg(&pcfg);
         std::thread t(CircuitsTaskSingle, (void*)NULL);
-        t.detach();
+
+        // Check correct thread creation
+        if (!t.joinable()) {
+            ESP_LOGE(LOGTAG, "[ERR] CircuitsManager Start(): PThread could not be created. Please retry.\n");
+        }
+        else {
+            t.detach();
+            this->isStopped = false;
+        }
     }
 
     /*static*/ void BriandTorCircuitsManager::CircuitsTaskSingle(void* noparam) {

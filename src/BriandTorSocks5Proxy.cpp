@@ -145,8 +145,6 @@ namespace Briand
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy listening.\n");
         #endif
 
-        this->proxyStarted = true;
-
         auto pcfg = esp_pthread_get_default_config();
         
         pcfg.thread_name = "TorProxyEnQ";
@@ -156,7 +154,6 @@ namespace Briand
 
         // Start the en-queuer
         std::thread tQueue(this->QueueClientRequest, this->proxySocket);
-        tQueue.detach();
 
         pcfg.thread_name = "TorProxyDeQ";
         pcfg.stack_size = STACK_TorProxy;
@@ -165,7 +162,16 @@ namespace Briand
 
         // Start the de-queuer
         std::thread tDeQueue(this->DeQueueClientRequest, this->proxySocket);
-        tDeQueue.detach();
+
+        // Check correct thread creation
+        if (!tQueue.joinable() || !tDeQueue.joinable()) {
+            ESP_LOGE(LOGTAG, "[ERR] StartProxyServer(): PThreads could not be created. Please retry.\n");
+        }
+        else {
+            tQueue.detach();
+            tDeQueue.detach();
+            this->proxyStarted = true;
+        }
 
         #if !SUPPRESSDEBUGLOG
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy started.\n");
@@ -220,7 +226,6 @@ namespace Briand
             // Check if something could be dequeued
             if (BriandTorSocks5Proxy::REQUEST_QUEUE.size() > 0 && CURRENT_ACTIVE_CLIENTS < REQUEST_QUEUE_LIMIT) {
                 int clientSock = REQUEST_QUEUE.front();
-                REQUEST_QUEUE.pop();
                 BriandTorSocks5Proxy::CURRENT_ACTIVE_CLIENTS++;
 
                 #if !SUPPRESSDEBUGLOG
@@ -234,7 +239,15 @@ namespace Briand
                 esp_pthread_set_cfg(&pcfg);
 
                 std::thread t(HandleClient, clientSock);
-                t.detach();
+
+                // Check correct thread creation
+                if (!t.joinable()) {
+                    ESP_LOGW(LOGTAG, "[ERR] DeQueueClientRequest: PThread could not be created. Auto-retrying at next cycle.\n");
+                }
+                else {
+                    t.detach();
+                    REQUEST_QUEUE.pop();
+                }
             }
 
             // Wait before next run

@@ -53,6 +53,7 @@ unique_ptr<string> STA_ESSID = nullptr;
 unique_ptr<string> STA_PASSW = nullptr;
 unique_ptr<string> AP_ESSID = nullptr;
 unique_ptr<string> AP_PASSW = nullptr;
+unique_ptr<string> LAST_COMMAND = nullptr;
 unique_ptr<string> COMMAND = nullptr;
 unique_ptr<Briand::BriandTorCircuitsManager> CIRCUITS_MANAGER = nullptr;
 unique_ptr<Briand::BriandTorSocks5Proxy> SOCKS5_PROXY = nullptr;
@@ -88,8 +89,22 @@ void app_main() {
 	pcfg.stack_size = STACK_HeapStats;
 	pcfg.prio = 1000;
 	esp_pthread_set_cfg(&pcfg);
-	std::thread t1(heapStats);
-	t1.detach();
+
+	std::thread t1;
+
+	do {
+		t1 = std::thread(heapStats);
+
+		// Check correct thread creation
+		if (!t1.joinable()) {
+			ESP_LOGE("toresp32", "[ERR] Error on starting heap stat pthread. Auto-retrying.\n");
+			vTaskDelay(500 / portTICK_PERIOD_MS);
+		}
+		else {
+			t1.detach();
+			break;
+		}
+	} while (!t1.joinable());
 
 	// Start application loop
 	// This MUST remain a IDF task, otherwise serial input will not work well!!
@@ -114,6 +129,7 @@ void TorEsp32Setup() {
     AP_ESSID = make_unique<string>("");
     AP_PASSW = make_unique<string>("");
     COMMAND = make_unique<string>("");
+	LAST_COMMAND = make_unique<string>("");
 
 	// Common for error testing
 	esp_err_t ret;
@@ -395,8 +411,22 @@ void TorEsp32Main(void* taskParam) {
 			pcfg.stack_size = STACK_StaCheck;
 			pcfg.prio = 500;
 			esp_pthread_set_cfg(&pcfg);
-			std::thread t(checkStaHealth);
-			t.detach();
+
+			std::thread t;
+
+			do {
+				t = std::thread(checkStaHealth);
+
+				// Check correct thread creation
+				if (!t.joinable()) {
+					ESP_LOGE("toresp32", "[ERR] Error on starting STA check pthread. Auto-retrying.\n");
+					vTaskDelay(500 / portTICK_PERIOD_MS);
+				}
+				else {
+					t.detach();
+					break;
+				}
+			} while (!t.joinable());
 
 			nextStep = 7;
 		}
@@ -474,27 +504,30 @@ void TorEsp32Main(void* taskParam) {
 			gpio_set_level(GPIO_NUM_5, 1); // initial status OFF
 			
 			CIRCUITS_MANAGER->Start();
-			printf("[INFO] TOR Circuits Manager started.\n");
 
-			printf("[INFO] Waiting for at least one suitable circuit, may take some time...\n");
+			printf("[INFO] TOR Circuits Manager started: %s\n", (CIRCUITS_MANAGER->IsStarted() ? "success" : "***ERROR! MANUAL START REQUIRED.***" ));
 
-			while (CIRCUITS_MANAGER->GetCircuit() == nullptr) {
-				vTaskDelay(1000/portTICK_PERIOD_MS);
+			if (CIRCUITS_MANAGER->IsStarted()) {
+				printf("[INFO] Waiting for at least one suitable circuit, may take some time...\n");
+
+				while (CIRCUITS_MANAGER->GetCircuit() == nullptr) {
+					vTaskDelay(1000/portTICK_PERIOD_MS);
+				}
+
+				// Start the Proxy
+				printf("[INFO] Starting SOCKS5 Proxy.\n");
+				SOCKS5_PROXY = make_unique<Briand::BriandTorSocks5Proxy>();
+				SOCKS5_PROXY->StartProxyServer(TOR_SOCKS5_PROXY_PORT, CIRCUITS_MANAGER);
+				SOCKS5_PROXY->PrintStatus();
+				printf("[INFO] SOCKS5 Proxy started.\n");
+
+				if (BUILTIN_LED_MODE == 1) {
+					// The led here should be turned ON
+					printf("[INFO] Turning ON built led %d\n", GPIO_NUM_5);
+					gpio_set_level(GPIO_NUM_5, 0); // initial status ON
+				}
 			}
-
-			// Start the Proxy
-			printf("[INFO] Starting SOCKS5 Proxy.\n");
-			SOCKS5_PROXY = make_unique<Briand::BriandTorSocks5Proxy>();
-			SOCKS5_PROXY->StartProxyServer(TOR_SOCKS5_PROXY_PORT, CIRCUITS_MANAGER);
-			SOCKS5_PROXY->PrintStatus();
-			printf("[INFO] SOCKS5 Proxy started.\n");
-
-			if (BUILTIN_LED_MODE == 1) {
-				// The led here should be turned ON
-				printf("[INFO] Turning ON built led %d\n", GPIO_NUM_5);
-				gpio_set_level(GPIO_NUM_5, 0); // initial status ON
-			}
-
+			
 			printf("\n\n[INFO] SYSTEM READY! Type help for commands.\n\n");
 
 			nextStep = 10000;
@@ -509,6 +542,7 @@ void TorEsp32Main(void* taskParam) {
 			
 			// Command received
 			// Execute.....
+			LAST_COMMAND->assign(*COMMAND.get());
 			executeCommand( *(COMMAND.get()) );
 
 			// Wait for next command
@@ -720,7 +754,7 @@ void executeCommand(string& cmd) {
 		else printf("Wrong format for command. Type help log.\n");
 	}
     else if (cmd.compare("devinfo") == 0) {
-        printf("CPU Frequency: %lu\n", Briand::BriandESPDevice::GetCpuFreqMHz());
+        printf("CPU Frequency: %luMHz\n", Briand::BriandESPDevice::GetCpuFreqMHz());
 		
 		Briand::BriandESPDevice::PrintMemoryStatus();
         
@@ -959,6 +993,8 @@ void executeCommand(string& cmd) {
         printf("Unknown command.\n");
     }
     
+	printf("\n");
+	
     // Clear COMMAND for next
     COMMAND->clear();
 }

@@ -1329,12 +1329,10 @@ namespace Briand {
 
 				if (wasPreviousStream) {
 			
-					//
-					// TODO : maybe update backward digest!??!?!
-					//
+					// update backward digest!??!?! YES! on ESP platform this is frequent, 
+					// test shows that if digest is not updated then other cells are unrecognized
 
-					// tempCell->BuildRelayCellFromPayload(this->exitNode->KEY_BackwardDigest_Db);
-					ESP_LOGW(STREAMLOGTAG, "[WARN][%08X] DIGEST NOT UPDATED!\n", this->CIRCID);
+					tempCell->BuildRelayCellFromPayload(this->exitNode->KEY_BackwardDigest_Db);
 
 					// Update current window
 					this->CURRENT_STREAM_WINDOW--;
