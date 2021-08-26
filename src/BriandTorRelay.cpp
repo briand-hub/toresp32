@@ -310,7 +310,7 @@ namespace Briand {
 		*/
 	}
 
-	bool BriandTorRelay::FetchDescriptorsFromAuthority() {
+	bool BriandTorRelay::FetchDescriptorsFromAuthority(const unsigned int& useID /*= 0*/) {
 		// Statistics
 		auto fetchStartTime = esp_timer_get_time();
 
@@ -329,7 +329,7 @@ namespace Briand {
 
 			if (!client->Connect(string(curDir.host), curDir.port)) {
 				#if !SUPPRESSDEBUGLOG
-				ESP_LOGD(LOGTAG, "[DEBUG] FetchDescriptorsFromAuthority Failed to connect to dir #%hu (%s)\n", TOR_DIR_LAST_USED, curDir.nickname);
+				ESP_LOGD(LOGTAG, "[DEBUG][%u] FetchDescriptorsFromAuthority Failed to connect to dir #%hu (%s)\n", useID, TOR_DIR_LAST_USED, curDir.nickname);
 				#endif
 				TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED+1) % TOR_DIR_AUTHORITIES_NUMBER;
 				client->Disconnect();
@@ -350,8 +350,9 @@ namespace Briand {
 
 			if (!client->WriteData(requestV)) {
 				#if !SUPPRESSDEBUGLOG
-				ESP_LOGD(LOGTAG, "[DEBUG] FetchDescriptorsFromAuthority Failed to write request to dir #%hu (%s)\n", TOR_DIR_LAST_USED, curDir.nickname);
+				ESP_LOGD(LOGTAG, "[DEBUG][%u] FetchDescriptorsFromAuthority Failed to write request to dir #%hu (%s)\n", useID, TOR_DIR_LAST_USED, curDir.nickname);
 				#endif
+
 				TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED+1) % TOR_DIR_AUTHORITIES_NUMBER;
 				client->Disconnect();
 				continue;
@@ -361,7 +362,7 @@ namespace Briand {
 			requestV.reset();
 
 			#if !SUPPRESSDEBUGLOG
-			ESP_LOGD(LOGTAG, "[DEBUG] FetchDescriptorsFromAuthority request sent.\n");
+			ESP_LOGD(LOGTAG, "[DEBUG][%u] FetchDescriptorsFromAuthority request sent: http://%s:%hu/tor/server/fp/%s\n", useID, curDir.host, curDir.port, this->fingerprint->c_str());
 			#endif
 
 			bool newLine;
@@ -384,7 +385,25 @@ namespace Briand {
 						success = true;
 					}
 				}
-			} while (newLine);
+			} while (newLine && !success);
+
+			#if !SUPPRESSDEBUGLOG
+			ESP_LOGD(LOGTAG, "[DEBUG][%u] FetchDescriptorsFromAuthority had %s response.\n", useID, (success ? "good" : "bad"));
+			#endif
+
+			#if !SUPPRESSDEBUGLOG
+			ESP_LOGD(LOGTAG, "[DEBUG][%u] FetchDescriptorsFromAuthority reading remaining bytes (http courtesy).\n", useID);
+			#endif
+
+			// HTTP courtesy: read all bytes from server
+			while (client->AvailableBytes() > 0) { 
+				client->SetReceivingBufferSize(512);
+				auto temp = client->ReadData(); 
+			}
+
+			#if !SUPPRESSDEBUGLOG
+			ESP_LOGD(LOGTAG, "[DEBUG][%u] FetchDescriptorsFromAuthority disconnecting.\n", useID);
+			#endif
 
 			// Disconnect client
 			client->Disconnect();

@@ -247,7 +247,6 @@ namespace Briand
     }
 
     /* static */ void BriandTorSocks5Proxy::HandleClient(const int clientSock) {
-
         while (BriandTorSocks5Proxy::proxyStarted && clientSock > 0) {
             //
             // Very good example: https://www.programmersought.com/article/85795017726/
@@ -592,7 +591,7 @@ namespace Briand
             //wFuture.get();
 
             // Now wait that read/write finished.
-            while(!parameter->readerFinished || !parameter->writerFinished) {
+            while(!parameter->clientDisconnected && (!parameter->readerFinished || !parameter->writerFinished)) {
                 vTaskDelay(500 / portTICK_PERIOD_MS);
             }
 
@@ -697,7 +696,6 @@ namespace Briand
                 torStreamOk = swParams->circuit->CircuitInstance->TorStreamRead(buffer, swParams->writerFinished, torStreamCellIgnorable, TOR_SOCKS5_PROXY_TIMEOUT_S);
             }
             
-
             if (!torStreamOk) {
                 #if !SUPPRESSDEBUGLOG
                 ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy: ProxyClient_AsyncStreamWriter error on Tor streaming, exiting.\n");
@@ -724,8 +722,8 @@ namespace Briand
             // Reset now the buffer
             buffer.reset();
 
-            // If the REALAY_END has been received, send ending and exit.
-            if (swParams->writerFinished) {
+            // If the REALAY_END has been received or the peer disconnected, send ending and exit.
+            if (swParams->writerFinished || swParams->clientDisconnected) {
                 if (!swParams->torStreamClosed) {
                     // Lock circuit
                     unique_lock<mutex> lock(swParams->circuit->CircuitMutex);

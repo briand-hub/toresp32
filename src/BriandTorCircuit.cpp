@@ -195,7 +195,7 @@ namespace Briand {
 			ESP_LOGD(LOGTAG, "[DEBUG] Retrieving descriptors for %s node...\n", relayS.c_str());
 			#endif
 
-			if (tentative->FetchDescriptorsFromAuthority()) {
+			if (tentative->FetchDescriptorsFromAuthority(this->internalID)) {
 
 				if (relayType == 0) this->guardNode = std::move(tentative);
 				else if (relayType == 1) this->middleNode = std::move(tentative);
@@ -1334,7 +1334,7 @@ namespace Briand {
 					//
 
 					// tempCell->BuildRelayCellFromPayload(this->exitNode->KEY_BackwardDigest_Db);
-					printf("*** [%08X] DIGEST NOT UPDATED!\n", this->CIRCID);
+					// printf("*** [%08X] DIGEST NOT UPDATED!\n", this->CIRCID);
 
 					// Update current window
 					this->CURRENT_STREAM_WINDOW--;

@@ -135,9 +135,10 @@ namespace Briand {
 		/**
 		 * Method fetches the relay (OR) descriptors needed by requesting it to an authority directory. 
 		 * After calling this method descriptors will be populated.
+		 * @param useID an optional parameter for debugging purposes
 		 * @return true if success, false instead
 		*/
-		bool FetchDescriptorsFromAuthority();
+		bool FetchDescriptorsFromAuthority(const unsigned int& useID = 0);
 
 		/**
 		 * Method (only if debug active) print all short info of certificates, order of CertType
