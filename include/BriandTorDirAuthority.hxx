@@ -19,6 +19,18 @@
 #pragma once
 
 #include <iostream>
+#include <memory>
+
+#if defined(ESP_PLATFORM)
+#include <esp_timer.h>
+#elif defined(__linux__)
+#include "BriandEspLinuxPorting.hxx"
+#else
+#error "UNSUPPORTED PLATFORM (ESP32 OR LINUX REQUIRED)"
+#endif
+
+#include "BriandIDFSocketClient.hxx"
+#include "BriandNet.hxx"
 
 using namespace std;
 
@@ -50,3 +62,6 @@ constexpr Briand::BriandTorDirAuthority TOR_DIR_AUTHORITIES[TOR_DIR_AUTHORITIES_
 
 // Defined after in BriandTorDirAuthority.cpp
 extern unsigned short TOR_DIR_LAST_USED;
+
+/** retrieves the best directory for speed/connection and sets to TOR_DIR_LAST_USED */
+void briand_find_best_dir();

@@ -2,9 +2,8 @@
 
 ## Next steps
 
-* LAST_COMMAND with up arrow?
-* Consider change circuit build policy to exclude in-use exit nodes
 * Place BriandError management on strategic points for debugging
+* Consider to package as PlatformIO library
 * Consider to build on-demand circuits for specific requested ports:
   * requires cache to save allowed ports
   * requires GetExitNode method introducing unsigned short port parameter to find suitable exit with specific port if provided 
@@ -13,8 +12,6 @@
   * requires CircuitManager to check for suitable circuits and build one if none capable (destroying the oldest?)
 * Implement a vector of nodes.
 * Authenticate cell? => Prepare stub method to authenticate client
-* Consider provide alternative for cache with Onionoo service (not default)
-* Consider to package as PlatformIO library
 
 ##
 
@@ -46,6 +43,9 @@ May be due to un-real window resizing exactly at 450 (stream) / 900 (circuit). S
 * TorStreamRead() method needs to be changed, otherwise could read only padding and lock the circuit without any data to write back! Added an "ignorableRead" parameter in order to unlock the circuit and let the other threads do any work. (Otherwise infinite lock beacause infinite loop when only paddings are available!) **Working well!**
 * Added a proxy client request queue in order to not close the socket proxy-side so the connection will be hold (ex. firefox loading images connection close = no image)
 * Testing on ESP32 : some pthreads not created, added check
+* Added LAST_COMMAND with UP/DOWN arrows support (only Putty and escape-allowed terminals)
+* Now ntor-key downloaded previously and saved in the cache (less long fetch descriptors calls each time for the same selected node)
+* Added authority directory optimization for faster downloads
 
 ## 2021-08-21
 

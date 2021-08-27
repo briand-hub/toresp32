@@ -328,9 +328,11 @@ namespace Briand {
 			auto curDir = TOR_DIR_AUTHORITIES[TOR_DIR_LAST_USED];
 
 			if (!client->Connect(string(curDir.host), curDir.port)) {
+				
 				#if !SUPPRESSDEBUGLOG
 				ESP_LOGD(LOGTAG, "[DEBUG][%u] FetchDescriptorsFromAuthority Failed to connect to dir #%hu (%s)\n", useID, TOR_DIR_LAST_USED, curDir.nickname);
 				#endif
+				
 				TOR_DIR_LAST_USED = (TOR_DIR_LAST_USED+1) % TOR_DIR_AUTHORITIES_NUMBER;
 				client->Disconnect();
 				continue;

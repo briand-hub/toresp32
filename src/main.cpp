@@ -30,6 +30,7 @@
 #include "BriandTorCircuitsManager.hxx"
 #include "BriandTorSocks5Proxy.hxx"
 #include "BriandTorStatistics.hxx"
+#include "BriandTorDirAuthority.hxx"
 
 /* Startup tests */
 
@@ -283,6 +284,37 @@ void TorEsp32Main(void* taskParam) {
 		// If during serial input reading, wait while the command is entered and confirmed.
 		if (SERIAL_INPUT_READING) {
 			char in = (char)fgetc(stdin);
+
+			// Check arrows
+			if (in == 0x1B) {
+				char in2 = (char)fgetc(stdin);
+				char in3 = (char)fgetc(stdin);
+
+				if (in2 == 0x5B && in3 == 0x41) {
+					// UP: take last command, cancel the input and echo serial command
+					while (SERIAL_INPUT_POINTER->length() > 0) {
+						SERIAL_INPUT_POINTER->resize(SERIAL_INPUT_POINTER->length() - 1);
+						// print backspace-like in order to clear input
+						printf("%c %c", 0x08, 0x08);
+					}
+
+					// Assign command and print out
+					SERIAL_INPUT_POINTER->assign(*LAST_COMMAND.get());
+					printf("%s", LAST_COMMAND->c_str());
+				}
+				else if (in2 == 0x5B && in3 == 0x42) {
+					// DOWN: reset all
+					while (SERIAL_INPUT_POINTER->length() > 0) {
+						SERIAL_INPUT_POINTER->resize(SERIAL_INPUT_POINTER->length() - 1);
+						// print backspace-like in order to clear input
+						printf("%c %c", 0x08, 0x08);
+					}
+				}
+
+				// set in to 0xFF so no echo will be printed and nothing else will be done
+				in = 0xFF;
+			}
+
 			if (in != 13 && in != 10 && in > 0 && in != 0xFF) {
 				// Backspace handling
 				if (in == 8 && SERIAL_INPUT_POINTER->length() > 0) {
@@ -312,7 +344,7 @@ void TorEsp32Main(void* taskParam) {
 
 				// de-buffer (terminal "sticky" keys) (ONLY if running on ESP, on Linux will be infinite loop!)
 				#if defined(ESP_PLATFORM)
-				while (in != 0xFF || in < 0) in = (char)fgetc(stdin);
+				while (in != 0xFF) in = (char)fgetc(stdin);
 				#endif
 			}
 
@@ -496,6 +528,10 @@ void TorEsp32Main(void* taskParam) {
 				gpio_set_level(GPIO_NUM_5, 1); // 1 => off, 0 => on
 			}
 
+			// Call method to get the best dir (will be saved in TOR_DIR_LAST_USED)
+			briand_find_best_dir();
+
+
 			printf("[INFO] Starting TOR Circuits Manager.\n");
 			CIRCUITS_MANAGER = make_unique<Briand::BriandTorCircuitsManager>(TOR_CIRCUITS_KEEPALIVE, TOR_CIRCUITS_MAX_TIME_S, TOR_CIRCUITS_MAX_REQUESTS);
 			
@@ -542,7 +578,6 @@ void TorEsp32Main(void* taskParam) {
 			
 			// Command received
 			// Execute.....
-			LAST_COMMAND->assign(*COMMAND.get());
 			executeCommand( *(COMMAND.get()) );
 
 			// Wait for next command
@@ -834,7 +869,7 @@ void executeCommand(string& cmd) {
 		auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
 		auto relay = relaySearcher->GetGuardRelay();
         
-		if (relay != nullptr && relay->FetchDescriptorsFromAuthority())
+		if (relay != nullptr/* Now in cache && relay->FetchDescriptorsFromAuthority()*/)
             printf("SUCCESS\n");
 		else 
 			printf("FAILED\n");
@@ -845,7 +880,7 @@ void executeCommand(string& cmd) {
 		auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
 		auto relay = relaySearcher->GetExitRelay("", "");
         
-		if (relay != nullptr && relay->FetchDescriptorsFromAuthority())
+		if (relay != nullptr/* Now in cache && relay->FetchDescriptorsFromAuthority()*/)
 			printf("SUCCESS\n");
 		else 
 			printf("FAILED\n");
@@ -856,7 +891,7 @@ void executeCommand(string& cmd) {
 		auto relaySearcher = make_unique<Briand::BriandTorRelaySearcher>();
 		auto relay = relaySearcher->GetMiddleRelay("");
 		
-		if (relay != nullptr && relay->FetchDescriptorsFromAuthority())
+		if (relay != nullptr/* Now in cache && relay->FetchDescriptorsFromAuthority()*/)
 			printf("SUCCESS\n");
 		else 
 			printf("FAILED\n");
@@ -994,7 +1029,10 @@ void executeCommand(string& cmd) {
     }
     
 	printf("\n");
-	
+
+	// Save as last command
+	LAST_COMMAND->assign(COMMAND->c_str());
+
     // Clear COMMAND for next
     COMMAND->clear();
 }

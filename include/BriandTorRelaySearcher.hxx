@@ -92,6 +92,16 @@ namespace Briand {
 		*/
 		virtual bool IsPortListed(const unsigned short& port, const string& portList);
 
+		/**
+		 * Method returns the descriptor, if found, downloading from the specified dir.
+		 * WARNING: currently supports ntor-onion-key descriptor only!
+		 * @param dir the directory index to use for request
+		 * @param fingerprint the node fingerprint
+		 * @param descriptor the descriptor identifier, must include spaces (ex. "ntor-onion-key ")
+		 * @returns string with descriptor or empty string if not found
+		*/
+		virtual string GetDescriptor(const unsigned short& dir, const string& fingerprint,const string& descriptor);
+
 		public:
 
 		static const char* LOGTAG;

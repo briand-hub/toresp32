@@ -167,8 +167,6 @@ namespace Briand {
 
 		ESP_LOGD(LOGTAG, "[DEBUG] Starting search for %s node.\n", relayS.c_str());
 		#endif
-
-		bool done = false;
 		
 		unique_ptr<Briand::BriandTorRelay> tentative = nullptr;
 
@@ -187,35 +185,16 @@ namespace Briand {
 			else
 				tentative = this->relaySearcher->GetExitRelay("", "");
 		} 
-		
-		if (tentative != nullptr) {
-			// Fetch relay descriptors
 
-			#if !SUPPRESSDEBUGLOG
-			ESP_LOGD(LOGTAG, "[DEBUG] Retrieving descriptors for %s node...\n", relayS.c_str());
-			#endif
+		if (tentative == nullptr) {
+			ESP_LOGW(LOGTAG, "[ERR] FAIL to get a valid %s node.\n", relayS.c_str());
+			return false;
+		} 
+		else if (relayType == 0) this->guardNode = std::move(tentative);
+		else if (relayType == 1) this->middleNode = std::move(tentative);
+		else if (relayType == 2) this->exitNode = std::move(tentative);
 
-			if (tentative->FetchDescriptorsFromAuthority(this->internalID)) {
-
-				if (relayType == 0) this->guardNode = std::move(tentative);
-				else if (relayType == 1) this->middleNode = std::move(tentative);
-				else if (relayType == 2) this->exitNode = std::move(tentative);
-
-				done = true;
-				#if !SUPPRESSDEBUGLOG
-				ESP_LOGD(LOGTAG, "[DEBUG] %s node ok.\n", relayS.c_str());
-				#endif
-			}
-			else {
-				#if !SUPPRESSDEBUGLOG
-				ESP_LOGD(LOGTAG, "[DEBUG] Retrieving descriptors for %s node FAILED\n", relayS.c_str());
-				#endif
-			}
-		}
-
-		if (!done) ESP_LOGW(LOGTAG, "[ERR] FAIL to get a valid %s node.\n", relayS.c_str());
-
-		return done;
+		return true;
 	}
 
 	bool BriandTorCircuit::StartInProtocolWithGuard(bool authenticateSelf /* = false*/) {

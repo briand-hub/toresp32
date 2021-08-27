@@ -59,7 +59,7 @@ namespace Briand {
 		/*
 			NEW CACHE FILES FORMAT (ascii formats!):
 			[TIMESTAMP]\n
-			[NICKNAME]\t[FINGERPRINT]\t[IPV4ADDRESS]\t[OR PORT]\t[FLAGS MASK]\n
+			[NICKNAME]\t[FINGERPRINT]\t[IPV4ADDRESS]\t[OR PORT]\t[NTOR ONION KEY BASE64]\t[FLAGS MASK]\n
 
 			each row (except first) is a router. All ASCII format, including integers (port, mask etc.)
 
@@ -75,9 +75,9 @@ namespace Briand {
 		auto buildStartTime = BriandUtils::GetUnixTime();
 
 		// Start with the first authority, check not to start an infinite loop 
-		unsigned short loopStartsWith = 0;
-		TOR_DIR_LAST_USED = 1 % TOR_DIR_AUTHORITIES_NUMBER;
-
+		int loopStartsWith = (TOR_DIR_LAST_USED - 1) % TOR_DIR_AUTHORITIES_NUMBER;
+		if (loopStartsWith < 0) loopStartsWith += TOR_DIR_AUTHORITIES_NUMBER; // negative-modulo operator
+		
 		bool cacheCreated = false;
 		auto client = make_unique<BriandIDFSocketClient>();
 		client->SetVerbose(false);
@@ -96,6 +96,7 @@ namespace Briand {
 			}
 			fExit << std::to_string(BriandUtils::GetUnixTime()) << "\n";
 			unsigned char fExitNodes = 0;
+			
 			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache recreated exit cache.\n");
 			#endif
@@ -107,6 +108,7 @@ namespace Briand {
 			}
 			fMiddle << std::to_string(BriandUtils::GetUnixTime()) << "\n";
 			unsigned char fMiddleNodes = 0;
+			
 			#if !SUPPRESSDEBUGLOG
 			ESP_LOGD(LOGTAG, "[DEBUG] RefreshNodesCache recreated middle cache.\n");
 			#endif
@@ -288,19 +290,6 @@ namespace Briand {
 					string rPort = sData->substr(0, pos);
 					sData->erase(0, pos+1);
 
-					// OK! Now there shuld be an "m " line (ignorable)
-					// Not listed in full consensus
-					// rawData = client->ReadDataUntil('\n', 512, newLine);
-					// if (!newLine || rawData->size() < 2) {
-					// 	// error occoured!
-					// 	continue;
-					// }
-					// if (static_cast<char>(rawData->at(0)) == 'r' && static_cast<char>(rawData->at(1) == ' ')) {
-					// 	// a new router line !?!?
-					// 	lostR = std::move(rawData);
-					// 	continue;
-					// } 
-
 					// OK! Now there shuld be an "s " line (contains flags!!)
 					rawData = client->ReadDataUntil('\n', 512, newLine);
 					if (!newLine || rawData->size() < 2) {
@@ -412,34 +401,49 @@ namespace Briand {
 						// Check if this node is suitable as EXIT, GUARD or MIDDLE
 						// If the exitCheck is false then exit node is not suitable or an "r " line has been found, so error, do not insert anything!
 						if (exitCheck && fExitNodes < TOR_NODES_CACHE_SIZE && (rFlags & TOR_FLAGS_EXIT_MUST_HAVE) == TOR_FLAGS_EXIT_MUST_HAVE) {
-							fExit << rName << "\t";
-							fExit << rFingerprint << "\t";
-							fExit << rIP << "\t";
-							fExit << rPort << "\t";
-							fExit << std::to_string(rFlags) << "\t";
-							if (fExitNodes+1 < TOR_NODES_CACHE_SIZE) fExit << "\n"; // skip last \n
-							fExitNodes++;
-							fExit.flush();
+							// Fetch ntor-onion-key descriptor
+							string rNtorKey = this->GetDescriptor(TOR_DIR_LAST_USED, rFingerprint, "ntor-onion-key ");
+							if (rNtorKey.length() > 0) {
+								fExit << rName << "\t";
+								fExit << rFingerprint << "\t";
+								fExit << rIP << "\t";
+								fExit << rPort << "\t";
+								fExit << rNtorKey<< "\t";
+								fExit << std::to_string(rFlags) << "\t";
+								if (fExitNodes+1 < TOR_NODES_CACHE_SIZE) fExit << "\n"; // skip last \n
+								fExitNodes++;
+								fExit.flush();
+							}
 						}
 						else if (exitCheck && fGuardNodes < TOR_NODES_CACHE_SIZE && (rFlags & TOR_FLAGS_GUARD_MUST_HAVE) == TOR_FLAGS_GUARD_MUST_HAVE) {
-							fGuard << rName << "\t";
-							fGuard << rFingerprint << "\t";
-							fGuard << rIP << "\t";
-							fGuard << rPort << "\t";
-							fGuard << std::to_string(rFlags) << "\t";
-							if (fGuardNodes+1 < TOR_NODES_CACHE_SIZE) fGuard << "\n"; // skip last \n
-							fGuardNodes++;
-							fGuard.flush();
+							// Fetch ntor-onion-key descriptor
+							string rNtorKey = this->GetDescriptor(TOR_DIR_LAST_USED, rFingerprint, "ntor-onion-key ");
+							if (rNtorKey.length() > 0) {
+								fGuard << rName << "\t";
+								fGuard << rFingerprint << "\t";
+								fGuard << rIP << "\t";
+								fGuard << rPort << "\t";
+								fGuard << rNtorKey<< "\t";
+								fGuard << std::to_string(rFlags) << "\t";
+								if (fGuardNodes+1 < TOR_NODES_CACHE_SIZE) fGuard << "\n"; // skip last \n
+								fGuardNodes++;
+								fGuard.flush();
+							}
 						}
 						else if (exitCheck && fMiddleNodes < TOR_NODES_CACHE_SIZE && (rFlags & TOR_FLAGS_MIDDLE_MUST_HAVE) == TOR_FLAGS_MIDDLE_MUST_HAVE) {
-							fMiddle << rName << "\t";
-							fMiddle << rFingerprint << "\t";
-							fMiddle << rIP << "\t";
-							fMiddle << rPort << "\t";
-							fMiddle << std::to_string(rFlags) << "\t";
-							if (fMiddleNodes+1 < TOR_NODES_CACHE_SIZE) fMiddle << "\n"; // skip last \n
-							fMiddleNodes++;
-							fMiddle.flush();
+							// Fetch ntor-onion-key descriptor
+							string rNtorKey = this->GetDescriptor(TOR_DIR_LAST_USED, rFingerprint, "ntor-onion-key ");
+							if (rNtorKey.length() > 0) {
+								fMiddle << rName << "\t";
+								fMiddle << rFingerprint << "\t";
+								fMiddle << rIP << "\t";
+								fMiddle << rPort << "\t";
+								fMiddle << rNtorKey<< "\t";
+								fMiddle << std::to_string(rFlags) << "\t";
+								if (fMiddleNodes+1 < TOR_NODES_CACHE_SIZE) fMiddle << "\n"; // skip last \n
+								fMiddleNodes++;
+								fMiddle.flush();
+							}
 						}
 					}
 				}
@@ -611,6 +615,116 @@ namespace Briand {
 		return false;
 	}
 
+	string BriandTorRelaySearcher::GetDescriptor(const unsigned short& dir, const string& fingerprint,const string& descriptor) {
+		// Statistics
+		auto fetchStartTime = esp_timer_get_time();
+
+		string content = "";
+		auto curDir = TOR_DIR_AUTHORITIES[dir];
+
+		auto client = make_unique<BriandIDFSocketClient>();
+		client->SetVerbose(false);
+		client->SetID(100);
+		client->SetTimeout(NET_CONNECT_TIMEOUT_S, NET_IO_TIMEOUT_S);
+
+		if (!client->Connect(string(curDir.host), curDir.port)) {
+			
+			#if !SUPPRESSDEBUGLOG
+			ESP_LOGD(LOGTAG, "[DEBUG] GetDescriptor Failed to connect to dir #%hu (%s)\n", dir, curDir.nickname);
+			#endif
+
+			BriandTorStatistics::STAT_NUM_DESCRIPTOR_FETCH_ERR++;
+			client->Disconnect();
+			return content;
+		}
+
+		auto request = make_unique<string>();
+		request->append("GET /tor/server/fp/" + fingerprint + " HTTP/1.1\r\n");
+		request->append("Connection: close\r\n");
+		request->append("\r\n");
+		
+		auto requestV = BriandNet::StringToUnsignedCharVector(request, true);
+
+		if (!client->WriteData(requestV)) {
+			#if !SUPPRESSDEBUGLOG
+			ESP_LOGD(LOGTAG, "[DEBUG] GetDescriptor Failed to write request to dir #%hu (%s)\n", dir, curDir.nickname);
+			#endif
+
+			BriandTorStatistics::STAT_NUM_DESCRIPTOR_FETCH_ERR++;
+			client->Disconnect();		
+			return content;
+		}
+
+		// free ram
+		requestV.reset();
+
+		#if !SUPPRESSDEBUGLOG
+		ESP_LOGD(LOGTAG, "[DEBUG] GetDescriptor request sent: http://%s:%hu/tor/server/fp/%s\n", curDir.host, curDir.port, fingerprint.c_str());
+		#endif
+
+		bool newLine = false;
+		do {
+			auto lineV = client->ReadDataUntil('\n', 512, newLine);
+			if (newLine) {
+				auto line = BriandNet::UnsignedCharVectorToString(lineV, true);
+				// Remove any \r
+				BriandUtils::StringTrimAll(*line.get(), '\r');
+				size_t starts;
+				// Find the descriptor
+				starts = line->find(descriptor);
+				if (starts != string::npos) {
+					starts = starts + descriptor.length();
+					line->erase(0, starts);
+					// If line has \n or \r remove
+					BriandUtils::StringTrimAll(*line.get(), '\r');
+					BriandUtils::StringTrimAll(*line.get(), '\n');
+					content.assign( line->c_str() );
+				}
+			}
+		} while (newLine && content.length() == 0);
+
+		#if !SUPPRESSDEBUGLOG
+		ESP_LOGD(LOGTAG, "[DEBUG] GetDescriptor had %s response.\n", (content.length() > 0 ? "good" : "BAD"));
+		#endif
+
+		#if !SUPPRESSDEBUGLOG
+		ESP_LOGD(LOGTAG, "[DEBUG] GetDescriptor reading remaining bytes (http courtesy).\n");
+		#endif
+
+		// HTTP courtesy: read all bytes from server
+		while (client->AvailableBytes() > 0) { 
+			client->SetReceivingBufferSize(512);
+			auto temp = client->ReadData(); 
+		}
+
+		#if !SUPPRESSDEBUGLOG
+		ESP_LOGD(LOGTAG, "[DEBUG] GetDescriptor disconnecting.\n");
+		#endif
+
+		// Disconnect client
+		client->Disconnect();
+
+		// NOTR-ONION-KEY
+		// WARNING: base64 fields could be without the ending '=' but this could be not
+		// recognized by a decoding library. So, add the ending '='/'==' to fit
+		// the base64 multiples of 4 as required. (occours in ntor-onion-key)
+
+		if (content.length() > 0 && descriptor.compare("ntor-onion-key ") == 0) {
+			while (content.length() % 4 != 0)
+				content.push_back('=');
+		}
+
+		// Statistics
+		// esp_timer_get_time() returns microseconds!
+		BriandTorStatistics::STAT_DESCRIPTORS_TIME_AVG = (BriandTorStatistics::STAT_DESCRIPTORS_TIME_AVG*BriandTorStatistics::STAT_DESCRIPTORS_N) + ((esp_timer_get_time() - fetchStartTime)/1000) ;
+		BriandTorStatistics::STAT_DESCRIPTORS_N++;
+		BriandTorStatistics::STAT_DESCRIPTORS_TIME_AVG /= BriandTorStatistics::STAT_DESCRIPTORS_N;
+
+		if (content.length() == 0) BriandTorStatistics::STAT_NUM_DESCRIPTOR_FETCH_ERR++;
+
+		return content;
+	}
+
 	BriandTorRelaySearcher::BriandTorRelaySearcher() {
 		this->randomize();
 
@@ -714,8 +828,12 @@ namespace Briand {
 			line.erase(0, line.find('\t')+1);
 
 			relay->port = std::stoi( line.substr(0, line.find('\t')) );
-			// unecessary till new fields to manage
-			// line.erase(0, line.find('\t')+1);
+			line.erase(0, line.find('\t')+1);
+
+			relay->descriptorNtorOnionKey->assign( line.substr(0, line.find('\t')) );
+			line.erase(0, line.find('\t')+1);
+
+			//line.erase(0, line.find('\t')+1); // Ignore flags
 		}
 		else {
 			ESP_LOGW(LOGTAG, "[DEBUG] Invalid cache at second tentative. Skipping with failure.\n");
@@ -737,7 +855,7 @@ namespace Briand {
 			this->InvalidateCache(true);
 		}
 		if (this->cacheValid) {
-			bool sameFamily = true;
+			bool sameFamily = false;
 
 			do {
 				// randomize for random picking
@@ -817,8 +935,12 @@ namespace Briand {
 				line.erase(0, line.find('\t')+1);
 
 				relay->port = std::stoi( line.substr(0, line.find('\t')) );
-				// unecessary till new fields to manage
-				// line.erase(0, line.find('\t')+1);
+				line.erase(0, line.find('\t')+1);
+
+				relay->descriptorNtorOnionKey->assign( line.substr(0, line.find('\t')) );
+				line.erase(0, line.find('\t')+1);
+
+				//line.erase(0, line.find('\t')+1); // Ignore flags
 
 				// Check if in the same family
 				if (avoidGuardIp.length() > 0) {
@@ -932,8 +1054,12 @@ namespace Briand {
 				line.erase(0, line.find('\t')+1);
 
 				relay->port = std::stoi( line.substr(0, line.find('\t')) );
-				// unecessary till new fields to manage
-				// line.erase(0, line.find('\t')+1);
+				line.erase(0, line.find('\t')+1);
+
+				relay->descriptorNtorOnionKey->assign( line.substr(0, line.find('\t')) );
+				line.erase(0, line.find('\t')+1);
+
+				//line.erase(0, line.find('\t')+1); // Ignore flags
 
 				// Check if in the same family with guard
 				if (avoidGuardIp.length() > 0) {

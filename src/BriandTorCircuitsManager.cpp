@@ -73,13 +73,15 @@ namespace Briand
         esp_pthread_set_cfg(&pcfg);
         std::thread t(CircuitsTaskSingle, (void*)NULL);
 
+        this->isStopped = false;
+
         // Check correct thread creation
         if (!t.joinable()) {
             ESP_LOGE(LOGTAG, "[ERR] CircuitsManager Start(): PThread could not be created. Please retry.\n");
+            this->isStopped = true;
         }
         else {
             t.detach();
-            this->isStopped = false;
         }
     }
 

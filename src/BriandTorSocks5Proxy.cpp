@@ -145,6 +145,8 @@ namespace Briand
         ESP_LOGD(LOGTAG, "[DEBUG] SOCKS5 Proxy listening.\n");
         #endif
 
+        this->proxyStarted = true;
+
         auto pcfg = esp_pthread_get_default_config();
         
         pcfg.thread_name = "TorProxyEnQ";
@@ -166,11 +168,11 @@ namespace Briand
         // Check correct thread creation
         if (!tQueue.joinable() || !tDeQueue.joinable()) {
             ESP_LOGE(LOGTAG, "[ERR] StartProxyServer(): PThreads could not be created. Please retry.\n");
+            this->proxyStarted = false;
         }
         else {
             tQueue.detach();
             tDeQueue.detach();
-            this->proxyStarted = true;
         }
 
         #if !SUPPRESSDEBUGLOG
