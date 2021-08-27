@@ -5,6 +5,8 @@ Briand's project to turn an ESP32 into a Tor client "plug&amp;play"
 
 For details check always [NEWS FILE](NEWS.md)
 
+**v1.1.0 RELEASE AVAILABLE [link to release v1.1.0](https://github.com/briand-hub/toresp32/releases/tag/v1.1.0)**
+
 * Working to **version 1.1.0**, new features [See full changelog](https://github.com/briand-hub/toresp32/wiki/Version-1.1.0-Changelog): 
 	* consensus for cache (no more microdescriptors)
 	* exit policy check with default ports
